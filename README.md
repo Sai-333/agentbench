@@ -2,7 +2,7 @@
 
 Multi-tenant platform for evaluating coding agents against versioned benchmarks with visible and hidden tests.
 
-**Current milestone:** M7 — Security and code quality (hardened Docker isolation + Checkstyle/SpotBugs/PMD).
+**Current milestone:** M8 — Analytics and reporting dashboards (org-private; real backend aggregates).
 
 ## Stack
 
@@ -48,18 +48,22 @@ docker compose up -d --build
 | OpenAPI JSON | http://localhost:8080/v3/api-docs |
 | RabbitMQ management | http://localhost:15672 |
 
-## Milestone 7 highlights
+## Milestone 8 highlights
 
 | Area | Behavior |
 |---|---|
-| Docker hardening | No privileged, no docker.sock in eval containers, non-root, `--network none` by default, CPU/mem/pids/time limits, `--rm`, read-only rootfs + tmpfs, optional image digest pin |
-| Stages | Agent workspace never mounts hidden fixtures; `HIDDEN_TESTS` uses a separate clone + staged fixtures, then cleanup |
-| Quality | Checkstyle + SpotBugs + PMD (XML or builtin heuristics); new vs pre-existing findings; Sonar stub only |
-| Scoring | `code_quality` uses real normalized scores when tools produce results; otherwise `stub=true` raw=0 (no invented scores) |
-| Secrets / artifacts | `SecretRedactor` on logs/reports; retention TTL + max log bytes; cleanup audit (`V7`) |
-| Patches | Rejects traversal, absolute paths, `.git/hooks`, encoded `..` |
+| Overview | `/analytics/overview` — counts by state, avg score, tokens/cost, recent evals, daily volume |
+| Leaderboard | Org-private `/benchmark-versions/{id}/leaderboard` (best score per agent×task; not public) |
+| Comparisons | `/analytics/comparisons` across identical benchmark versions with raw metric columns |
+| Costs | `/analytics/costs` — tokens + estimated USD where adapters recorded them |
+| History | Paginated `/analytics/evaluations` with search/state filters |
+| Exports | Evaluation + leaderboard download as **JSON/CSV** (practical; no PDF stack) |
+| Live status | Frontend polls in-flight evaluation detail every 3s |
+| Ops | `/analytics/health` — actuator summary + org workload counts |
+| UI | Dark/light themes; accessible loading/empty/error states on dashboard panels |
+| Schema | Flyway `V8` analytics indexes only (no materialized metric tables) |
 
-**Explicit non-claim:** Docker-only isolation is **not** production-safe for arbitrary untrusted workloads. gVisor/Firecracker is planned (ADR-004). See `docs/SECURITY_THREAT_MODEL.md`.
+**Explicit non-claim:** M8 is analytics/reporting polish — **not** full production readiness (M9). Docker-only isolation remains unsuitable for arbitrary untrusted public workloads.
 
 **Scoring (default-v1 weights)**
 

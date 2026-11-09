@@ -22,10 +22,11 @@ public class PlatformInfoController {
     public Map<String, Object> info() {
         return Map.of(
                 "name", "agentbench",
-                "milestone", "M6",
+                "milestone", "M8",
                 "apiBase", ApiPaths.API_V1,
                 "orgScopedApiBase", "/api/v1/orgs/{orgId}/...",
-                "auth", "JWT bearer (local email/password)"
+                "auth", "JWT bearer (local email/password)",
+                "analytics", "org-private overview/leaderboard/comparisons/costs/exports"
         );
     }
 }

@@ -3,6 +3,7 @@ import type { FormEvent } from 'react'
 import {
   api,
   clearTokens,
+  downloadAuthenticated,
   getAccessToken,
   storeTokens,
 } from './api'
@@ -10,19 +11,45 @@ import type {
   Agent,
   Benchmark,
   BenchmarkVersion,
+  ComparisonResponse,
+  CostAnalyticsResponse,
   Evaluation,
   EvaluationDetail,
+  EvaluationSearchResponse,
+  LeaderboardResponse,
   MeResponse,
   Org,
+  OverviewResponse,
   Project,
   SecretMeta,
+  SystemHealthResponse,
   Task,
   TokenResponse,
 } from './api'
+import {
+  ComparisonPanel,
+  CostsPanel,
+  LeaderboardPanel,
+  OpsHealthPanel,
+  OverviewPanel,
+} from './DashboardPanels'
 import './App.css'
 
 type Mode = 'login' | 'register'
-type WorkspaceTab = 'projects' | 'benchmarks' | 'evaluations' | 'agents'
+type WorkspaceTab =
+  | 'overview'
+  | 'projects'
+  | 'benchmarks'
+  | 'evaluations'
+  | 'agents'
+  | 'leaderboard'
+  | 'compare'
+  | 'costs'
+  | 'ops'
+type LoadState = 'idle' | 'loading' | 'ready' | 'empty' | 'error'
+
+const THEME_KEY = 'agentbench.theme'
+const TERMINAL_STATES = new Set(['COMPLETED', 'FAILED', 'CANCELLED', 'TIMED_OUT'])
 
 function slugify(name: string): string {
   return name
@@ -49,11 +76,35 @@ function App() {
   const [evaluations, setEvaluations] = useState<Evaluation[]>([])
   const [selectedEvaluation, setSelectedEvaluation] = useState<EvaluationDetail | null>(null)
   const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null)
-  const [tab, setTab] = useState<WorkspaceTab>('benchmarks')
+  const [tab, setTab] = useState<WorkspaceTab>('overview')
   const [mode, setMode] = useState<Mode>('login')
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [bootstrapping, setBootstrapping] = useState(true)
+  const [theme, setTheme] = useState<'light' | 'dark'>(() => {
+    const stored = localStorage.getItem(THEME_KEY)
+    return stored === 'dark' ? 'dark' : 'light'
+  })
+  const [overview, setOverview] = useState<OverviewResponse | null>(null)
+  const [overviewState, setOverviewState] = useState<LoadState>('idle')
+  const [overviewError, setOverviewError] = useState<string | null>(null)
+  const [leaderboard, setLeaderboard] = useState<LeaderboardResponse | null>(null)
+  const [leaderboardState, setLeaderboardState] = useState<LoadState>('idle')
+  const [leaderboardError, setLeaderboardError] = useState<string | null>(null)
+  const [comparison, setComparison] = useState<ComparisonResponse | null>(null)
+  const [comparisonState, setComparisonState] = useState<LoadState>('idle')
+  const [comparisonError, setComparisonError] = useState<string | null>(null)
+  const [compareAgentIds, setCompareAgentIds] = useState<string[]>([])
+  const [costs, setCosts] = useState<CostAnalyticsResponse | null>(null)
+  const [costsState, setCostsState] = useState<LoadState>('idle')
+  const [costsError, setCostsError] = useState<string | null>(null)
+  const [health, setHealth] = useState<SystemHealthResponse | null>(null)
+  const [healthState, setHealthState] = useState<LoadState>('idle')
+  const [healthError, setHealthError] = useState<string | null>(null)
+  const [evalSearch, setEvalSearch] = useState('')
+  const [evalStateFilter, setEvalStateFilter] = useState('')
+  const [evalPage, setEvalPage] = useState(0)
+  const [evalSearchResult, setEvalSearchResult] = useState<EvaluationSearchResponse | null>(null)
 
   const loadBenchmarks = useCallback(async (orgId: string) => {
     const list = await api<Benchmark[]>(`/api/v1/orgs/${orgId}/benchmarks`)
@@ -112,6 +163,86 @@ function App() {
     setEvaluations(evalList)
   }, [])
 
+  const loadOverview = useCallback(async (orgId: string) => {
+    setOverviewState('loading')
+    setOverviewError(null)
+    try {
+      const data = await api<OverviewResponse>(`/api/v1/orgs/${orgId}/analytics/overview`)
+      setOverview(data)
+      setOverviewState(data.totalEvaluations === 0 ? 'empty' : 'ready')
+    } catch (err) {
+      setOverview(null)
+      setOverviewError(err instanceof Error ? err.message : 'Could not load overview')
+      setOverviewState('error')
+    }
+  }, [])
+
+  const loadLeaderboard = useCallback(async (orgId: string, versionId: string) => {
+    if (!versionId) {
+      setLeaderboard(null)
+      setLeaderboardState('empty')
+      return
+    }
+    setLeaderboardState('loading')
+    setLeaderboardError(null)
+    try {
+      const data = await api<LeaderboardResponse>(
+        `/api/v1/orgs/${orgId}/benchmark-versions/${versionId}/leaderboard?page=0&size=50`,
+      )
+      setLeaderboard(data)
+      setLeaderboardState(data.entries.length === 0 ? 'empty' : 'ready')
+    } catch (err) {
+      setLeaderboard(null)
+      setLeaderboardError(err instanceof Error ? err.message : 'Could not load leaderboard')
+      setLeaderboardState('error')
+    }
+  }, [])
+
+  const loadCosts = useCallback(async (orgId: string) => {
+    setCostsState('loading')
+    setCostsError(null)
+    try {
+      const data = await api<CostAnalyticsResponse>(`/api/v1/orgs/${orgId}/analytics/costs`)
+      setCosts(data)
+      setCostsState(data.invocationCount === 0 ? 'empty' : 'ready')
+    } catch (err) {
+      setCosts(null)
+      setCostsError(err instanceof Error ? err.message : 'Could not load costs')
+      setCostsState('error')
+    }
+  }, [])
+
+  const loadHealth = useCallback(async (orgId: string) => {
+    setHealthState('loading')
+    setHealthError(null)
+    try {
+      const data = await api<SystemHealthResponse>(`/api/v1/orgs/${orgId}/analytics/health`)
+      setHealth(data)
+      setHealthState('ready')
+    } catch (err) {
+      setHealth(null)
+      setHealthError(err instanceof Error ? err.message : 'Could not load health')
+      setHealthState('error')
+    }
+  }, [])
+
+  const loadEvaluationSearch = useCallback(
+    async (orgId: string, page = 0) => {
+      const params = new URLSearchParams({
+        page: String(page),
+        size: '20',
+      })
+      if (evalStateFilter) params.set('state', evalStateFilter)
+      if (evalSearch.trim()) params.set('q', evalSearch.trim())
+      const data = await api<EvaluationSearchResponse>(
+        `/api/v1/orgs/${orgId}/analytics/evaluations?${params.toString()}`,
+      )
+      setEvalSearchResult(data)
+      setEvalPage(page)
+    },
+    [evalSearch, evalStateFilter],
+  )
+
   const loadWorkspace = useCallback(async () => {
     const profile = await api<MeResponse>('/api/v1/me')
     const orgList = await api<Org[]>('/api/v1/orgs')
@@ -129,6 +260,10 @@ function App() {
       await loadBenchmarks(preferred)
       await loadEvaluations(preferred)
       await loadAgents(preferred)
+      await loadOverview(preferred)
+      await loadCosts(preferred)
+      await loadHealth(preferred)
+      await loadEvaluationSearch(preferred, 0)
     } else {
       setProjects([])
       setBenchmarks([])
@@ -140,8 +275,28 @@ function App() {
       setEvaluations([])
       setSelectedEvaluation(null)
       setSelectedAgent(null)
+      setOverview(null)
+      setLeaderboard(null)
+      setComparison(null)
+      setCosts(null)
+      setHealth(null)
+      setEvalSearchResult(null)
     }
-  }, [selectedOrgId, loadBenchmarks, loadEvaluations, loadAgents])
+  }, [
+    selectedOrgId,
+    loadBenchmarks,
+    loadEvaluations,
+    loadAgents,
+    loadOverview,
+    loadCosts,
+    loadHealth,
+    loadEvaluationSearch,
+  ])
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme)
+    localStorage.setItem(THEME_KEY, theme)
+  }, [theme])
 
   useEffect(() => {
     let cancelled = false
@@ -169,6 +324,20 @@ function App() {
     // intentionally run once on mount
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // Poll in-flight evaluation detail every 3s for near-real-time status.
+  useEffect(() => {
+    if (!selectedOrgId || !selectedEvaluation) return
+    const state = selectedEvaluation.evaluation.state
+    if (TERMINAL_STATES.has(state)) return
+    const timer = window.setInterval(() => {
+      void handleSelectEvaluation(selectedEvaluation.evaluation.id)
+      void loadEvaluations(selectedOrgId)
+      void loadOverview(selectedOrgId)
+    }, 3000)
+    return () => window.clearInterval(timer)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedOrgId, selectedEvaluation?.evaluation.id, selectedEvaluation?.evaluation.state])
 
   async function handleAuth(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -255,7 +424,13 @@ function App() {
       await loadBenchmarks(orgId)
       await loadEvaluations(orgId)
       await loadAgents(orgId)
+      await loadOverview(orgId)
+      await loadCosts(orgId)
+      await loadHealth(orgId)
+      await loadEvaluationSearch(orgId, 0)
       setSelectedEvaluation(null)
+      setComparison(null)
+      setCompareAgentIds([])
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not load organization')
       setProjects([])
@@ -266,6 +441,73 @@ function App() {
     } finally {
       setBusy(false)
     }
+  }
+
+  async function handleLoadComparison() {
+    if (!selectedOrgId || !selectedVersionId || compareAgentIds.length === 0) {
+      setError('Select a benchmark version and at least one agent to compare')
+      return
+    }
+    setComparisonState('loading')
+    setComparisonError(null)
+    setBusy(true)
+    try {
+      const params = new URLSearchParams({
+        benchmarkVersionId: selectedVersionId,
+        agentIds: compareAgentIds.join(','),
+      })
+      const data = await api<ComparisonResponse>(
+        `/api/v1/orgs/${selectedOrgId}/analytics/comparisons?${params.toString()}`,
+      )
+      setComparison(data)
+      setComparisonState(data.rows.length === 0 ? 'empty' : 'ready')
+      setTab('compare')
+    } catch (err) {
+      setComparison(null)
+      setComparisonError(err instanceof Error ? err.message : 'Could not compare agents')
+      setComparisonState('error')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function handleExportEvaluation(format: 'json' | 'csv') {
+    if (!selectedOrgId || !selectedEvaluation) return
+    setBusy(true)
+    setError(null)
+    try {
+      const id = selectedEvaluation.evaluation.id
+      await downloadAuthenticated(
+        `/api/v1/orgs/${selectedOrgId}/evaluations/${id}/export?format=${format}`,
+        `evaluation-${id}.${format}`,
+      )
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Export failed')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function handleExportLeaderboard(format: 'csv' | 'json') {
+    if (!selectedOrgId || !selectedVersionId) return
+    setBusy(true)
+    setError(null)
+    try {
+      await downloadAuthenticated(
+        `/api/v1/orgs/${selectedOrgId}/benchmark-versions/${selectedVersionId}/leaderboard/export?format=${format}`,
+        `leaderboard-${selectedVersionId}.${format}`,
+      )
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Leaderboard export failed')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  function toggleCompareAgent(agentId: string) {
+    setCompareAgentIds((prev) =>
+      prev.includes(agentId) ? prev.filter((id) => id !== agentId) : [...prev, agentId],
+    )
   }
 
   async function handleCreateAgent(event: FormEvent<HTMLFormElement>) {
@@ -398,6 +640,8 @@ function App() {
       })
       formEl.reset()
       await loadEvaluations(selectedOrgId)
+      await loadEvaluationSearch(selectedOrgId, 0)
+      await loadOverview(selectedOrgId)
       const detail = await api<EvaluationDetail>(
         `/api/v1/orgs/${selectedOrgId}/evaluations/${created.id}`,
       )
@@ -700,7 +944,7 @@ function App() {
   if (!me) {
     return (
       <main className="shell">
-        <p className="eyebrow">Milestone 4</p>
+        <p className="eyebrow">Milestone 8</p>
         <h1>AgentBench</h1>
         <p className="lede">Sign in to manage organizations, benchmarks, and evaluations.</p>
         <div className="tabs">
@@ -765,7 +1009,7 @@ function App() {
     <main className="shell wide">
       <header className="topbar">
         <div>
-          <p className="eyebrow">Milestone 4</p>
+          <p className="eyebrow">Milestone 8 · Analytics</p>
           <h1>AgentBench</h1>
         </div>
         <div className="userbox">
@@ -773,6 +1017,14 @@ function App() {
             <strong>{me.displayName}</strong>
             <div className="muted small">{me.email}</div>
           </div>
+          <button
+            type="button"
+            className="cta secondary"
+            onClick={() => setTheme((t) => (t === 'light' ? 'dark' : 'light'))}
+            aria-label={`Switch to ${theme === 'light' ? 'dark' : 'light'} theme`}
+          >
+            {theme === 'light' ? 'Dark' : 'Light'}
+          </button>
           <button type="button" className="cta secondary" onClick={handleLogout} disabled={busy}>
             Log out
           </button>
@@ -819,38 +1071,174 @@ function App() {
         </div>
 
         <div className="panel">
-          <div className="tabs">
-            <button
-              type="button"
-              className={tab === 'benchmarks' ? 'tab active' : 'tab'}
-              onClick={() => setTab('benchmarks')}
-            >
-              Benchmarks
-            </button>
-            <button
-              type="button"
-              className={tab === 'evaluations' ? 'tab active' : 'tab'}
-              onClick={() => setTab('evaluations')}
-            >
-              Evaluations
-            </button>
-            <button
-              type="button"
-              className={tab === 'agents' ? 'tab active' : 'tab'}
-              onClick={() => setTab('agents')}
-            >
-              Agents
-            </button>
-            <button
-              type="button"
-              className={tab === 'projects' ? 'tab active' : 'tab'}
-              onClick={() => setTab('projects')}
-            >
-              Projects
-            </button>
+          <div className="tabs wrap">
+            {(
+              [
+                ['overview', 'Overview'],
+                ['evaluations', 'Evaluations'],
+                ['leaderboard', 'Leaderboard'],
+                ['compare', 'Compare'],
+                ['costs', 'Costs'],
+                ['agents', 'Agents'],
+                ['benchmarks', 'Benchmarks'],
+                ['projects', 'Projects'],
+                ['ops', 'Ops'],
+              ] as Array<[WorkspaceTab, string]>
+            ).map(([id, label]) => (
+              <button
+                key={id}
+                type="button"
+                className={tab === id ? 'tab active' : 'tab'}
+                onClick={() => {
+                  setTab(id)
+                  if (!selectedOrgId) return
+                  if (id === 'overview') void loadOverview(selectedOrgId)
+                  if (id === 'leaderboard' && selectedVersionId) {
+                    void loadLeaderboard(selectedOrgId, selectedVersionId)
+                  }
+                  if (id === 'costs') void loadCosts(selectedOrgId)
+                  if (id === 'ops') void loadHealth(selectedOrgId)
+                  if (id === 'evaluations') void loadEvaluationSearch(selectedOrgId, evalPage)
+                }}
+              >
+                {label}
+              </button>
+            ))}
           </div>
 
-          {tab === 'agents' ? (
+          {tab === 'overview' ? (
+            <>
+              <h2>Evaluation overview {selectedOrg ? `· ${selectedOrg.name}` : ''}</h2>
+              {selectedOrg ? (
+                <OverviewPanel
+                  overview={overview}
+                  state={overviewState}
+                  error={overviewError}
+                  onOpenEvaluation={(id) => {
+                    setTab('evaluations')
+                    void handleSelectEvaluation(id)
+                  }}
+                />
+              ) : (
+                <p className="muted">Select or create an organization to view analytics.</p>
+              )}
+            </>
+          ) : tab === 'leaderboard' ? (
+            <>
+              <h2>Org leaderboard {selectedOrg ? `· ${selectedOrg.name}` : ''}</h2>
+              {selectedOrg ? (
+                <>
+                  <label>
+                    Benchmark version
+                    <select
+                      value={selectedVersionId}
+                      onChange={(event) => {
+                        const versionId = event.target.value
+                        setSelectedVersionId(versionId)
+                        void loadLeaderboard(selectedOrgId, versionId)
+                      }}
+                    >
+                      <option value="">Select version</option>
+                      {versions.map((version) => (
+                        <option key={version.id} value={version.id}>
+                          {version.version} ({version.status})
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <LeaderboardPanel
+                    board={leaderboard}
+                    state={leaderboardState}
+                    error={leaderboardError}
+                    busy={busy}
+                    onExport={(format) => void handleExportLeaderboard(format)}
+                  />
+                </>
+              ) : (
+                <p className="muted">Select an organization first.</p>
+              )}
+            </>
+          ) : tab === 'compare' ? (
+            <>
+              <h2>Model comparisons {selectedOrg ? `· ${selectedOrg.name}` : ''}</h2>
+              {selectedOrg ? (
+                <>
+                  <p className="muted small">
+                    Compare agents on the same benchmark version (identical task set / scoring profile).
+                  </p>
+                  <label>
+                    Benchmark version
+                    <select
+                      value={selectedVersionId}
+                      onChange={(event) => setSelectedVersionId(event.target.value)}
+                    >
+                      <option value="">Select version</option>
+                      {versions.map((version) => (
+                        <option key={version.id} value={version.id}>
+                          {version.version} ({version.status})
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <div className="compare-agents">
+                    {agents.map((agent) => (
+                      <label key={agent.id} className="check-row">
+                        <input
+                          type="checkbox"
+                          checked={compareAgentIds.includes(agent.id)}
+                          onChange={() => toggleCompareAgent(agent.id)}
+                        />
+                        {agent.name} ({agent.adapterType})
+                      </label>
+                    ))}
+                  </div>
+                  <button
+                    type="button"
+                    className="cta"
+                    disabled={busy || !selectedVersionId || compareAgentIds.length === 0}
+                    onClick={() => void handleLoadComparison()}
+                  >
+                    Run comparison
+                  </button>
+                  <ComparisonPanel
+                    comparison={comparison}
+                    state={comparisonState}
+                    error={comparisonError}
+                  />
+                </>
+              ) : (
+                <p className="muted">Select an organization first.</p>
+              )}
+            </>
+          ) : tab === 'costs' ? (
+            <>
+              <h2>Cost analytics {selectedOrg ? `· ${selectedOrg.name}` : ''}</h2>
+              {selectedOrg ? (
+                <CostsPanel costs={costs} state={costsState} error={costsError} />
+              ) : (
+                <p className="muted">Select an organization first.</p>
+              )}
+            </>
+          ) : tab === 'ops' ? (
+            <>
+              <h2>System health {selectedOrg ? `· ${selectedOrg.name}` : ''}</h2>
+              {selectedOrg ? (
+                <>
+                  <button
+                    type="button"
+                    className="cta secondary"
+                    disabled={busy}
+                    onClick={() => void loadHealth(selectedOrgId)}
+                  >
+                    Refresh health
+                  </button>
+                  <OpsHealthPanel health={health} state={healthState} error={healthError} />
+                </>
+              ) : (
+                <p className="muted">Select an organization first.</p>
+              )}
+            </>
+          ) : tab === 'agents' ? (
             <>
               <h2>Agents {selectedOrg ? `· ${selectedOrg.name}` : ''}</h2>
               {selectedOrg ? (
@@ -1001,12 +1389,75 @@ function App() {
               <h2>Evaluations {selectedOrg ? `· ${selectedOrg.name}` : ''}</h2>
               {selectedOrg ? (
                 <>
-                  <p className="muted small">Your role: {role || 'unknown'}</p>
-                  {evaluations.length === 0 ? (
+                  <p className="muted small">
+                    Your role: {role || 'unknown'}
+                    {selectedEvaluation &&
+                    !TERMINAL_STATES.has(selectedEvaluation.evaluation.state)
+                      ? ' · live polling every 3s'
+                      : ''}
+                  </p>
+                  <div className="filter-row">
+                    <label>
+                      Search
+                      <input
+                        value={evalSearch}
+                        onChange={(event) => setEvalSearch(event.target.value)}
+                        placeholder="agent, task, id…"
+                      />
+                    </label>
+                    <label>
+                      State
+                      <select
+                        value={evalStateFilter}
+                        onChange={(event) => setEvalStateFilter(event.target.value)}
+                      >
+                        <option value="">Any</option>
+                        {[
+                          'QUEUED',
+                          'INVOKING_AGENT',
+                          'RUNNING_VISIBLE_TESTS',
+                          'RUNNING_HIDDEN_TESTS',
+                          'SCORING',
+                          'COMPLETED',
+                          'FAILED',
+                          'CANCELLED',
+                          'TIMED_OUT',
+                        ].map((state) => (
+                          <option key={state} value={state}>
+                            {state}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <button
+                      type="button"
+                      className="cta secondary"
+                      disabled={busy}
+                      onClick={() => void loadEvaluationSearch(selectedOrgId, 0)}
+                    >
+                      Apply
+                    </button>
+                  </div>
+                  {(evalSearchResult?.items.length ?? 0) === 0 &&
+                  (evaluations.length === 0) ? (
                     <p className="muted">No evaluations yet.</p>
                   ) : (
                     <ul className="list">
-                      {evaluations.map((evaluation) => (
+                      {(evalSearchResult?.items ?? evaluations.map((evaluation) => ({
+                        id: evaluation.id,
+                        state: evaluation.state,
+                        agentId: evaluation.agentId,
+                        agentName: agents.find((a) => a.id === evaluation.agentId)?.name || evaluation.agentId.slice(0, 8),
+                        taskId: evaluation.taskId,
+                        taskSlug: evaluation.taskId.slice(0, 8),
+                        benchmarkVersionId: evaluation.benchmarkVersionId,
+                        benchmarkVersion: '',
+                        weightedTotal: null as number | null,
+                        failureClass: evaluation.failureClass,
+                        createdAt: evaluation.createdAt,
+                        updatedAt: evaluation.updatedAt,
+                        completedAt: evaluation.completedAt,
+                      }))).map((evaluation) => (
                         <li key={evaluation.id}>
                           <button
                             type="button"
@@ -1019,16 +1470,45 @@ function App() {
                           >
                             <span>
                               <span className="badge">{evaluation.state}</span>{' '}
-                              <span className="muted small">{evaluation.id.slice(0, 8)}</span>
+                              {evaluation.agentName} · {evaluation.taskSlug}
                             </span>
                             <span className="muted small">
-                              task {evaluation.taskId.slice(0, 8)} · agent{' '}
-                              {evaluation.agentId.slice(0, 8)}
+                              {evaluation.weightedTotal != null
+                                ? `score ${Number(evaluation.weightedTotal).toFixed(2)} · `
+                                : ''}
+                              {evaluation.id.slice(0, 8)}
                             </span>
                           </button>
                         </li>
                       ))}
                     </ul>
+                  )}
+                  {evalSearchResult && evalSearchResult.page.total > evalSearchResult.page.size && (
+                    <div className="toolbar-actions" style={{ marginTop: '0.75rem' }}>
+                      <button
+                        type="button"
+                        className="cta secondary"
+                        disabled={busy || evalPage <= 0}
+                        onClick={() => void loadEvaluationSearch(selectedOrgId, evalPage - 1)}
+                      >
+                        Prev
+                      </button>
+                      <span className="muted small">
+                        Page {evalPage + 1} /{' '}
+                        {Math.max(1, Math.ceil(evalSearchResult.page.total / evalSearchResult.page.size))}
+                      </span>
+                      <button
+                        type="button"
+                        className="cta secondary"
+                        disabled={
+                          busy ||
+                          (evalPage + 1) * evalSearchResult.page.size >= evalSearchResult.page.total
+                        }
+                        onClick={() => void loadEvaluationSearch(selectedOrgId, evalPage + 1)}
+                      >
+                        Next
+                      </button>
+                    </div>
                   )}
                   {canEdit && (
                     <>
@@ -1186,14 +1666,27 @@ function App() {
                 {selectedEvaluation.evaluation.id} · attempt {selectedEvaluation.evaluation.attempt}
               </p>
             </div>
-            <div style={{ display: 'flex', gap: '0.5rem' }}>
+            <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
               <button type="button" className="cta secondary" onClick={handleRefreshEvaluation} disabled={busy}>
                 Refresh
               </button>
-              {canEdit &&
-                !['COMPLETED', 'FAILED', 'CANCELLED', 'TIMED_OUT'].includes(
-                  selectedEvaluation.evaluation.state,
-                ) && (
+              <button
+                type="button"
+                className="cta secondary"
+                onClick={() => void handleExportEvaluation('json')}
+                disabled={busy}
+              >
+                Export JSON
+              </button>
+              <button
+                type="button"
+                className="cta secondary"
+                onClick={() => void handleExportEvaluation('csv')}
+                disabled={busy}
+              >
+                Export CSV
+              </button>
+              {canEdit && !TERMINAL_STATES.has(selectedEvaluation.evaluation.state) && (
                   <button type="button" className="cta secondary" onClick={handleCancelEvaluation} disabled={busy}>
                     Cancel
                   </button>

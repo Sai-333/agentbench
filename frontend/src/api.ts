@@ -251,6 +251,123 @@ export type EvaluationDetail = {
   qualityReports?: QualityReport[]
 }
 
+export type PageMeta = { page: number; size: number; total: number }
+
+export type OverviewResponse = {
+  totalEvaluations: number
+  completed: number
+  failed: number
+  cancelled: number
+  timedOut: number
+  inFlight: number
+  queued: number
+  averageWeightedTotal: number | null
+  totalEstimatedCostUsd: number
+  totalTokens: number | null
+  countsByState: Record<string, number>
+  recent: Array<{
+    id: string
+    state: string
+    agentId: string
+    agentName: string
+    taskId: string
+    taskSlug: string
+    benchmarkVersionId: string
+    weightedTotal: number | null
+    createdAt: string
+    completedAt: string | null
+  }>
+  volumeByDay: Array<{ day: string; started: number; completed: number }>
+}
+
+export type LeaderboardEntry = {
+  rank: number
+  agentId: string
+  agentName: string
+  adapterType: string
+  taskId: string
+  taskSlug: string
+  evaluationId: string
+  weightedTotal: number
+  scoreStatus: string
+  transitionSummary: Record<string, number>
+  completedAt: string | null
+  durationMs: number | null
+  totalTokens: number | null
+  estimatedCostUsd: number | null
+}
+
+export type LeaderboardResponse = {
+  benchmarkVersionId: string
+  scoringProfileKey: string
+  note: string
+  entries: LeaderboardEntry[]
+  page: PageMeta
+}
+
+export type ComparisonResponse = {
+  benchmarkVersionId: string
+  scoringProfileKey: string
+  agentIds: string[]
+  rows: Array<{
+    agentId: string
+    agentName: string
+    adapterType: string
+    taskId: string
+    taskSlug: string
+    evaluationId: string
+    weightedTotal: number
+    metricRaws: Record<string, number>
+    transitionSummary: Record<string, number>
+    completedAt: string | null
+  }>
+  metricKeys: string[]
+}
+
+export type CostAnalyticsResponse = {
+  totalEstimatedCostUsd: number
+  totalPromptTokens: number
+  totalCompletionTokens: number
+  totalTokens: number
+  invocationCount: number
+  byAgent: Array<{
+    agentId: string
+    agentName: string
+    adapterType: string
+    invocationCount: number
+    totalTokens: number
+    estimatedCostUsd: number
+  }>
+  byDay: Array<{ day: string; invocationCount: number; totalTokens: number; estimatedCostUsd: number }>
+  page: PageMeta
+}
+
+export type EvaluationSearchResponse = {
+  items: Array<{
+    id: string
+    state: string
+    agentId: string
+    agentName: string
+    taskId: string
+    taskSlug: string
+    benchmarkVersionId: string
+    benchmarkVersion: string
+    weightedTotal: number | null
+    failureClass: string | null
+    createdAt: string
+    updatedAt: string
+    completedAt: string | null
+  }>
+  page: PageMeta
+}
+
+export type SystemHealthResponse = {
+  status: string
+  checkedAt: string
+  components: Record<string, { status: string; detail: string }>
+  counts: Record<string, number>
+}
+
 export function getAccessToken(): string | null {
   return localStorage.getItem(TOKEN_KEY)
 }
@@ -293,4 +410,25 @@ export async function api<T>(path: string, options: RequestInit = {}, auth = tru
     return undefined as T
   }
   return (await response.json()) as T
+}
+
+export async function downloadAuthenticated(path: string, filename: string): Promise<void> {
+  const headers = new Headers()
+  const token = getAccessToken()
+  if (token) {
+    headers.set('Authorization', `Bearer ${token}`)
+  }
+  const response = await fetch(path, { headers })
+  if (!response.ok) {
+    throw new Error(await readError(response))
+  }
+  const blob = await response.blob()
+  const url = URL.createObjectURL(blob)
+  const anchor = document.createElement('a')
+  anchor.href = url
+  anchor.download = filename
+  document.body.appendChild(anchor)
+  anchor.click()
+  anchor.remove()
+  URL.revokeObjectURL(url)
 }
