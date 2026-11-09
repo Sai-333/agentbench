@@ -112,9 +112,19 @@ services:
       AGENTBENCH_SECRETS_ENCRYPTION_KEY: ${AGENTBENCH_SECRETS_ENCRYPTION_KEY:-MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=}
       AGENTBENCH_GITHUB_TOKEN: ${AGENTBENCH_GITHUB_TOKEN:-}
       AGENTBENCH_GITHUB_VALIDATION_ENABLED: ${AGENTBENCH_GITHUB_VALIDATION_ENABLED:-true}
+      # M7: hardened Docker eval containers when host Docker is reachable from worker.
+      # Never mount docker.sock into evaluation containers (RuntimeIsolator forbids it).
+      # Optional: uncomment volume below ONLY on the worker to enable nested docker run.
+      AGENTBENCH_EXECUTION_MODE: ${AGENTBENCH_EXECUTION_MODE:-docker}
+      AGENTBENCH_DOCKER_ENABLED: ${AGENTBENCH_DOCKER_ENABLED:-true}
+      AGENTBENCH_RUNNER_IMAGE: ${AGENTBENCH_RUNNER_IMAGE:-eclipse-temurin:21-jre-alpine}
+      AGENTBENCH_RUNNER_IMAGE_DIGEST: ${AGENTBENCH_RUNNER_IMAGE_DIGEST:-}
+      AGENTBENCH_ARTIFACT_RETENTION_DAYS: ${AGENTBENCH_ARTIFACT_RETENTION_DAYS:-14}
       LOGGING_STRUCTURED_FORMAT_CONSOLE: logstash
     volumes:
       - artifacts_data:/var/agentbench/artifacts
+      # Uncomment for Docker-backed eval isolation on the worker host (trusted controller only):
+      # - /var/run/docker.sock:/var/run/docker.sock
     depends_on:
       postgres:
         condition: service_healthy

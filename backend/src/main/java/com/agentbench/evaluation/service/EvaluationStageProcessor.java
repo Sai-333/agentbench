@@ -19,12 +19,17 @@ import com.agentbench.evaluation.domain.TestCaseStatus;
 import com.agentbench.evaluation.domain.TestPhase;
 import com.agentbench.evaluation.domain.TestRun;
 import com.agentbench.evaluation.infra.EvaluationRepository;
+import com.agentbench.execution.domain.ExecutionStage;
+import com.agentbench.execution.quality.QualityAnalysisService;
+import com.agentbench.execution.service.ExecutionIsolatorService;
 import com.agentbench.execution.service.FixtureSuiteRunner;
 import com.agentbench.execution.service.PatchValidator;
 import com.agentbench.execution.service.SuiteExecutionService;
 import com.agentbench.execution.service.WorkspaceProvisioner;
 import com.agentbench.platform.error.ApiException;
+import com.agentbench.platform.infra.storage.ArtifactRetentionService;
 import com.agentbench.platform.infra.storage.ArtifactStorage;
+import com.agentbench.agents.infra.SecretRedactor;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -36,6 +41,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.io.ByteArrayInputStream;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.time.Instant;
@@ -65,6 +71,9 @@ public class EvaluationStageProcessor {
     private final TransitionClassificationEngine classificationEngine;
     private final FlakyDetectionService flakyDetectionService;
     private final ScoringService scoringService;
+    private final QualityAnalysisService qualityAnalysisService;
+    private final ExecutionIsolatorService executionIsolatorService;
+    private final ArtifactRetentionService artifactRetentionService;
     private final ObjectMapper objectMapper;
     private final int maxAttempts;
 
@@ -80,6 +89,9 @@ public class EvaluationStageProcessor {
             TransitionClassificationEngine classificationEngine,
             FlakyDetectionService flakyDetectionService,
             ScoringService scoringService,
+            QualityAnalysisService qualityAnalysisService,
+            ExecutionIsolatorService executionIsolatorService,
+            ArtifactRetentionService artifactRetentionService,
             ObjectMapper objectMapper,
             @Value("${agentbench.evaluation.max-stage-attempts:5}") int maxAttempts) {
         this.evaluationRepository = evaluationRepository;
@@ -93,6 +105,9 @@ public class EvaluationStageProcessor {
         this.classificationEngine = classificationEngine;
         this.flakyDetectionService = flakyDetectionService;
         this.scoringService = scoringService;
+        this.qualityAnalysisService = qualityAnalysisService;
+        this.executionIsolatorService = executionIsolatorService;
+        this.artifactRetentionService = artifactRetentionService;
         this.objectMapper = objectMapper;
         this.maxAttempts = maxAttempts;
     }
@@ -388,7 +403,8 @@ public class EvaluationStageProcessor {
     /**
      * Hidden suite runs only after patch seal, in a separate stage/result set.
      * Never label hidden outcomes as F2P/P2P/P2F/F2F — post-only pass rate for scoring.
-     * Fixture contents are never copied into agent-visible artifacts.
+     * Fixture contents are staged outside the agent-visible workspace and only attached
+     * for this stage (Docker mount or local path), then cleaned up.
      */
     private void runHiddenPost(Evaluation evaluation, JsonNode task) {
         if (evaluationRepository.findTestRun(evaluation.id(), TestPhase.HIDDEN_POST).isPresent()) {
@@ -411,72 +427,109 @@ public class EvaluationStageProcessor {
         }
 
         Path workspace = workspaceProvisioner.requireExisting(evaluation.workspaceUri());
+        // Separate clone so hidden stage never mutates the agent-visible tree unexpectedly.
+        Path hiddenWorkspace = workspaceProvisioner.cleanClone(
+                workspace, evaluation.orgId(), evaluation.id(), "hidden-run");
+        Path hiddenFixtures = workspaceProvisioner.stageHiddenFixtures(
+                evaluation.orgId(),
+                evaluation.id(),
+                hidden.path("fixtureContent").asText("{}"));
+
+        ObjectNode containerMeta = objectMapper.createObjectNode();
+        containerMeta.put("runner", "suite-v1");
+        containerMeta.put("phase", "HIDDEN_POST");
+        containerMeta.put("agentVisible", false);
+        containerMeta.put("stage", ExecutionStage.HIDDEN_TESTS.name());
+        containerMeta.put("runtime", executionIsolatorService.activeIsolator().runtimeName());
+        containerMeta.put("hiddenFixturesSeparate", true);
+        containerMeta.put("dockerSockMounted", false);
+        containerMeta.put("privileged", false);
+
         UUID suiteId = hidden.hasNonNull("id") ? UUID.fromString(hidden.get("id").asText()) : null;
         TestRun run = new TestRun(
                 UUID.randomUUID(), evaluation.id(), evaluation.orgId(), TestPhase.HIDDEN_POST, suiteId,
-                "RUNNING", Instant.now(), null,
-                "{\"runner\":\"suite-v1\",\"phase\":\"HIDDEN_POST\",\"agentVisible\":false}");
+                "RUNNING", Instant.now(), null, writeJson(containerMeta));
         evaluationRepository.insertTestRun(run);
 
-        int repeatRuns = resolveFlakyRepeats(task);
-        FlakyDetectionService.FlakyAwareResult flakyAware = flakyDetectionService.runWithFlakyDetection(
-                evaluation.id(),
-                evaluation.orgId(),
-                run.id(),
-                TestPhase.HIDDEN_POST,
-                repeatRuns,
-                () -> suiteExecutionService.run(workspace, hidden, FixtureSuiteRunner.Phase.POST)
-        );
+        try {
+            int repeatRuns = resolveFlakyRepeats(task);
+            FlakyDetectionService.FlakyAwareResult flakyAware = flakyDetectionService.runWithFlakyDetection(
+                    evaluation.id(),
+                    evaluation.orgId(),
+                    run.id(),
+                    TestPhase.HIDDEN_POST,
+                    repeatRuns,
+                    () -> suiteExecutionService.run(hiddenWorkspace, hidden, FixtureSuiteRunner.Phase.POST)
+            );
 
-        Map<String, CaseCategory> categories = classificationEngine.categoriesFromFixtureCases(
-                suiteExecutionService.listCaseNodes(hidden), true);
-        List<TransitionClassificationEngine.ClassifiedCase> classified =
-                classificationEngine.classifyHiddenPostOnly(flakyAware.canonicalOutcomes(), categories);
+            Map<String, CaseCategory> categories = classificationEngine.categoriesFromFixtureCases(
+                    suiteExecutionService.listCaseNodes(hidden), true);
+            List<TransitionClassificationEngine.ClassifiedCase> classified =
+                    classificationEngine.classifyHiddenPostOnly(flakyAware.canonicalOutcomes(), categories);
 
-        for (TransitionClassificationEngine.ClassifiedCase outcome : classified) {
-            boolean flaky = flakyAware.flakyCaseKeys().contains(outcome.caseKey());
-            evaluationRepository.insertTestCaseResult(new TestCaseResult(
-                    UUID.randomUUID(), run.id(), evaluation.orgId(), outcome.caseKey(),
-                    outcome.status(), outcome.durationMs(),
-                    null, // never F2P/P2P/P2F/F2F on hidden
-                    outcome.message(), null,
-                    outcome.category(), flaky, flakyAware.attemptCount(),
-                    "{\"hidden\":true,\"neverF2P\":true}"));
+            for (TransitionClassificationEngine.ClassifiedCase outcome : classified) {
+                boolean flaky = flakyAware.flakyCaseKeys().contains(outcome.caseKey());
+                String message = SecretRedactor.redact(outcome.message());
+                evaluationRepository.insertTestCaseResult(new TestCaseResult(
+                        UUID.randomUUID(), run.id(), evaluation.orgId(), outcome.caseKey(),
+                        outcome.status(), outcome.durationMs(),
+                        null, // never F2P/P2P/P2F/F2F on hidden
+                        message == null ? "" : message, null,
+                        outcome.category(), flaky, flakyAware.attemptCount(),
+                        "{\"hidden\":true,\"neverF2P\":true}"));
+            }
+            evaluationRepository.finishTestRun(run.id(), "SUCCEEDED", Instant.now());
+        } finally {
+            // Remove hidden fixtures + hidden-run clone only; keep baseline/patched for quality.
+            try {
+                workspaceProvisioner.cleanupHiddenStaging(evaluation.orgId(), evaluation.id());
+                artifactRetentionService.cleanupEvaluationWorkspace(hiddenFixtures);
+            } catch (Exception cleanupEx) {
+                log.warn("Hidden stage cleanup warning: {}", SecretRedactor.sanitizeError(cleanupEx.getMessage()));
+            }
+            executionIsolatorService.cleanupEvaluation(evaluation.id());
         }
-        evaluationRepository.finishTestRun(run.id(), "SUCCEEDED", Instant.now());
     }
 
     /**
-     * Quality tools (Checkstyle/SpotBugs/PMD) land in M7. Persist a structural stub report
-     * with normalized_score=null so scoring keeps weight slots without inventing fake scores.
+     * Checkstyle + SpotBugs + PMD (XML or builtin heuristics). Separates new vs pre-existing.
+     * Sonar remains an optional stub and does not invent scores.
      */
     private void analyzeQuality(Evaluation evaluation, JsonNode task) {
         if (!evaluationRepository.findQualityReports(evaluation.id()).isEmpty()) {
             return;
         }
-        ObjectNode metrics = objectMapper.createObjectNode();
-        metrics.put("stub", true);
-        metrics.put("reason", "quality_tools_deferred_to_m7");
-        metrics.put("plannedTools", "checkstyle,spotbugs,pmd");
-        JsonNode edgeHooks = task.path("evalConfig").path("edgeCaseCategories");
-        if (!edgeHooks.isMissingNode()) {
-            metrics.set("edgeCaseCategories", edgeHooks);
+        Path patched = workspaceProvisioner.requireExisting(evaluation.workspaceUri());
+        Path baseline = workspaceProvisioner.baselineWorkspace(evaluation.orgId(), evaluation.id());
+        if (!Files.isDirectory(baseline) || baseline.equals(patched)) {
+            // Fall back: re-provision a pristine baseline tree from the task snapshot.
+            baseline = workspaceProvisioner.provision(evaluation.orgId(), evaluation.id(), task);
+            if (baseline.equals(patched)) {
+                baseline = workspaceProvisioner.cleanClone(
+                        patched, evaluation.orgId(), evaluation.id(), "baseline-quality");
+            }
         }
+
+        QualityAnalysisService.AggregatedQuality aggregated =
+                qualityAnalysisService.analyze(baseline, patched);
+        String metricsJson = artifactRetentionService.truncateForStorage(aggregated.metricsJson());
+
+        evaluationRepository.insertQualityReport(new QualityReport(
+                UUID.randomUUID(),
+                evaluation.id(),
+                evaluation.orgId(),
+                aggregated.toolLabel(),
+                metricsJson,
+                aggregated.normalizedScore(),
+                Instant.now()
+        ));
+    }
+
+    private String writeJson(Object node) {
         try {
-            evaluationRepository.insertQualityReport(new QualityReport(
-                    UUID.randomUUID(),
-                    evaluation.id(),
-                    evaluation.orgId(),
-                    "stub-m6",
-                    objectMapper.writeValueAsString(metrics),
-                    null,
-                    Instant.now()
-            ));
+            return objectMapper.writeValueAsString(node);
         } catch (Exception ex) {
-            throw new ApiException(
-                    org.springframework.http.HttpStatus.INTERNAL_SERVER_ERROR,
-                    FailureCode.INTERNAL.name(),
-                    "Failed to persist quality stub report");
+            return "{}";
         }
     }
 
@@ -707,10 +760,6 @@ public class EvaluationStageProcessor {
     }
 
     private static String sanitize(String message) {
-        if (message == null) {
-            return "";
-        }
-        String cleaned = message.replaceAll("(/[A-Za-z0-9._-]+)+", "[path]");
-        return cleaned.substring(0, Math.min(cleaned.length(), 400));
+        return SecretRedactor.sanitizeError(message);
     }
 }

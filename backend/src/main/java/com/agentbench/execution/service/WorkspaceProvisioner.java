@@ -17,19 +17,23 @@ import java.util.Map;
 import java.util.UUID;
 
 /**
- * Provisions an isolated evaluation workspace. Full Docker isolation lands in M6/M7;
- * M4 uses filesystem isolation under the artifacts root.
+ * Provisions isolated evaluation workspaces under the artifacts root.
+ * Agent and hidden-test stages use separate trees so hidden fixtures are never
+ * present during {@code INVOKING_AGENT}. Docker hardening is applied by {@code RuntimeIsolator}.
  */
 @Service
 public class WorkspaceProvisioner {
 
     private final Path workspacesRoot;
+    private final Path hiddenRoot;
     private final ObjectMapper objectMapper;
 
     public WorkspaceProvisioner(
             @Value("${agentbench.artifacts.root}") String artifactsRoot,
             ObjectMapper objectMapper) {
-        this.workspacesRoot = Path.of(artifactsRoot).resolve("workspaces").toAbsolutePath().normalize();
+        Path root = Path.of(artifactsRoot).toAbsolutePath().normalize();
+        this.workspacesRoot = root.resolve("workspaces");
+        this.hiddenRoot = root.resolve("hidden-fixtures");
         this.objectMapper = objectMapper;
     }
 
@@ -80,6 +84,76 @@ public class WorkspaceProvisioner {
                     "Invalid workspace path");
         }
         return path;
+    }
+
+    /**
+     * Stages hidden suite fixtures into a directory that is only mounted during HIDDEN_TESTS.
+     * Path is intentionally under a separate root from the agent-visible workspace.
+     */
+    public Path stageHiddenFixtures(UUID orgId, UUID evaluationId, String fixtureContent) {
+        try {
+            Files.createDirectories(hiddenRoot);
+            Path dir = hiddenRoot.resolve(orgId.toString()).resolve(evaluationId.toString());
+            if (Files.exists(dir)) {
+                deleteRecursive(dir);
+            }
+            Files.createDirectories(dir);
+            if (fixtureContent != null && !fixtureContent.isBlank()) {
+                Files.writeString(dir.resolve("suite.json"), fixtureContent, StandardCharsets.UTF_8);
+            }
+            return dir;
+        } catch (IOException ex) {
+            throw new ApiException(HttpStatus.INTERNAL_SERVER_ERROR, FailureCode.WORKSPACE_ERROR.name(),
+                    "Failed to stage hidden fixtures");
+        }
+    }
+
+    public Path baselineWorkspace(UUID orgId, UUID evaluationId) {
+        return workspacesRoot.resolve(orgId.toString()).resolve(evaluationId.toString());
+    }
+
+    /**
+     * Removes hidden-stage-only trees (hidden fixture mount + hidden-run clone).
+     * Leaves baseline and patched workspaces intact for quality analysis.
+     */
+    public void cleanupHiddenStaging(UUID orgId, UUID evaluationId) {
+        try {
+            deleteRecursive(hiddenRoot.resolve(orgId.toString()).resolve(evaluationId.toString()));
+            deleteRecursive(workspacesRoot.resolve(orgId.toString()).resolve(evaluationId + "-hidden-run"));
+        } catch (IOException ex) {
+            throw new ApiException(HttpStatus.INTERNAL_SERVER_ERROR, FailureCode.WORKSPACE_ERROR.name(),
+                    "Failed to cleanup hidden staging");
+        }
+    }
+
+    /**
+     * Secure recursive cleanup of all evaluation workspaces and hidden fixture staging dirs.
+     */
+    public void secureCleanup(UUID orgId, UUID evaluationId) {
+        try {
+            Path hidden = hiddenRoot.resolve(orgId.toString()).resolve(evaluationId.toString());
+            deleteRecursive(hidden);
+            Path orgDir = workspacesRoot.resolve(orgId.toString());
+            if (Files.isDirectory(orgDir)) {
+                try (var stream = Files.list(orgDir)) {
+                    stream.filter(p -> p.getFileName().toString().startsWith(evaluationId.toString()))
+                            .forEach(p -> {
+                                try {
+                                    deleteRecursive(p);
+                                } catch (IOException ex) {
+                                    throw new IllegalStateException(ex);
+                                }
+                            });
+                }
+            }
+        } catch (IOException ex) {
+            throw new ApiException(HttpStatus.INTERNAL_SERVER_ERROR, FailureCode.WORKSPACE_ERROR.name(),
+                    "Failed to cleanup evaluation workspace");
+        }
+    }
+
+    public Path workspacesRoot() {
+        return workspacesRoot;
     }
 
     private JsonNode resolveWorkspaceFiles(JsonNode snapshotTaskNode) {

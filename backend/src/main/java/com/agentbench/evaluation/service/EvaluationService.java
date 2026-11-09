@@ -18,6 +18,7 @@ import com.agentbench.evaluation.domain.FailureClass;
 import com.agentbench.evaluation.domain.FailureCode;
 import com.agentbench.evaluation.domain.OrgEvaluationLimits;
 import com.agentbench.evaluation.domain.PatchArtifact;
+import com.agentbench.evaluation.domain.QualityReport;
 import com.agentbench.evaluation.domain.ScoreMetric;
 import com.agentbench.evaluation.domain.TestCaseResult;
 import com.agentbench.evaluation.domain.TestRun;
@@ -177,7 +178,8 @@ public class EvaluationService {
                         patch.id(), patch.contentDigest(), patch.format(), patch.byteSize(),
                         patch.collectedAt(), patch.sealed()),
                 invocations,
-                buildScoreResponse(evaluationId)
+                buildScoreResponse(evaluationId),
+                buildQualityReports(evaluationId)
         );
     }
 
@@ -187,6 +189,7 @@ public class EvaluationService {
         Evaluation evaluation = require(orgId, evaluationId);
         EvaluationDtos.ScoreResponse score = buildScoreResponse(evaluationId);
         List<EvaluationDtos.TestRunResponse> runs = buildTestRunResponses(evaluationId);
+        List<EvaluationDtos.QualityReportResponse> qualityReports = buildQualityReports(evaluationId);
 
         Map<String, Integer> visibleTransitions = new LinkedHashMap<>();
         visibleTransitions.put("F2P", 0);
@@ -221,8 +224,102 @@ public class EvaluationService {
                 score,
                 visibleTransitions,
                 new EvaluationDtos.HiddenSummary(hiddenTotal, hiddenPassed, passRate, true),
-                runs
+                runs,
+                qualityReports
         );
+    }
+
+    private List<EvaluationDtos.QualityReportResponse> buildQualityReports(UUID evaluationId) {
+        return evaluationRepository.findQualityReports(evaluationId).stream()
+                .map(this::toQualityReport)
+                .toList();
+    }
+
+    @SuppressWarnings("unchecked")
+    private EvaluationDtos.QualityReportResponse toQualityReport(QualityReport report) {
+        Map<String, Object> metrics = readObjectMap(report.metricsJson());
+        boolean stub = true;
+        int newCount = 0;
+        int preCount = 0;
+        List<EvaluationDtos.QualityToolSummaryResponse> tools = new ArrayList<>();
+        Object stubObj = metrics.get("stub");
+        if (stubObj instanceof Boolean b) {
+            stub = b;
+        }
+        if (report.normalizedScore() != null) {
+            stub = false;
+        }
+        Object newObj = metrics.get("newFindingCount");
+        if (newObj instanceof Number n) {
+            newCount = n.intValue();
+        }
+        Object preObj = metrics.get("preExistingFindingCount");
+        if (preObj instanceof Number n) {
+            preCount = n.intValue();
+        }
+        Object toolsObj = metrics.get("tools");
+        if (toolsObj instanceof List<?> toolList) {
+            for (Object item : toolList) {
+                if (!(item instanceof Map<?, ?> map)) {
+                    continue;
+                }
+                List<EvaluationDtos.QualityFindingResponse> samples = new ArrayList<>();
+                Object sampleObj = map.get("findingsSample");
+                if (sampleObj instanceof List<?> sampleList) {
+                    for (Object sample : sampleList) {
+                        if (!(sample instanceof Map<?, ?> sm)) {
+                            continue;
+                        }
+                        samples.add(new EvaluationDtos.QualityFindingResponse(
+                                stringVal(sm.get("ruleId")),
+                                stringVal(sm.get("severity")),
+                                stringVal(sm.get("filePath")),
+                                intVal(sm.get("line")),
+                                stringVal(sm.get("message")),
+                                boolVal(sm.get("introduced"), true)
+                        ));
+                    }
+                }
+                tools.add(new EvaluationDtos.QualityToolSummaryResponse(
+                        stringVal(map.get("tool")),
+                        boolVal(map.get("stub"), false),
+                        stringVal(map.get("notes")),
+                        intVal(map.get("totalFindings")),
+                        intVal(map.get("newFindings")),
+                        intVal(map.get("preExistingFindings")),
+                        samples
+                ));
+            }
+        }
+        return new EvaluationDtos.QualityReportResponse(
+                report.id(),
+                report.tool(),
+                report.normalizedScore(),
+                stub,
+                newCount,
+                preCount,
+                tools,
+                metrics,
+                report.createdAt()
+        );
+    }
+
+    private static String stringVal(Object value) {
+        return value == null ? "" : String.valueOf(value);
+    }
+
+    private static int intVal(Object value) {
+        if (value instanceof Number number) {
+            return number.intValue();
+        }
+        return 0;
+    }
+
+    private static boolean boolVal(Object value, boolean fallback) {
+        if (value instanceof Boolean b) {
+            return b;
+        }
+        return fallback;
     }
 
     private List<EvaluationDtos.TestRunResponse> buildTestRunResponses(UUID evaluationId) {

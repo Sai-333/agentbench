@@ -2,7 +2,7 @@
 
 Multi-tenant platform for evaluating coding agents against versioned benchmarks with visible and hidden tests.
 
-**Current milestone:** M6 — Evaluation engine (test transitions + scoring).
+**Current milestone:** M7 — Security and code quality (hardened Docker isolation + Checkstyle/SpotBugs/PMD).
 
 ## Stack
 
@@ -16,6 +16,7 @@ Multi-tenant platform for evaluating coding agents against versioned benchmarks 
 | Auth | Local email/password + JWT (access + refresh); BCrypt; AES-GCM secret refs |
 | API docs | springdoc OpenAPI + Swagger UI |
 | Local runtime | Docker Compose |
+| Eval isolation | Hardened Docker via `RuntimeIsolator` (local fallback for CI) |
 
 ## Architecture
 
@@ -47,13 +48,18 @@ docker compose up -d --build
 | OpenAPI JSON | http://localhost:8080/v3/api-docs |
 | RabbitMQ management | http://localhost:15672 |
 
-## Milestone 6 API surface
+## Milestone 7 highlights
 
-| Area | Paths |
+| Area | Behavior |
 |---|---|
-| Evaluations | create/list/get/cancel (M4); detail includes `score` + transition tables |
-| Report | `GET /api/v1/orgs/{orgId}/evaluations/{id}/report` — raw metrics, weighted total, hidden pass rate |
-| Agents / benchmarks / auth / projects | retained from M2–M5 |
+| Docker hardening | No privileged, no docker.sock in eval containers, non-root, `--network none` by default, CPU/mem/pids/time limits, `--rm`, read-only rootfs + tmpfs, optional image digest pin |
+| Stages | Agent workspace never mounts hidden fixtures; `HIDDEN_TESTS` uses a separate clone + staged fixtures, then cleanup |
+| Quality | Checkstyle + SpotBugs + PMD (XML or builtin heuristics); new vs pre-existing findings; Sonar stub only |
+| Scoring | `code_quality` uses real normalized scores when tools produce results; otherwise `stub=true` raw=0 (no invented scores) |
+| Secrets / artifacts | `SecretRedactor` on logs/reports; retention TTL + max log bytes; cleanup audit (`V7`) |
+| Patches | Rejects traversal, absolute paths, `.git/hooks`, encoded `..` |
+
+**Explicit non-claim:** Docker-only isolation is **not** production-safe for arbitrary untrusted workloads. gVisor/Firecracker is planned (ADR-004). See `docs/SECURITY_THREAT_MODEL.md`.
 
 **Scoring (default-v1 weights)**
 
@@ -62,17 +68,9 @@ docker compose up -d --build
 | `target_failure_resolution` | 30% |
 | `regression` | 25% |
 | `hidden` (post-only pass rate; never labeled F2P) | 20% |
-| `code_quality` | 10% (stub=0 until M7 tools) |
+| `code_quality` | 10% (real when tools run; else stub=0) |
 | `edge_case` | 10% |
 | `efficiency` | 5% |
-
-Raw metrics are always persisted and shown separately from the weighted total. Invalid baseline / infra failure / incomplete runs withhold the weighted total (`scoreStatus`).
-
-**Transitions:** F2P / P2P / P2F / F2F only on comparable visible baseline↔post identities. Hidden suites run after patch seal as `HIDDEN_POST` with no transition labels.
-
-**JUnit XML:** Maven Surefire / JUnit 5 reports are ingested into stable `classname#method` identities (fixture-v1 remains supported).
-
-**Flaky detection:** configurable repeats via `AGENTBENCH_EVAL_FLAKY_REPEAT_RUNS` / scoring profile / task `evalConfig.flakyRepeatRuns`.
 
 ## Local development
 
@@ -107,21 +105,18 @@ Notable variables:
 
 - `AGENTBENCH_JWT_SECRET` (≥ 32 chars)
 - `AGENTBENCH_SECRETS_ENCRYPTION_KEY` (base64 32-byte AES key)
-- `AGENTBENCH_GITHUB_TOKEN` (optional live repo validation)
-- `AGENTBENCH_AGENTS_MAX_RETRIES` / `AGENTBENCH_AGENTS_TIMEOUT_SEC`
-- `AGENTBENCH_OPENAI_BASE_URL` (default `https://api.openai.com`)
-- `AGENTBENCH_EVAL_FLAKY_REPEAT_RUNS` (default `1`)
+- `AGENTBENCH_EXECUTION_MODE` (`docker` \| `local`)
+- `AGENTBENCH_RUNNER_IMAGE` / `AGENTBENCH_RUNNER_IMAGE_DIGEST`
+- `AGENTBENCH_EXEC_MEMORY_MB` / `AGENTBENCH_EXEC_CPU` / `AGENTBENCH_EXEC_PIDS` / `AGENTBENCH_EXEC_TIMEOUT_SEC`
+- `AGENTBENCH_ARTIFACT_RETENTION_DAYS` / `AGENTBENCH_ARTIFACT_MAX_LOG_BYTES`
+- `AGENTBENCH_EVAL_FLAKY_REPEAT_RUNS`
 
 ## Flyway
 
 Single migration stream under `backend/src/main/resources/db/migration`.
 
-- `V1__platform_baseline.sql` — extensions + platform schema marker
-- `V2__identity_projects.sql` — users, orgs, memberships, refresh tokens, secret refs, projects, repo config, snapshots
-- `V3__benchmarks.sql` — benchmarks, versions, tasks, visible/hidden test suites
-- `V4__evaluations.sql` — agents stub, evaluations, transitions, stage attempts, patches, test results, outbox
-- `V5__agent_invocations.sql` — expanded adapter types + `agents.agent_invocations` audit
-- `V6__scoring_engine.sql` — scoring profiles, score metadata, flaky attempt log, case categories
+- `V1`–`V6` — platform through scoring engine
+- `V7__security_quality.sql` — artifact cleanup audit + M7 marker
 
 Never edit applied migrations; forward-only only.
 
@@ -141,9 +136,8 @@ echo '{"min-api-version":"1.24"}' | sudo tee /etc/docker/daemon.json
 - Never returns plaintext secrets, ciphertext, or raw tokens in API responses.
 - Hidden suite fixtures are RBAC-gated; agent-facing projections never include them.
 - Org isolation is enforced in the application/repository layer (Postgres RLS deferred).
-- Extensible `AuthProvider` SPI; only local password provider in M2–M5 (OIDC later).
-- Agent API keys use encrypted `secret_refs`; never store keys in `config_json`.
-- Hidden test bodies are never exposed to agents; scoring uses post-only pass rate.
+- Evaluation containers never receive `docker.sock` or `--privileged`.
+- Docker-only is lab/demo grade until gVisor/Firecracker (see threat model).
 
 ## License
 
