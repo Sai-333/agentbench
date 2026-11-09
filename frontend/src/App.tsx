@@ -7,8 +7,11 @@ import {
   storeTokens,
 } from './api'
 import type {
+  Agent,
   Benchmark,
   BenchmarkVersion,
+  Evaluation,
+  EvaluationDetail,
   MeResponse,
   Org,
   Project,
@@ -18,7 +21,7 @@ import type {
 import './App.css'
 
 type Mode = 'login' | 'register'
-type WorkspaceTab = 'projects' | 'benchmarks'
+type WorkspaceTab = 'projects' | 'benchmarks' | 'evaluations'
 
 function slugify(name: string): string {
   return name
@@ -40,6 +43,9 @@ function App() {
   const [selectedVersionId, setSelectedVersionId] = useState<string>('')
   const [tasks, setTasks] = useState<Task[]>([])
   const [selectedTask, setSelectedTask] = useState<Task | null>(null)
+  const [agents, setAgents] = useState<Agent[]>([])
+  const [evaluations, setEvaluations] = useState<Evaluation[]>([])
+  const [selectedEvaluation, setSelectedEvaluation] = useState<EvaluationDetail | null>(null)
   const [tab, setTab] = useState<WorkspaceTab>('benchmarks')
   const [mode, setMode] = useState<Mode>('login')
   const [error, setError] = useState<string | null>(null)
@@ -82,6 +88,15 @@ function App() {
     }
   }, [selectedVersionId])
 
+  const loadEvaluations = useCallback(async (orgId: string) => {
+    const [agentList, evalList] = await Promise.all([
+      api<Agent[]>(`/api/v1/orgs/${orgId}/agents`),
+      api<Evaluation[]>(`/api/v1/orgs/${orgId}/evaluations?limit=50`),
+    ])
+    setAgents(agentList)
+    setEvaluations(evalList)
+  }, [])
+
   const loadWorkspace = useCallback(async () => {
     const profile = await api<MeResponse>('/api/v1/me')
     const orgList = await api<Org[]>('/api/v1/orgs')
@@ -97,14 +112,18 @@ function App() {
       const projectList = await api<Project[]>(`/api/v1/orgs/${preferred}/projects`)
       setProjects(projectList)
       await loadBenchmarks(preferred)
+      await loadEvaluations(preferred)
     } else {
       setProjects([])
       setBenchmarks([])
       setVersions([])
       setTasks([])
       setSelectedTask(null)
+      setAgents([])
+      setEvaluations([])
+      setSelectedEvaluation(null)
     }
-  }, [selectedOrgId, loadBenchmarks])
+  }, [selectedOrgId, loadBenchmarks, loadEvaluations])
 
   useEffect(() => {
     let cancelled = false
@@ -176,6 +195,9 @@ function App() {
       setVersions([])
       setTasks([])
       setSelectedTask(null)
+      setAgents([])
+      setEvaluations([])
+      setSelectedEvaluation(null)
       setSelectedOrgId('')
       setBusy(false)
     }
@@ -211,12 +233,119 @@ function App() {
       const projectList = await api<Project[]>(`/api/v1/orgs/${orgId}/projects`)
       setProjects(projectList)
       await loadBenchmarks(orgId)
+      await loadEvaluations(orgId)
+      setSelectedEvaluation(null)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not load organization')
       setProjects([])
       setBenchmarks([])
+      setEvaluations([])
+      setAgents([])
     } finally {
       setBusy(false)
+    }
+  }
+
+  async function handleCreateAgent(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (!selectedOrgId) {
+      setError('Create or select an organization first')
+      return
+    }
+    setError(null)
+    setBusy(true)
+    const formEl = event.currentTarget
+    const form = new FormData(formEl)
+    const name = String(form.get('name') || '')
+    const patch = String(form.get('patch') || '')
+    try {
+      await api<Agent>(`/api/v1/orgs/${selectedOrgId}/agents`, {
+        method: 'POST',
+        body: JSON.stringify({
+          name,
+          adapterType: 'FAKE',
+          config: patch ? { patch } : {},
+        }),
+      })
+      formEl.reset()
+      await loadEvaluations(selectedOrgId)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not create agent')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function handleCreateEvaluation(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (!selectedOrgId) {
+      setError('Create or select an organization first')
+      return
+    }
+    setError(null)
+    setBusy(true)
+    const formEl = event.currentTarget
+    const form = new FormData(formEl)
+    const benchmarkVersionId = String(form.get('benchmarkVersionId') || '')
+    const taskId = String(form.get('taskId') || '')
+    const agentId = String(form.get('agentId') || '')
+    try {
+      const created = await api<Evaluation>(`/api/v1/orgs/${selectedOrgId}/evaluations`, {
+        method: 'POST',
+        body: JSON.stringify({ benchmarkVersionId, taskId, agentId }),
+      })
+      formEl.reset()
+      await loadEvaluations(selectedOrgId)
+      const detail = await api<EvaluationDetail>(
+        `/api/v1/orgs/${selectedOrgId}/evaluations/${created.id}`,
+      )
+      setSelectedEvaluation(detail)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not create evaluation')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function handleSelectEvaluation(evaluationId: string) {
+    if (!selectedOrgId) return
+    setBusy(true)
+    setError(null)
+    try {
+      const detail = await api<EvaluationDetail>(
+        `/api/v1/orgs/${selectedOrgId}/evaluations/${evaluationId}`,
+      )
+      setSelectedEvaluation(detail)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not load evaluation')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function handleCancelEvaluation() {
+    if (!selectedOrgId || !selectedEvaluation) return
+    setBusy(true)
+    setError(null)
+    try {
+      await api(
+        `/api/v1/orgs/${selectedOrgId}/evaluations/${selectedEvaluation.evaluation.id}/cancel`,
+        { method: 'POST' },
+      )
+      await handleSelectEvaluation(selectedEvaluation.evaluation.id)
+      await loadEvaluations(selectedOrgId)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not cancel evaluation')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function handleRefreshEvaluation() {
+    if (!selectedEvaluation) return
+    await handleSelectEvaluation(selectedEvaluation.evaluation.id)
+    if (selectedOrgId) {
+      await loadEvaluations(selectedOrgId)
     }
   }
 
@@ -469,9 +598,9 @@ function App() {
   if (!me) {
     return (
       <main className="shell">
-        <p className="eyebrow">Milestone 3</p>
+        <p className="eyebrow">Milestone 4</p>
         <h1>AgentBench</h1>
-        <p className="lede">Sign in to manage organizations, projects, and benchmarks.</p>
+        <p className="lede">Sign in to manage organizations, benchmarks, and evaluations.</p>
         <div className="tabs">
           <button
             type="button"
@@ -534,7 +663,7 @@ function App() {
     <main className="shell wide">
       <header className="topbar">
         <div>
-          <p className="eyebrow">Milestone 3</p>
+          <p className="eyebrow">Milestone 4</p>
           <h1>AgentBench</h1>
         </div>
         <div className="userbox">
@@ -598,6 +727,13 @@ function App() {
             </button>
             <button
               type="button"
+              className={tab === 'evaluations' ? 'tab active' : 'tab'}
+              onClick={() => setTab('evaluations')}
+            >
+              Evaluations
+            </button>
+            <button
+              type="button"
               className={tab === 'projects' ? 'tab active' : 'tab'}
               onClick={() => setTab('projects')}
             >
@@ -605,7 +741,94 @@ function App() {
             </button>
           </div>
 
-          {tab === 'projects' ? (
+          {tab === 'evaluations' ? (
+            <>
+              <h2>Evaluations {selectedOrg ? `· ${selectedOrg.name}` : ''}</h2>
+              {selectedOrg ? (
+                <>
+                  <p className="muted small">Your role: {role || 'unknown'}</p>
+                  {evaluations.length === 0 ? (
+                    <p className="muted">No evaluations yet.</p>
+                  ) : (
+                    <ul className="list">
+                      {evaluations.map((evaluation) => (
+                        <li key={evaluation.id}>
+                          <button
+                            type="button"
+                            className={
+                              selectedEvaluation?.evaluation.id === evaluation.id
+                                ? 'list-item active'
+                                : 'list-item'
+                            }
+                            onClick={() => handleSelectEvaluation(evaluation.id)}
+                          >
+                            <span>
+                              <span className="badge">{evaluation.state}</span>{' '}
+                              <span className="muted small">{evaluation.id.slice(0, 8)}</span>
+                            </span>
+                            <span className="muted small">
+                              task {evaluation.taskId.slice(0, 8)} · agent{' '}
+                              {evaluation.agentId.slice(0, 8)}
+                            </span>
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                  {canEdit && (
+                    <>
+                      <form className="form compact" onSubmit={handleCreateAgent}>
+                        <h3>Register fake agent</h3>
+                        <label>
+                          Name
+                          <input name="name" required maxLength={120} placeholder="Fake fixer" />
+                        </label>
+                        <label>
+                          Patch (optional unified diff)
+                          <textarea name="patch" rows={3} placeholder="Uses task reference patch if empty" />
+                        </label>
+                        <button className="cta" type="submit" disabled={busy}>
+                          Create agent
+                        </button>
+                      </form>
+                      <form className="form compact" onSubmit={handleCreateEvaluation}>
+                        <h3>Enqueue evaluation</h3>
+                        <label>
+                          Published version ID
+                          <input
+                            name="benchmarkVersionId"
+                            required
+                            defaultValue={
+                              versions.find((v) => v.status === 'PUBLISHED')?.id || selectedVersionId
+                            }
+                          />
+                        </label>
+                        <label>
+                          Task ID
+                          <input name="taskId" required defaultValue={selectedTask?.id || ''} />
+                        </label>
+                        <label>
+                          Agent
+                          <select name="agentId" required defaultValue={agents[0]?.id || ''}>
+                            {agents.map((agent) => (
+                              <option key={agent.id} value={agent.id}>
+                                {agent.name} ({agent.adapterType})
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                        <button className="cta" type="submit" disabled={busy || agents.length === 0}>
+                          Create evaluation
+                        </button>
+                      </form>
+                    </>
+                  )}
+                </>
+              ) : (
+                <p className="muted">Select or create an organization to manage evaluations.</p>
+              )}
+            </>
+          ) : tab === 'projects' ? (
             <>
               <h2>Projects {selectedOrg ? `· ${selectedOrg.name}` : ''}</h2>
               {selectedOrg ? (
@@ -709,6 +932,89 @@ function App() {
           )}
         </div>
       </section>
+
+      {tab === 'evaluations' && selectedEvaluation && (
+        <section className="panel" style={{ marginTop: '1.25rem' }}>
+          <div className="topbar" style={{ marginBottom: '1rem' }}>
+            <div>
+              <h2>Evaluation detail</h2>
+              <p className="muted small">
+                {selectedEvaluation.evaluation.id} · attempt {selectedEvaluation.evaluation.attempt}
+              </p>
+            </div>
+            <div style={{ display: 'flex', gap: '0.5rem' }}>
+              <button type="button" className="cta secondary" onClick={handleRefreshEvaluation} disabled={busy}>
+                Refresh
+              </button>
+              {canEdit &&
+                !['COMPLETED', 'FAILED', 'CANCELLED', 'TIMED_OUT'].includes(
+                  selectedEvaluation.evaluation.state,
+                ) && (
+                  <button type="button" className="cta secondary" onClick={handleCancelEvaluation} disabled={busy}>
+                    Cancel
+                  </button>
+                )}
+            </div>
+          </div>
+          <p>
+            <span className="badge">{selectedEvaluation.evaluation.state}</span>
+            {selectedEvaluation.evaluation.failureClass && (
+              <span className="muted small">
+                {' '}
+                · {selectedEvaluation.evaluation.failureClass}
+                {selectedEvaluation.evaluation.errorCode
+                  ? ` / ${selectedEvaluation.evaluation.errorCode}`
+                  : ''}
+              </span>
+            )}
+          </p>
+          {selectedEvaluation.evaluation.errorMessage && (
+            <p className="error">{selectedEvaluation.evaluation.errorMessage}</p>
+          )}
+          <h3>Status timeline</h3>
+          <ol className="timeline">
+            {selectedEvaluation.transitions.map((transition) => (
+              <li key={transition.id}>
+                <strong>
+                  {transition.fromState || '∅'} → {transition.toState}
+                </strong>
+                <div className="muted small">
+                  {new Date(transition.createdAt).toLocaleString()} · {transition.actor}
+                  {transition.reason ? ` · ${transition.reason}` : ''}
+                </div>
+              </li>
+            ))}
+          </ol>
+          {selectedEvaluation.patch && (
+            <p className="muted small">
+              Sealed patch · {selectedEvaluation.patch.format} · {selectedEvaluation.patch.byteSize}{' '}
+              bytes · {selectedEvaluation.patch.contentDigest.slice(0, 12)}…
+            </p>
+          )}
+          {selectedEvaluation.testRuns.length > 0 && (
+            <>
+              <h3>Test runs</h3>
+              <ul className="list plain">
+                {selectedEvaluation.testRuns.map((run) => (
+                  <li key={run.id}>
+                    <strong>
+                      {run.phase} · {run.status}
+                    </strong>
+                    <ul className="muted small">
+                      {run.results.map((result) => (
+                        <li key={result.caseKey}>
+                          {result.caseKey}: {result.status}
+                          {result.transition ? ` (${result.transition})` : ''} · {result.durationMs}ms
+                        </li>
+                      ))}
+                    </ul>
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
+        </section>
+      )}
 
       {tab === 'benchmarks' && selectedBenchmark && (
         <section className="grid detail-grid">

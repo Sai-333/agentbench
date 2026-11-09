@@ -1,4 +1,5 @@
 /**
- * Execution module (sandbox runner). Stub package for Milestone 1.
+ * Execution helpers: workspace provisioning, fixture suite runner, patch validation/apply.
+ * Full Docker isolation lands in later milestones.
  */
 package com.agentbench.execution;

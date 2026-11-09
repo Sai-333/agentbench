@@ -2,7 +2,7 @@
 
 Multi-tenant platform for evaluating coding agents against versioned benchmarks with visible and hidden tests.
 
-**Current milestone:** M3 — benchmark management (versioned tasks, visible/hidden suites, immutable publish snapshots).
+**Current milestone:** M4 — evaluation orchestration (durable state machine, RabbitMQ outbox/worker, baseline + patch validation).
 
 ## Stack
 
@@ -49,17 +49,16 @@ docker compose up -d --build
 | OpenAPI JSON | http://localhost:8080/v3/api-docs |
 | RabbitMQ management | http://localhost:15672 |
 
-## Milestone 3 API surface
+## Milestone 4 API surface
 
 | Area | Paths |
 |---|---|
-| Benchmarks | `POST/GET/PUT/DELETE /api/v1/orgs/{orgId}/benchmarks` |
-| Versions | `/benchmarks/{id}/versions`, `/benchmark-versions/{id}`, `/publish` |
-| Tasks | `/benchmark-versions/{id}/tasks`, `/tasks/{id}` |
-| Suites | `/tasks/{id}/suites/visible`, `/tasks/{id}/suites/hidden` |
-| Agent context | `GET /tasks/{id}/agent-context` (never includes hidden suites) |
+| Evaluations | `POST/GET /api/v1/orgs/{orgId}/evaluations`, `GET .../{id}`, `POST .../{id}/cancel`, `GET .../{id}/transitions` |
+| Agents (stub) | `POST/GET /api/v1/orgs/{orgId}/agents` |
+| Benchmarks | retained from M3 (versioned tasks, visible/hidden suites) |
+| Auth / orgs / projects | retained from M2 |
 
-Also retains M2 auth/orgs/secrets/projects.
+**Evaluation lifecycle (PRD states):** `QUEUED` → `PREPARING_REPO` → `RUNNING_BASELINE` → `INVOKING_AGENT` → `COLLECTING_PATCH` → `VALIDATING_PATCH` → `APPLYING_PATCH` → `RUNNING_VISIBLE_TESTS` → `RUNNING_HIDDEN_TESTS` → `ANALYZING_QUALITY` → `SCORING` → `COMPLETED` (plus `FAILED` / `CANCELLED` / `TIMED_OUT`).
 
 **Hidden confidentiality:** VIEWER (evaluator) responses omit hidden fixture content, storage URIs, entry commands, digests, and expected outcomes. Agent-facing `agent-context` is an allowlist DTO with no hidden fields. Published versions freeze an immutable JSON snapshot and reject further task/suite edits.
 
@@ -105,6 +104,7 @@ Single migration stream under `backend/src/main/resources/db/migration`.
 - `V1__platform_baseline.sql` — extensions + platform schema marker
 - `V2__identity_projects.sql` — users, orgs, memberships, refresh tokens, secret refs, projects, repo config, snapshots
 - `V3__benchmarks.sql` — benchmarks, versions, tasks, visible/hidden test suites
+- `V4__evaluations.sql` — agents stub, evaluations, transitions, stage attempts, patches, test results, outbox
 
 Never edit applied migrations; forward-only only.
 
