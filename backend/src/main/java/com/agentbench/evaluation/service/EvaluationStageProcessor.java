@@ -4,6 +4,7 @@ import com.agentbench.agents.domain.Agent;
 import com.agentbench.agents.domain.spi.AgentInvocationResult;
 import com.agentbench.agents.infra.AgentRepository;
 import com.agentbench.agents.service.AgentInvocationService;
+import com.agentbench.evaluation.domain.CaseCategory;
 import com.agentbench.evaluation.domain.Evaluation;
 import com.agentbench.evaluation.domain.EvaluationState;
 import com.agentbench.evaluation.domain.EvaluationStateMachine;
@@ -11,6 +12,8 @@ import com.agentbench.evaluation.domain.FailureClass;
 import com.agentbench.evaluation.domain.FailureCode;
 import com.agentbench.evaluation.domain.OrgEvaluationLimits;
 import com.agentbench.evaluation.domain.PatchArtifact;
+import com.agentbench.evaluation.domain.QualityReport;
+import com.agentbench.evaluation.domain.ScoringProfile;
 import com.agentbench.evaluation.domain.TestCaseResult;
 import com.agentbench.evaluation.domain.TestCaseStatus;
 import com.agentbench.evaluation.domain.TestPhase;
@@ -18,6 +21,7 @@ import com.agentbench.evaluation.domain.TestRun;
 import com.agentbench.evaluation.infra.EvaluationRepository;
 import com.agentbench.execution.service.FixtureSuiteRunner;
 import com.agentbench.execution.service.PatchValidator;
+import com.agentbench.execution.service.SuiteExecutionService;
 import com.agentbench.execution.service.WorkspaceProvisioner;
 import com.agentbench.platform.error.ApiException;
 import com.agentbench.platform.infra.storage.ArtifactStorage;
@@ -38,6 +42,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HexFormat;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -53,10 +58,13 @@ public class EvaluationStageProcessor {
     private final EvaluationService evaluationService;
     private final AgentRepository agentRepository;
     private final WorkspaceProvisioner workspaceProvisioner;
-    private final FixtureSuiteRunner fixtureSuiteRunner;
+    private final SuiteExecutionService suiteExecutionService;
     private final PatchValidator patchValidator;
     private final AgentInvocationService agentInvocationService;
     private final ArtifactStorage artifactStorage;
+    private final TransitionClassificationEngine classificationEngine;
+    private final FlakyDetectionService flakyDetectionService;
+    private final ScoringService scoringService;
     private final ObjectMapper objectMapper;
     private final int maxAttempts;
 
@@ -65,20 +73,26 @@ public class EvaluationStageProcessor {
             EvaluationService evaluationService,
             AgentRepository agentRepository,
             WorkspaceProvisioner workspaceProvisioner,
-            FixtureSuiteRunner fixtureSuiteRunner,
+            SuiteExecutionService suiteExecutionService,
             PatchValidator patchValidator,
             AgentInvocationService agentInvocationService,
             ArtifactStorage artifactStorage,
+            TransitionClassificationEngine classificationEngine,
+            FlakyDetectionService flakyDetectionService,
+            ScoringService scoringService,
             ObjectMapper objectMapper,
             @Value("${agentbench.evaluation.max-stage-attempts:5}") int maxAttempts) {
         this.evaluationRepository = evaluationRepository;
         this.evaluationService = evaluationService;
         this.agentRepository = agentRepository;
         this.workspaceProvisioner = workspaceProvisioner;
-        this.fixtureSuiteRunner = fixtureSuiteRunner;
+        this.suiteExecutionService = suiteExecutionService;
         this.patchValidator = patchValidator;
         this.agentInvocationService = agentInvocationService;
         this.artifactStorage = artifactStorage;
+        this.classificationEngine = classificationEngine;
+        this.flakyDetectionService = flakyDetectionService;
+        this.scoringService = scoringService;
         this.objectMapper = objectMapper;
         this.maxAttempts = maxAttempts;
     }
@@ -116,12 +130,10 @@ public class EvaluationStageProcessor {
             return;
         }
 
-        // Concurrency gate when leaving QUEUED
         if (evaluation.state() == EvaluationState.QUEUED && command.targetState() == EvaluationState.PREPARING_REPO) {
             OrgEvaluationLimits limits = evaluationRepository.getOrDefaultLimits(evaluation.orgId());
             int active = evaluationRepository.countByStates(evaluation.orgId(), activeNonQueued());
             if (active >= limits.maxConcurrentEvaluations()) {
-                // Re-queue later via outbox without failing.
                 String retryMessageId = "eval-" + evaluation.id() + "-QUEUED-retry-" + UUID.randomUUID();
                 enqueue(evaluation, EvaluationState.PREPARING_REPO, evaluation.attempt(), retryMessageId);
                 evaluationRepository.markMessageProcessed(command.messageId(), evaluation.id(), evaluation.orgId());
@@ -132,7 +144,6 @@ public class EvaluationStageProcessor {
         EvaluationState expectedCurrent = predecessor(command.targetState());
         boolean alreadyInTarget = evaluation.state() == command.targetState();
         if (evaluation.state() != expectedCurrent && !alreadyInTarget) {
-            // Stale or out-of-order message.
             evaluationRepository.markMessageProcessed(command.messageId(), evaluation.id(), evaluation.orgId());
             return;
         }
@@ -202,7 +213,6 @@ public class EvaluationStageProcessor {
             }
             case RUNNING_BASELINE -> runBaseline(evaluation, task);
             case INVOKING_AGENT, COLLECTING_PATCH -> {
-                // M5: invoke configured AgentProvider (FAKE / OPENAI_COMPATIBLE / HTTP / CODING_CLI).
                 if (evaluationRepository.findPatch(evaluation.id()).isPresent()) {
                     return;
                 }
@@ -253,9 +263,13 @@ public class EvaluationStageProcessor {
                 );
             }
             case RUNNING_VISIBLE_TESTS -> runPostVisible(evaluation, task);
-            case RUNNING_HIDDEN_TESTS, ANALYZING_QUALITY, SCORING, COMPLETED -> {
-                // Scaffolded stages for later milestones — succeed as no-op hooks.
-                // COMPLETED is a terminal transition with no side effects.
+            case RUNNING_HIDDEN_TESTS -> runHiddenPost(evaluation, task);
+            case ANALYZING_QUALITY -> analyzeQuality(evaluation, task);
+            case SCORING -> {
+                scoringService.score(evaluation, task);
+            }
+            case COMPLETED -> {
+                // Terminal transition target — no side effects.
             }
             default -> throw new IllegalStateException("Unexpected stage " + command.targetState());
         }
@@ -263,62 +277,56 @@ public class EvaluationStageProcessor {
 
     private void runBaseline(Evaluation evaluation, JsonNode task) {
         if (evaluationRepository.findTestRun(evaluation.id(), TestPhase.BASELINE).isPresent()) {
-            return; // idempotent
+            return;
         }
         Path workspace = workspaceProvisioner.requireExisting(evaluation.workspaceUri());
         JsonNode visible = findSuite(task, "VISIBLE");
-        JsonNode fixture = fixtureSuiteRunner.parseFixtureContent(visible.path("fixtureContent").asText(""));
-        // Prefer structured fixture; merge expected outcomes.
-        var suiteNode = objectMapper.createObjectNode();
-        suiteNode.set("cases", fixture.path("cases"));
-        suiteNode.set("expectedOutcomes", visible.path("expectedOutcomes"));
-        if (fixture.has("workspace") && evaluation.workspaceUri() != null) {
-            // workspace already provisioned from task.fixtureWorkspace / suite content
-        }
-
         UUID suiteId = visible.hasNonNull("id") ? UUID.fromString(visible.get("id").asText()) : null;
         Instant started = Instant.now();
         TestRun run = new TestRun(
                 UUID.randomUUID(), evaluation.id(), evaluation.orgId(), TestPhase.BASELINE, suiteId,
-                "RUNNING", started, null, "{\"runner\":\"fixture-v1\"}");
+                "RUNNING", started, null, "{\"runner\":\"suite-v1\",\"phase\":\"BASELINE\"}");
         evaluationRepository.insertTestRun(run);
 
-        List<FixtureSuiteRunner.CaseOutcome> outcomes =
-                fixtureSuiteRunner.run(workspace, suiteNode.has("cases") && !suiteNode.get("cases").isMissingNode()
-                        ? suiteNode
-                        : visible, FixtureSuiteRunner.Phase.BASELINE);
+        int repeatRuns = resolveFlakyRepeats(task);
+        FlakyDetectionService.FlakyAwareResult flakyAware = flakyDetectionService.runWithFlakyDetection(
+                evaluation.id(),
+                evaluation.orgId(),
+                run.id(),
+                TestPhase.BASELINE,
+                repeatRuns,
+                () -> suiteExecutionService.run(workspace, visible, FixtureSuiteRunner.Phase.BASELINE)
+        );
+
+        Map<String, CaseCategory> categories = classificationEngine.categoriesFromFixtureCases(
+                suiteExecutionService.listCaseNodes(visible), false);
 
         boolean targetFailed = false;
-        for (FixtureSuiteRunner.CaseOutcome outcome : outcomes) {
+        boolean anyFail = false;
+        for (FixtureSuiteRunner.CaseOutcome outcome : flakyAware.canonicalOutcomes()) {
+            CaseCategory category = categories.getOrDefault(
+                    outcome.caseKey(),
+                    CaseCategory.fromRole(inferRole(outcome.caseKey()), false));
+            boolean flaky = flakyAware.flakyCaseKeys().contains(outcome.caseKey());
             evaluationRepository.insertTestCaseResult(new TestCaseResult(
                     UUID.randomUUID(), run.id(), evaluation.orgId(), outcome.caseKey(),
-                    outcome.status(), outcome.durationMs(), null, outcome.message(), null));
-            if (outcome.caseKey().toLowerCase().contains("target") && outcome.status() == TestCaseStatus.FAIL) {
-                targetFailed = true;
-            }
-            if ("target".equalsIgnoreCase(outcome.caseKey()) && outcome.status() == TestCaseStatus.FAIL) {
-                targetFailed = true;
+                    outcome.status(), outcome.durationMs(), null, outcome.message(), null,
+                    category, flaky, flakyAware.attemptCount(), "{}"));
+            if (outcome.status() == TestCaseStatus.FAIL) {
+                anyFail = true;
+                if (category == CaseCategory.TARGET || outcome.caseKey().toLowerCase().contains("target")) {
+                    targetFailed = true;
+                }
             }
         }
-        // If any FAIL exists, treat baseline as reproducible for bug-fixing fixtures.
-        boolean anyFail = outcomes.stream().anyMatch(o -> o.status() == TestCaseStatus.FAIL);
         evaluationRepository.finishTestRun(run.id(), "SUCCEEDED", Instant.now());
 
         JsonNode requireTargetFail = task.path("evalConfig").path("requireTargetFailAtBaseline");
         boolean require = requireTargetFail.isMissingNode() || requireTargetFail.asBoolean(true);
-        if (require && !anyFail && !targetFailed && !outcomes.isEmpty()) {
-            // Soft check: only fail when fixture explicitly marks role=target without FAIL.
-            boolean hasTargetRole = false;
-            JsonNode cases = suiteNode.path("cases");
-            if (cases.isArray()) {
-                for (JsonNode c : cases) {
-                    if ("target".equalsIgnoreCase(c.path("role").asText())
-                            || c.path("key").asText().toLowerCase().contains("target")) {
-                        hasTargetRole = true;
-                        break;
-                    }
-                }
-            }
+        if (require && !anyFail && !targetFailed && !flakyAware.canonicalOutcomes().isEmpty()) {
+            boolean hasTargetRole = categories.containsValue(CaseCategory.TARGET)
+                    || flakyAware.canonicalOutcomes().stream()
+                    .anyMatch(o -> o.caseKey().toLowerCase().contains("target"));
             if (hasTargetRole) {
                 throw new ApiException(
                         org.springframework.http.HttpStatus.CONFLICT,
@@ -334,56 +342,152 @@ public class EvaluationStageProcessor {
         }
         Path workspace = workspaceProvisioner.requireExisting(evaluation.workspaceUri());
         JsonNode visible = findSuite(task, "VISIBLE");
-        JsonNode fixture = fixtureSuiteRunner.parseFixtureContent(visible.path("fixtureContent").asText(""));
-        var suiteNode = objectMapper.createObjectNode();
-        suiteNode.set("cases", fixture.path("cases"));
-        suiteNode.set("expectedOutcomes", visible.path("expectedOutcomes"));
-
         UUID suiteId = visible.hasNonNull("id") ? UUID.fromString(visible.get("id").asText()) : null;
         TestRun run = new TestRun(
                 UUID.randomUUID(), evaluation.id(), evaluation.orgId(), TestPhase.VISIBLE_POST, suiteId,
-                "RUNNING", Instant.now(), null, "{\"runner\":\"fixture-v1\"}");
+                "RUNNING", Instant.now(), null, "{\"runner\":\"suite-v1\",\"phase\":\"VISIBLE_POST\"}");
         evaluationRepository.insertTestRun(run);
 
-        List<FixtureSuiteRunner.CaseOutcome> post =
-                fixtureSuiteRunner.run(workspace, suiteNode.path("cases").isMissingNode() ? visible : suiteNode,
-                        FixtureSuiteRunner.Phase.POST);
+        int repeatRuns = resolveFlakyRepeats(task);
+        FlakyDetectionService.FlakyAwareResult flakyAware = flakyDetectionService.runWithFlakyDetection(
+                evaluation.id(),
+                evaluation.orgId(),
+                run.id(),
+                TestPhase.VISIBLE_POST,
+                repeatRuns,
+                () -> suiteExecutionService.run(workspace, visible, FixtureSuiteRunner.Phase.POST)
+        );
 
         TestRun baseline = evaluationRepository.findTestRun(evaluation.id(), TestPhase.BASELINE).orElse(null);
         List<TestCaseResult> baselineResults = baseline == null
                 ? List.of()
                 : evaluationRepository.listTestCaseResults(baseline.id());
 
-        for (FixtureSuiteRunner.CaseOutcome outcome : post) {
-            String transition = null;
-            TestCaseStatus base = baselineResults.stream()
-                    .filter(r -> r.caseKey().equals(outcome.caseKey()))
-                    .map(TestCaseResult::status)
-                    .findFirst()
-                    .orElse(null);
-            if (base != null
-                    && (base == TestCaseStatus.PASS || base == TestCaseStatus.FAIL)
-                    && (outcome.status() == TestCaseStatus.PASS || outcome.status() == TestCaseStatus.FAIL)) {
-                transition = classify(base, outcome.status());
+        Map<String, CaseCategory> categories = classificationEngine.categoriesFromFixtureCases(
+                suiteExecutionService.listCaseNodes(visible), false);
+
+        List<TransitionClassificationEngine.ClassifiedCase> classified =
+                classificationEngine.classifyVisible(baselineResults, flakyAware.canonicalOutcomes(), categories);
+
+        for (TransitionClassificationEngine.ClassifiedCase outcome : classified) {
+            boolean flaky = flakyAware.flakyCaseKeys().contains(outcome.caseKey());
+            // Flaky F2P must not be trusted as a clean fix signal — drop transition label.
+            String transition = outcome.transition();
+            if (flaky && "F2P".equals(transition)) {
+                transition = null;
             }
             evaluationRepository.insertTestCaseResult(new TestCaseResult(
                     UUID.randomUUID(), run.id(), evaluation.orgId(), outcome.caseKey(),
-                    outcome.status(), outcome.durationMs(), transition, outcome.message(), null));
+                    outcome.status(), outcome.durationMs(), transition, outcome.message(), null,
+                    outcome.category(), flaky, flakyAware.attemptCount(),
+                    flaky ? "{\"flaky\":true}" : "{}"));
         }
         evaluationRepository.finishTestRun(run.id(), "SUCCEEDED", Instant.now());
     }
 
-    private static String classify(TestCaseStatus baseline, TestCaseStatus post) {
-        if (baseline == TestCaseStatus.FAIL && post == TestCaseStatus.PASS) {
-            return "F2P";
+    /**
+     * Hidden suite runs only after patch seal, in a separate stage/result set.
+     * Never label hidden outcomes as F2P/P2P/P2F/F2F — post-only pass rate for scoring.
+     * Fixture contents are never copied into agent-visible artifacts.
+     */
+    private void runHiddenPost(Evaluation evaluation, JsonNode task) {
+        if (evaluationRepository.findTestRun(evaluation.id(), TestPhase.HIDDEN_POST).isPresent()) {
+            return;
         }
-        if (baseline == TestCaseStatus.PASS && post == TestCaseStatus.PASS) {
-            return "P2P";
+        JsonNode hidden = findSuite(task, "HIDDEN");
+        if (hidden == null || hidden.isMissingNode() || hidden.isNull()
+                || (!hidden.has("fixtureContent") && !hidden.has("cases") && !hidden.has("id"))) {
+            // No hidden suite configured — record empty successful stage (pass-rate stubbed at score time).
+            return;
         }
-        if (baseline == TestCaseStatus.PASS && post == TestCaseStatus.FAIL) {
-            return "P2F";
+
+        // Ensure patch is sealed before hidden execution (defense in depth).
+        PatchArtifact patch = evaluationRepository.findPatch(evaluation.id()).orElse(null);
+        if (patch == null || !patch.sealed()) {
+            throw new ApiException(
+                    org.springframework.http.HttpStatus.CONFLICT,
+                    FailureCode.INTERNAL.name(),
+                    "Hidden suite requires a sealed patch");
         }
-        return "F2F";
+
+        Path workspace = workspaceProvisioner.requireExisting(evaluation.workspaceUri());
+        UUID suiteId = hidden.hasNonNull("id") ? UUID.fromString(hidden.get("id").asText()) : null;
+        TestRun run = new TestRun(
+                UUID.randomUUID(), evaluation.id(), evaluation.orgId(), TestPhase.HIDDEN_POST, suiteId,
+                "RUNNING", Instant.now(), null,
+                "{\"runner\":\"suite-v1\",\"phase\":\"HIDDEN_POST\",\"agentVisible\":false}");
+        evaluationRepository.insertTestRun(run);
+
+        int repeatRuns = resolveFlakyRepeats(task);
+        FlakyDetectionService.FlakyAwareResult flakyAware = flakyDetectionService.runWithFlakyDetection(
+                evaluation.id(),
+                evaluation.orgId(),
+                run.id(),
+                TestPhase.HIDDEN_POST,
+                repeatRuns,
+                () -> suiteExecutionService.run(workspace, hidden, FixtureSuiteRunner.Phase.POST)
+        );
+
+        Map<String, CaseCategory> categories = classificationEngine.categoriesFromFixtureCases(
+                suiteExecutionService.listCaseNodes(hidden), true);
+        List<TransitionClassificationEngine.ClassifiedCase> classified =
+                classificationEngine.classifyHiddenPostOnly(flakyAware.canonicalOutcomes(), categories);
+
+        for (TransitionClassificationEngine.ClassifiedCase outcome : classified) {
+            boolean flaky = flakyAware.flakyCaseKeys().contains(outcome.caseKey());
+            evaluationRepository.insertTestCaseResult(new TestCaseResult(
+                    UUID.randomUUID(), run.id(), evaluation.orgId(), outcome.caseKey(),
+                    outcome.status(), outcome.durationMs(),
+                    null, // never F2P/P2P/P2F/F2F on hidden
+                    outcome.message(), null,
+                    outcome.category(), flaky, flakyAware.attemptCount(),
+                    "{\"hidden\":true,\"neverF2P\":true}"));
+        }
+        evaluationRepository.finishTestRun(run.id(), "SUCCEEDED", Instant.now());
+    }
+
+    /**
+     * Quality tools (Checkstyle/SpotBugs/PMD) land in M7. Persist a structural stub report
+     * with normalized_score=null so scoring keeps weight slots without inventing fake scores.
+     */
+    private void analyzeQuality(Evaluation evaluation, JsonNode task) {
+        if (!evaluationRepository.findQualityReports(evaluation.id()).isEmpty()) {
+            return;
+        }
+        ObjectNode metrics = objectMapper.createObjectNode();
+        metrics.put("stub", true);
+        metrics.put("reason", "quality_tools_deferred_to_m7");
+        metrics.put("plannedTools", "checkstyle,spotbugs,pmd");
+        JsonNode edgeHooks = task.path("evalConfig").path("edgeCaseCategories");
+        if (!edgeHooks.isMissingNode()) {
+            metrics.set("edgeCaseCategories", edgeHooks);
+        }
+        try {
+            evaluationRepository.insertQualityReport(new QualityReport(
+                    UUID.randomUUID(),
+                    evaluation.id(),
+                    evaluation.orgId(),
+                    "stub-m6",
+                    objectMapper.writeValueAsString(metrics),
+                    null,
+                    Instant.now()
+            ));
+        } catch (Exception ex) {
+            throw new ApiException(
+                    org.springframework.http.HttpStatus.INTERNAL_SERVER_ERROR,
+                    FailureCode.INTERNAL.name(),
+                    "Failed to persist quality stub report");
+        }
+    }
+
+    private int resolveFlakyRepeats(JsonNode task) {
+        int fromConfig = task.path("evalConfig").path("flakyRepeatRuns").asInt(-1);
+        if (fromConfig > 0) {
+            return fromConfig;
+        }
+        return evaluationRepository.findScoringProfile(ScoringProfile.DEFAULT_KEY)
+                .map(ScoringProfile::flakyRepeatRuns)
+                .orElse(1);
     }
 
     private void storePatch(Evaluation evaluation, String patchText, int maxBytes) throws Exception {
@@ -434,8 +538,6 @@ public class EvaluationStageProcessor {
                     suiteNode.put("visibility", "VISIBLE");
                     suiteNode.put("framework", suite.path("framework").asText(null));
                     suiteNode.put("caseCount", suite.path("caseCount").asInt(0));
-                    // Fixture content for FAKE/local runners is already on the task snapshot for M4;
-                    // still omit expected hidden outcomes and any HIDDEN suites.
                     if (suite.has("fixtureContent")) {
                         suiteNode.put("fixtureContent", suite.path("fixtureContent").asText(""));
                     }
@@ -514,7 +616,17 @@ public class EvaluationStageProcessor {
                 }
             }
         }
-        return task.path("visibleSuite");
+        if ("VISIBLE".equalsIgnoreCase(visibility)) {
+            return task.path("visibleSuite");
+        }
+        if ("HIDDEN".equalsIgnoreCase(visibility)) {
+            return task.path("hiddenSuite");
+        }
+        return objectMapperMissing();
+    }
+
+    private static JsonNode objectMapperMissing() {
+        return com.fasterxml.jackson.databind.node.MissingNode.getInstance();
     }
 
     private static List<String> allowedPaths(JsonNode task) {
@@ -529,7 +641,6 @@ public class EvaluationStageProcessor {
             for (JsonNode suite : suites) {
                 if ("VISIBLE".equalsIgnoreCase(suite.path("visibility").asText())) {
                     try {
-                        // parsed later
                         String content = suite.path("fixtureContent").asText("");
                         if (content.trim().startsWith("{")) {
                             fixture = new ObjectMapper().readTree(content);
@@ -544,6 +655,23 @@ public class EvaluationStageProcessor {
             fixture.path("allowedPaths").forEach(n -> allowed.add(n.asText()));
         }
         return allowed;
+    }
+
+    private static String inferRole(String caseKey) {
+        if (caseKey == null) {
+            return null;
+        }
+        String lower = caseKey.toLowerCase();
+        if (lower.contains("target")) {
+            return "target";
+        }
+        if (lower.contains("edge")) {
+            return "edge";
+        }
+        if (lower.contains("control")) {
+            return "control";
+        }
+        return null;
     }
 
     private static EvaluationState predecessor(EvaluationState target) {

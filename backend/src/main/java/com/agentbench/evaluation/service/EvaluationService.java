@@ -18,6 +18,7 @@ import com.agentbench.evaluation.domain.FailureClass;
 import com.agentbench.evaluation.domain.FailureCode;
 import com.agentbench.evaluation.domain.OrgEvaluationLimits;
 import com.agentbench.evaluation.domain.PatchArtifact;
+import com.agentbench.evaluation.domain.ScoreMetric;
 import com.agentbench.evaluation.domain.TestCaseResult;
 import com.agentbench.evaluation.domain.TestRun;
 import com.agentbench.evaluation.infra.EvaluationRepository;
@@ -33,6 +34,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -160,22 +162,7 @@ public class EvaluationService {
         orgAccessService.requireMembership(orgId, OrgRole.VIEWER);
         Evaluation evaluation = require(orgId, evaluationId);
         List<EvaluationTransition> transitions = evaluationRepository.listTransitions(orgId, evaluationId);
-        List<TestRun> runs = evaluationRepository.listTestRuns(evaluationId);
-        List<EvaluationDtos.TestRunResponse> runResponses = new ArrayList<>();
-        for (TestRun run : runs) {
-            List<TestCaseResult> results = evaluationRepository.listTestCaseResults(run.id());
-            runResponses.add(new EvaluationDtos.TestRunResponse(
-                    run.id(),
-                    run.phase().name(),
-                    run.status(),
-                    run.startedAt(),
-                    run.finishedAt(),
-                    results.stream()
-                            .map(r -> new EvaluationDtos.TestCaseResultResponse(
-                                    r.caseKey(), r.status().name(), r.durationMs(), r.transition(), r.message()))
-                            .toList()
-            ));
-        }
+        List<EvaluationDtos.TestRunResponse> runResponses = buildTestRunResponses(evaluationId);
         PatchArtifact patch = evaluationRepository.findPatch(evaluationId).orElse(null);
         List<AgentDtos.AgentInvocationResponse> invocations = agentInvocationService
                 .listForEvaluation(orgId, evaluationId)
@@ -189,8 +176,147 @@ public class EvaluationService {
                 patch == null ? null : new EvaluationDtos.PatchResponse(
                         patch.id(), patch.contentDigest(), patch.format(), patch.byteSize(),
                         patch.collectedAt(), patch.sealed()),
-                invocations
+                invocations,
+                buildScoreResponse(evaluationId)
         );
+    }
+
+    @Transactional(readOnly = true)
+    public EvaluationDtos.EvaluationReportResponse report(UUID orgId, UUID evaluationId) {
+        orgAccessService.requireMembership(orgId, OrgRole.VIEWER);
+        Evaluation evaluation = require(orgId, evaluationId);
+        EvaluationDtos.ScoreResponse score = buildScoreResponse(evaluationId);
+        List<EvaluationDtos.TestRunResponse> runs = buildTestRunResponses(evaluationId);
+
+        Map<String, Integer> visibleTransitions = new LinkedHashMap<>();
+        visibleTransitions.put("F2P", 0);
+        visibleTransitions.put("P2P", 0);
+        visibleTransitions.put("P2F", 0);
+        visibleTransitions.put("F2F", 0);
+        int hiddenTotal = 0;
+        int hiddenPassed = 0;
+        for (EvaluationDtos.TestRunResponse run : runs) {
+            if ("VISIBLE_POST".equals(run.phase())) {
+                for (EvaluationDtos.TestCaseResultResponse result : run.results()) {
+                    if (result.transition() != null) {
+                        visibleTransitions.merge(result.transition(), 1, Integer::sum);
+                    }
+                }
+            }
+            if ("HIDDEN_POST".equals(run.phase())) {
+                for (EvaluationDtos.TestCaseResultResponse result : run.results()) {
+                    hiddenTotal++;
+                    if ("PASS".equals(result.status())) {
+                        hiddenPassed++;
+                    }
+                }
+            }
+        }
+        if (score != null && score.transitionSummary() != null && !score.transitionSummary().isEmpty()) {
+            visibleTransitions.putAll(score.transitionSummary());
+        }
+        Double passRate = hiddenTotal == 0 ? null : (double) hiddenPassed / (double) hiddenTotal;
+        return new EvaluationDtos.EvaluationReportResponse(
+                toResponse(evaluation),
+                score,
+                visibleTransitions,
+                new EvaluationDtos.HiddenSummary(hiddenTotal, hiddenPassed, passRate, true),
+                runs
+        );
+    }
+
+    private List<EvaluationDtos.TestRunResponse> buildTestRunResponses(UUID evaluationId) {
+        List<TestRun> runs = evaluationRepository.listTestRuns(evaluationId);
+        List<EvaluationDtos.TestRunResponse> runResponses = new ArrayList<>();
+        for (TestRun run : runs) {
+            List<TestCaseResult> results = evaluationRepository.listTestCaseResults(run.id());
+            runResponses.add(new EvaluationDtos.TestRunResponse(
+                    run.id(),
+                    run.phase().name(),
+                    run.status(),
+                    run.startedAt(),
+                    run.finishedAt(),
+                    results.stream()
+                            .map(r -> new EvaluationDtos.TestCaseResultResponse(
+                                    r.caseKey(),
+                                    r.status().name(),
+                                    r.durationMs(),
+                                    r.transition(),
+                                    r.message(),
+                                    r.category() == null ? null : r.category().name(),
+                                    r.flaky(),
+                                    r.attemptCount()))
+                            .toList()
+            ));
+        }
+        return runResponses;
+    }
+
+    private EvaluationDtos.ScoreResponse buildScoreResponse(UUID evaluationId) {
+        return evaluationRepository.findScore(evaluationId).map(score -> {
+            List<ScoreMetric> metrics = evaluationRepository.listScoreMetrics(score.id());
+            return new EvaluationDtos.ScoreResponse(
+                    score.id(),
+                    score.scoreStatus().name(),
+                    score.weightedTotal(),
+                    score.profileKey(),
+                    readIntMap(score.transitionSummaryJson()),
+                    readObjectMap(score.rawSummaryJson()),
+                    readStringList(score.warningsJson()),
+                    metrics.stream()
+                            .map(m -> new EvaluationDtos.ScoreMetricResponse(
+                                    m.metricKey(),
+                                    m.rawValue(),
+                                    m.weight(),
+                                    m.weightedValue(),
+                                    readObjectMap(m.metaJson())))
+                            .toList(),
+                    score.computedAt()
+            );
+        }).orElse(null);
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Integer> readIntMap(String json) {
+        try {
+            if (json == null || json.isBlank()) {
+                return Map.of();
+            }
+            Map<String, Object> raw = objectMapper.readValue(json, Map.class);
+            Map<String, Integer> out = new LinkedHashMap<>();
+            for (Map.Entry<String, Object> entry : raw.entrySet()) {
+                if (entry.getValue() instanceof Number number) {
+                    out.put(entry.getKey(), number.intValue());
+                }
+            }
+            return out;
+        } catch (Exception ex) {
+            return Map.of();
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> readObjectMap(String json) {
+        try {
+            if (json == null || json.isBlank()) {
+                return Map.of();
+            }
+            return objectMapper.readValue(json, Map.class);
+        } catch (Exception ex) {
+            return Map.of();
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private List<String> readStringList(String json) {
+        try {
+            if (json == null || json.isBlank()) {
+                return List.of();
+            }
+            return objectMapper.readValue(json, List.class);
+        } catch (Exception ex) {
+            return List.of();
+        }
     }
 
     private AgentDtos.AgentInvocationResponse toInvocationResponse(AgentInvocation inv) {

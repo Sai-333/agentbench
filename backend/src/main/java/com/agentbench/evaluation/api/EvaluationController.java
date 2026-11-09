@@ -23,7 +23,7 @@ import java.util.UUID;
 
 @RestController
 @RequestMapping(ApiPaths.ORG_BASE + "/evaluations")
-@Tag(name = "Evaluations", description = "Evaluation orchestration lifecycle (Milestone 4)")
+@Tag(name = "Evaluations", description = "Evaluation orchestration + scoring (Milestone 6)")
 @SecurityRequirement(name = "bearerAuth")
 public class EvaluationController {
 
@@ -68,6 +68,14 @@ public class EvaluationController {
             @PathVariable UUID orgId,
             @PathVariable UUID evaluationId) {
         return evaluationService.listTransitions(orgId, evaluationId);
+    }
+
+    @GetMapping("/{evaluationId}/report")
+    @Operation(summary = "Scoring report with raw metrics, transition matrix, and hidden pass rate")
+    public EvaluationDtos.EvaluationReportResponse report(
+            @PathVariable UUID orgId,
+            @PathVariable UUID evaluationId) {
+        return evaluationService.report(orgId, evaluationId);
     }
 
     @PostMapping("/{evaluationId}/cancel")

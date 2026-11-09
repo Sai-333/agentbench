@@ -3,8 +3,10 @@ package com.agentbench.evaluation.api.dto;
 import com.agentbench.agents.api.dto.AgentDtos;
 import jakarta.validation.constraints.NotNull;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 public final class EvaluationDtos {
@@ -55,7 +57,10 @@ public final class EvaluationDtos {
             String status,
             int durationMs,
             String transition,
-            String message
+            String message,
+            String category,
+            boolean flaky,
+            int attemptCount
     ) {
     }
 
@@ -79,12 +84,52 @@ public final class EvaluationDtos {
     ) {
     }
 
+    public record ScoreMetricResponse(
+            String metricKey,
+            BigDecimal rawValue,
+            BigDecimal weight,
+            BigDecimal weightedValue,
+            Map<String, Object> meta
+    ) {
+    }
+
+    public record ScoreResponse(
+            UUID id,
+            String scoreStatus,
+            BigDecimal weightedTotal,
+            String profileKey,
+            Map<String, Integer> transitionSummary,
+            Map<String, Object> rawSummary,
+            List<String> warnings,
+            List<ScoreMetricResponse> metrics,
+            Instant computedAt
+    ) {
+    }
+
     public record EvaluationDetailResponse(
             EvaluationResponse evaluation,
             List<TransitionResponse> transitions,
             List<TestRunResponse> testRuns,
             PatchResponse patch,
-            List<AgentDtos.AgentInvocationResponse> agentInvocations
+            List<AgentDtos.AgentInvocationResponse> agentInvocations,
+            ScoreResponse score
+    ) {
+    }
+
+    public record EvaluationReportResponse(
+            EvaluationResponse evaluation,
+            ScoreResponse score,
+            Map<String, Integer> visibleTransitions,
+            HiddenSummary hidden,
+            List<TestRunResponse> testRuns
+    ) {
+    }
+
+    public record HiddenSummary(
+            int total,
+            int passed,
+            Double passRate,
+            boolean neverLabeledF2P
     ) {
     }
 }

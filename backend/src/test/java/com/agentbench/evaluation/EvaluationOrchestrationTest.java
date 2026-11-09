@@ -66,6 +66,27 @@ class EvaluationOrchestrationTest {
             }
             """;
 
+    private static final String HIDDEN_FIXTURE = """
+            {
+              "cases": [
+                {
+                  "key": "hidden.generalizes",
+                  "role": "hidden",
+                  "postChecks": [
+                    {"type": "file_contains", "path": "src/Bug.java", "needle": "Objects.requireNonNull", "expectPresent": true}
+                  ]
+                },
+                {
+                  "key": "edge.nullValue",
+                  "role": "edge",
+                  "postChecks": [
+                    {"type": "file_contains", "path": "src/Bug.java", "needle": "requireNonNull", "expectPresent": true}
+                  ]
+                }
+              ]
+            }
+            """;
+
     private static final String REFERENCE_PATCH = """
             diff --git a/src/Bug.java b/src/Bug.java
             --- a/src/Bug.java
@@ -169,6 +190,8 @@ class EvaluationOrchestrationTest {
         assertTrue(body.get("transitions").size() >= 10);
         boolean hasBaseline = false;
         boolean hasF2p = false;
+        boolean hasHidden = false;
+        boolean hiddenHasTransitionLabel = false;
         for (JsonNode run : body.get("testRuns")) {
             if ("BASELINE".equals(run.get("phase").asText())) {
                 hasBaseline = true;
@@ -182,9 +205,35 @@ class EvaluationOrchestrationTest {
                     }
                 }
             }
+            if ("HIDDEN_POST".equals(run.get("phase").asText())) {
+                hasHidden = true;
+                for (JsonNode result : run.get("results")) {
+                    if (!result.path("transition").isNull() && !result.path("transition").asText("").isBlank()) {
+                        hiddenHasTransitionLabel = true;
+                    }
+                }
+            }
         }
         assertTrue(hasBaseline);
         assertTrue(hasF2p);
+        assertTrue(hasHidden);
+        assertTrue(!hiddenHasTransitionLabel, "Hidden suite must never be labeled F2P/P2P/P2F/F2F");
+
+        JsonNode score = body.get("score");
+        assertTrue(score != null && !score.isNull());
+        assertEquals("VALID", score.get("scoreStatus").asText());
+        assertTrue(score.get("weightedTotal").asDouble() > 0);
+        assertTrue(score.get("metrics").isArray());
+        assertTrue(score.get("metrics").size() >= 6);
+        assertTrue(score.get("transitionSummary").get("F2P").asInt() >= 1);
+
+        mockMvc.perform(get("/api/v1/orgs/{orgId}/evaluations/{id}/report", orgId, evaluationId)
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.score.scoreStatus").value("VALID"))
+                .andExpect(jsonPath("$.hidden.neverLabeledF2P").value(true))
+                .andExpect(jsonPath("$.hidden.total").value(2))
+                .andExpect(jsonPath("$.visibleTransitions.F2P").isNumber());
 
         // Duplicate message protection: reprocessing same completed evaluation command is a no-op
         int again = syncRunner.drainAndProcess(5);
@@ -254,6 +303,7 @@ class EvaluationOrchestrationTest {
         UUID versionId = createVersion(token, orgId, benchmarkId);
         UUID taskId = createTask(token, orgId, versionId);
         upsertVisible(token, orgId, taskId);
+        upsertHidden(token, orgId, taskId);
         mockMvc.perform(post("/api/v1/orgs/{orgId}/benchmark-versions/{versionId}/publish", orgId, versionId)
                         .header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk());
@@ -366,6 +416,21 @@ class EvaluationOrchestrationTest {
                 .set("expectedOutcomes", objectMapper.createObjectNode())
                 .toString();
         mockMvc.perform(put("/api/v1/orgs/{orgId}/tasks/{taskId}/suites/visible", orgId, taskId)
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isOk());
+    }
+
+    private void upsertHidden(String token, UUID orgId, UUID taskId) throws Exception {
+        String body = objectMapper.createObjectNode()
+                .put("framework", "fixture-v1")
+                .put("entryCommand", "fixture")
+                .put("fixtureContent", HIDDEN_FIXTURE)
+                .put("caseCount", 2)
+                .set("expectedOutcomes", objectMapper.createObjectNode())
+                .toString();
+        mockMvc.perform(put("/api/v1/orgs/{orgId}/tasks/{taskId}/suites/hidden", orgId, taskId)
                         .header("Authorization", "Bearer " + token)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(body))

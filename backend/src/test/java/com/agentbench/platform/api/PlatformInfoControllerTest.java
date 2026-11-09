@@ -31,7 +31,7 @@ class PlatformInfoControllerTest {
         mockMvc.perform(get("/api/v1/info"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.name").value("agentbench"))
-                .andExpect(jsonPath("$.milestone").value("M5"))
+                .andExpect(jsonPath("$.milestone").value("M6"))
                 .andExpect(jsonPath("$.orgScopedApiBase", containsString("/api/v1/orgs/{orgId}/")));
     }
 }
