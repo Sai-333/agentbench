@@ -33,6 +33,7 @@
 | Managed cloud Helm chart / operators | **Deferred** — raw manifests only |
 | Certified hostile multi-tenant SaaS security | **Not claimed** |
 | Measured production throughput / capacity numbers | **Not claimed** without attached runs |
+| Live public hosted demo on Oracle Always Free | **Guide-ready** (`docs/DEPLOYMENT_ORACLE_ALWAYS_FREE.md`) — **not actually hosted** until Sai’s VM + SSH apply the runbook |
 | Sonar as scoring authority | **Not claimed** — stub only |
 | Full CODING_CLI production isolation | Skeleton only |
 | NetworkPolicies / mTLS / WORM audit | Draft / later |
