@@ -1,8 +1,9 @@
 package com.agentbench.evaluation.service;
 
 import com.agentbench.agents.domain.Agent;
+import com.agentbench.agents.domain.spi.AgentInvocationResult;
 import com.agentbench.agents.infra.AgentRepository;
-import com.agentbench.agents.service.FakeAgentAdapter;
+import com.agentbench.agents.service.AgentInvocationService;
 import com.agentbench.evaluation.domain.Evaluation;
 import com.agentbench.evaluation.domain.EvaluationState;
 import com.agentbench.evaluation.domain.EvaluationStateMachine;
@@ -22,6 +23,7 @@ import com.agentbench.platform.error.ApiException;
 import com.agentbench.platform.infra.storage.ArtifactStorage;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -53,7 +55,7 @@ public class EvaluationStageProcessor {
     private final WorkspaceProvisioner workspaceProvisioner;
     private final FixtureSuiteRunner fixtureSuiteRunner;
     private final PatchValidator patchValidator;
-    private final FakeAgentAdapter fakeAgentAdapter;
+    private final AgentInvocationService agentInvocationService;
     private final ArtifactStorage artifactStorage;
     private final ObjectMapper objectMapper;
     private final int maxAttempts;
@@ -65,7 +67,7 @@ public class EvaluationStageProcessor {
             WorkspaceProvisioner workspaceProvisioner,
             FixtureSuiteRunner fixtureSuiteRunner,
             PatchValidator patchValidator,
-            FakeAgentAdapter fakeAgentAdapter,
+            AgentInvocationService agentInvocationService,
             ArtifactStorage artifactStorage,
             ObjectMapper objectMapper,
             @Value("${agentbench.evaluation.max-stage-attempts:5}") int maxAttempts) {
@@ -75,7 +77,7 @@ public class EvaluationStageProcessor {
         this.workspaceProvisioner = workspaceProvisioner;
         this.fixtureSuiteRunner = fixtureSuiteRunner;
         this.patchValidator = patchValidator;
-        this.fakeAgentAdapter = fakeAgentAdapter;
+        this.agentInvocationService = agentInvocationService;
         this.artifactStorage = artifactStorage;
         this.objectMapper = objectMapper;
         this.maxAttempts = maxAttempts;
@@ -200,14 +202,23 @@ public class EvaluationStageProcessor {
             }
             case RUNNING_BASELINE -> runBaseline(evaluation, task);
             case INVOKING_AGENT, COLLECTING_PATCH -> {
-                // Stub agent stage (full providers in M5): collect patch via FakeAgentAdapter.
+                // M5: invoke configured AgentProvider (FAKE / OPENAI_COMPATIBLE / HTTP / CODING_CLI).
                 if (evaluationRepository.findPatch(evaluation.id()).isPresent()) {
                     return;
                 }
                 Agent agent = agentRepository.find(evaluation.orgId(), evaluation.agentId())
                         .orElseThrow(() -> ApiException.notFound("Agent not found"));
-                String patch = fakeAgentAdapter.collectPatch(agent, task);
-                storePatch(evaluation, patch, limits.maxPatchBytes());
+                String visibleContext = buildVisibleAgentContext(task);
+                String referenceHint = task.hasNonNull("referencePatch") ? task.get("referencePatch").asText("") : null;
+                AgentInvocationResult result = agentInvocationService.invokeForEvaluation(
+                        agent,
+                        evaluation.id(),
+                        evaluation.taskId(),
+                        task.path("prompt").asText(""),
+                        visibleContext,
+                        referenceHint
+                );
+                storePatch(evaluation, result.patchContent(), limits.maxPatchBytes());
             }
             case VALIDATING_PATCH -> {
                 PatchArtifact patch = evaluationRepository.findPatch(evaluation.id())
@@ -406,6 +417,36 @@ public class EvaluationStageProcessor {
         }
     }
 
+    private String buildVisibleAgentContext(JsonNode task) throws Exception {
+        // Defense in depth: never include hidden suite bodies in provider prompts.
+        ObjectNode visible = objectMapper.createObjectNode();
+        visible.put("slug", task.path("slug").asText(null));
+        visible.put("title", task.path("title").asText(null));
+        visible.put("prompt", task.path("prompt").asText(""));
+        visible.put("acceptanceCriteria", task.path("acceptanceCriteria").asText(null));
+        visible.put("languageTags", task.path("languageTags"));
+        JsonNode suites = task.path("suites");
+        if (suites.isArray()) {
+            var visibleSuites = objectMapper.createArrayNode();
+            for (JsonNode suite : suites) {
+                if ("VISIBLE".equalsIgnoreCase(suite.path("visibility").asText())) {
+                    ObjectNode suiteNode = objectMapper.createObjectNode();
+                    suiteNode.put("visibility", "VISIBLE");
+                    suiteNode.put("framework", suite.path("framework").asText(null));
+                    suiteNode.put("caseCount", suite.path("caseCount").asInt(0));
+                    // Fixture content for FAKE/local runners is already on the task snapshot for M4;
+                    // still omit expected hidden outcomes and any HIDDEN suites.
+                    if (suite.has("fixtureContent")) {
+                        suiteNode.put("fixtureContent", suite.path("fixtureContent").asText(""));
+                    }
+                    visibleSuites.add(suiteNode);
+                }
+            }
+            visible.set("visibleSuites", visibleSuites);
+        }
+        return objectMapper.writeValueAsString(visible);
+    }
+
     private void handleStageFailure(Evaluation evaluation, EvaluationCommand command, String code, String message) {
         evaluationRepository.completeStageAttempt(
                 evaluation.id(), command.targetState(), command.attempt(), "FAILED", code, sanitize(message));
@@ -415,7 +456,11 @@ public class EvaluationStageProcessor {
         try {
             failureCode = FailureCode.valueOf(code);
         } catch (Exception ex) {
-            failureCode = FailureCode.INTERNAL;
+            if (code != null && (code.startsWith("AGENT_") || "CODING_CLI_NOT_IMPLEMENTED".equals(code))) {
+                failureCode = "AGENT_TIMEOUT".equals(code) ? FailureCode.AGENT_TIMEOUT : FailureCode.AGENT_ERROR;
+            } else {
+                failureCode = FailureCode.INTERNAL;
+            }
         }
 
         if (command.attempt() < maxAttempts

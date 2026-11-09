@@ -74,6 +74,50 @@ public class AgentRepository {
                 (rs, rowNum) -> map(rs));
     }
 
+    public Agent update(
+            UUID orgId,
+            UUID agentId,
+            String name,
+            String adapterType,
+            UUID secretRefId,
+            String configJson,
+            boolean enabled) {
+        Instant now = Instant.now();
+        int updated = jdbc.update("""
+                UPDATE agents.agents
+                SET name = :name,
+                    adapter_type = :adapterType,
+                    secret_ref_id = :secretRefId,
+                    config_json = CAST(:configJson AS jsonb),
+                    enabled = :enabled,
+                    updated_at = :updatedAt
+                WHERE org_id = :orgId AND id = :id
+                """,
+                new MapSqlParameterSource()
+                        .addValue("orgId", orgId)
+                        .addValue("id", agentId)
+                        .addValue("name", name)
+                        .addValue("adapterType", adapterType)
+                        .addValue("secretRefId", secretRefId)
+                        .addValue("configJson", configJson == null ? "{}" : configJson)
+                        .addValue("enabled", enabled)
+                        .addValue("updatedAt", Timestamp.from(now)));
+        if (updated == 0) {
+            throw new IllegalStateException("Agent not found for update");
+        }
+        return find(orgId, agentId).orElseThrow();
+    }
+
+    public void delete(UUID orgId, UUID agentId) {
+        jdbc.update("""
+                DELETE FROM agents.agents
+                WHERE org_id = :orgId AND id = :id
+                """,
+                new MapSqlParameterSource()
+                        .addValue("orgId", orgId)
+                        .addValue("id", agentId));
+    }
+
     private static Agent map(ResultSet rs) throws SQLException {
         return new Agent(
                 rs.getObject("id", UUID.class),

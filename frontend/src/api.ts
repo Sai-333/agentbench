@@ -99,8 +99,46 @@ export type Agent = {
   orgId: string
   name: string
   adapterType: string
+  secretRefId: string | null
+  config: Record<string, unknown>
   enabled: boolean
+  createdBy: string
   createdAt: string
+  updatedAt: string
+}
+
+export type AgentInvocation = {
+  id: string
+  evaluationId: string
+  agentId: string
+  taskId: string
+  provider: string
+  model: string | null
+  providerVersion: string | null
+  prompt: string | null
+  status: string
+  attempt: number
+  maxAttempts: number
+  startedAt: string
+  finishedAt: string | null
+  patchDigest: string | null
+  patchByteSize: number | null
+  promptTokens: number | null
+  completionTokens: number | null
+  totalTokens: number | null
+  estimatedCostUsd: number | null
+  errorCode: string | null
+  errorMessage: string | null
+  meta: Record<string, unknown>
+  createdAt: string
+}
+
+export type SecretMeta = {
+  id: string
+  name: string
+  purpose: string
+  createdAt: string
+  rotatedAt: string | null
 }
 
 export type Evaluation = {
@@ -154,6 +192,7 @@ export type EvaluationDetail = {
     byteSize: number
     sealed: boolean
   } | null
+  agentInvocations: AgentInvocation[]
 }
 
 export function getAccessToken(): string | null {

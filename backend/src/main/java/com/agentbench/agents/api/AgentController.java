@@ -8,7 +8,9 @@ import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -21,7 +23,7 @@ import java.util.UUID;
 
 @RestController
 @RequestMapping(ApiPaths.ORG_BASE + "/agents")
-@Tag(name = "Agents", description = "Org-scoped agent registry (M4 stub adapters)")
+@Tag(name = "Agents", description = "Org-scoped agent registry and provider configuration (M5)")
 @SecurityRequirement(name = "bearerAuth")
 public class AgentController {
 
@@ -50,5 +52,29 @@ public class AgentController {
     @Operation(summary = "Get agent")
     public AgentDtos.AgentResponse get(@PathVariable UUID orgId, @PathVariable UUID agentId) {
         return agentService.get(orgId, agentId);
+    }
+
+    @PatchMapping("/{agentId}")
+    @Operation(summary = "Update agent configuration")
+    public AgentDtos.AgentResponse update(
+            @PathVariable UUID orgId,
+            @PathVariable UUID agentId,
+            @Valid @RequestBody AgentDtos.UpdateAgentRequest request) {
+        return agentService.update(orgId, agentId, request);
+    }
+
+    @DeleteMapping("/{agentId}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    @Operation(summary = "Disable and remove agent (soft-disable then delete when unused)")
+    public void delete(@PathVariable UUID orgId, @PathVariable UUID agentId) {
+        agentService.delete(orgId, agentId);
+    }
+
+    @PostMapping("/{agentId}/test-connection")
+    @Operation(summary = "Probe adapter registration and credential presence")
+    public AgentDtos.TestConnectionResponse testConnection(
+            @PathVariable UUID orgId,
+            @PathVariable UUID agentId) {
+        return agentService.testConnection(orgId, agentId);
     }
 }

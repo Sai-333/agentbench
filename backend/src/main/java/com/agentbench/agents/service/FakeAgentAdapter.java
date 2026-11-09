@@ -1,46 +1,50 @@
 package com.agentbench.agents.service;
 
 import com.agentbench.agents.domain.Agent;
+import com.agentbench.agents.domain.spi.AgentInvocationRequest;
+import com.agentbench.agents.domain.spi.AgentInvocationResult;
+import com.agentbench.agents.infra.FakeAgentProvider;
 import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Component;
 
+import java.time.Duration;
+import java.util.UUID;
+
 /**
- * M4/M5 stub agent adapter: returns a configured patch or the task reference patch.
- * Never claims test results.
+ * Backward-compatible façade over {@link FakeAgentProvider} for callers that still use collectPatch.
+ * Prefer {@link AgentInvocationService} for evaluation orchestration.
  */
 @Component
 public class FakeAgentAdapter {
 
-    private final ObjectMapper objectMapper;
+    private final FakeAgentProvider fakeAgentProvider;
 
-    public FakeAgentAdapter(ObjectMapper objectMapper) {
-        this.objectMapper = objectMapper;
+    public FakeAgentAdapter(FakeAgentProvider fakeAgentProvider) {
+        this.fakeAgentProvider = fakeAgentProvider;
     }
 
     public String collectPatch(Agent agent, JsonNode taskSnapshot) {
-        try {
-            JsonNode config = objectMapper.readTree(agent.configJson() == null ? "{}" : agent.configJson());
-            if (config.hasNonNull("patch")) {
-                return config.get("patch").asText();
-            }
-        } catch (Exception ignored) {
-            // fall through to reference patch
-        }
+        String reference = null;
         if (taskSnapshot != null && taskSnapshot.hasNonNull("referencePatch")) {
-            String reference = taskSnapshot.get("referencePatch").asText("");
-            if (!reference.isBlank()) {
-                return reference;
-            }
+            reference = taskSnapshot.get("referencePatch").asText("");
         }
-        // Minimal no-op style patch against README if nothing else is configured.
-        return """
-                diff --git a/README.md b/README.md
-                --- a/README.md
-                +++ b/README.md
-                @@ -1 +1,2 @@
-                 AgentBench evaluation workspace
-                +Patched by FakeAgentAdapter
-                """;
+        String prompt = taskSnapshot != null && taskSnapshot.hasNonNull("prompt")
+                ? taskSnapshot.get("prompt").asText("")
+                : "";
+        AgentInvocationRequest request = new AgentInvocationRequest(
+                UUID.randomUUID(),
+                agent.orgId(),
+                UUID.randomUUID(),
+                UUID.randomUUID(),
+                agent,
+                prompt,
+                null,
+                reference,
+                null,
+                Duration.ofSeconds(30),
+                1
+        );
+        AgentInvocationResult result = fakeAgentProvider.invoke(request);
+        return result.patchContent();
     }
 }

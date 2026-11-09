@@ -15,13 +15,14 @@ import type {
   MeResponse,
   Org,
   Project,
+  SecretMeta,
   Task,
   TokenResponse,
 } from './api'
 import './App.css'
 
 type Mode = 'login' | 'register'
-type WorkspaceTab = 'projects' | 'benchmarks' | 'evaluations'
+type WorkspaceTab = 'projects' | 'benchmarks' | 'evaluations' | 'agents'
 
 function slugify(name: string): string {
   return name
@@ -44,8 +45,10 @@ function App() {
   const [tasks, setTasks] = useState<Task[]>([])
   const [selectedTask, setSelectedTask] = useState<Task | null>(null)
   const [agents, setAgents] = useState<Agent[]>([])
+  const [secrets, setSecrets] = useState<SecretMeta[]>([])
   const [evaluations, setEvaluations] = useState<Evaluation[]>([])
   const [selectedEvaluation, setSelectedEvaluation] = useState<EvaluationDetail | null>(null)
+  const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null)
   const [tab, setTab] = useState<WorkspaceTab>('benchmarks')
   const [mode, setMode] = useState<Mode>('login')
   const [error, setError] = useState<string | null>(null)
@@ -88,6 +91,18 @@ function App() {
     }
   }, [selectedVersionId])
 
+  const loadAgents = useCallback(async (orgId: string) => {
+    const agentList = await api<Agent[]>(`/api/v1/orgs/${orgId}/agents`)
+    setAgents(agentList)
+    setSelectedAgent((prev) => agentList.find((a) => a.id === prev?.id) || agentList[0] || null)
+    try {
+      const secretList = await api<SecretMeta[]>(`/api/v1/orgs/${orgId}/secrets`)
+      setSecrets(secretList)
+    } catch {
+      setSecrets([])
+    }
+  }, [])
+
   const loadEvaluations = useCallback(async (orgId: string) => {
     const [agentList, evalList] = await Promise.all([
       api<Agent[]>(`/api/v1/orgs/${orgId}/agents`),
@@ -113,6 +128,7 @@ function App() {
       setProjects(projectList)
       await loadBenchmarks(preferred)
       await loadEvaluations(preferred)
+      await loadAgents(preferred)
     } else {
       setProjects([])
       setBenchmarks([])
@@ -120,10 +136,12 @@ function App() {
       setTasks([])
       setSelectedTask(null)
       setAgents([])
+      setSecrets([])
       setEvaluations([])
       setSelectedEvaluation(null)
+      setSelectedAgent(null)
     }
-  }, [selectedOrgId, loadBenchmarks, loadEvaluations])
+  }, [selectedOrgId, loadBenchmarks, loadEvaluations, loadAgents])
 
   useEffect(() => {
     let cancelled = false
@@ -196,8 +214,10 @@ function App() {
       setTasks([])
       setSelectedTask(null)
       setAgents([])
+      setSecrets([])
       setEvaluations([])
       setSelectedEvaluation(null)
+      setSelectedAgent(null)
       setSelectedOrgId('')
       setBusy(false)
     }
@@ -234,6 +254,7 @@ function App() {
       setProjects(projectList)
       await loadBenchmarks(orgId)
       await loadEvaluations(orgId)
+      await loadAgents(orgId)
       setSelectedEvaluation(null)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not load organization')
@@ -241,6 +262,7 @@ function App() {
       setBenchmarks([])
       setEvaluations([])
       setAgents([])
+      setSecrets([])
     } finally {
       setBusy(false)
     }
@@ -257,20 +279,100 @@ function App() {
     const formEl = event.currentTarget
     const form = new FormData(formEl)
     const name = String(form.get('name') || '')
+    const adapterType = String(form.get('adapterType') || 'FAKE')
     const patch = String(form.get('patch') || '')
+    const model = String(form.get('model') || '')
+    const baseUrl = String(form.get('baseUrl') || '')
+    const endpoint = String(form.get('endpoint') || '')
+    const secretRefId = String(form.get('secretRefId') || '')
+    const config: Record<string, unknown> = {}
+    if (patch) config.patch = patch
+    if (model) config.model = model
+    if (baseUrl) config.baseUrl = baseUrl
+    if (endpoint) config.endpoint = endpoint
+    if (adapterType === 'OPENAI_COMPATIBLE' || adapterType === 'HTTP') {
+      config.maxRetries = Number(form.get('maxRetries') || 2)
+      config.timeoutSec = Number(form.get('timeoutSec') || 60)
+    }
     try {
-      await api<Agent>(`/api/v1/orgs/${selectedOrgId}/agents`, {
+      const created = await api<Agent>(`/api/v1/orgs/${selectedOrgId}/agents`, {
         method: 'POST',
         body: JSON.stringify({
           name,
-          adapterType: 'FAKE',
-          config: patch ? { patch } : {},
+          adapterType,
+          secretRefId: secretRefId || null,
+          config,
         }),
       })
       formEl.reset()
+      await loadAgents(selectedOrgId)
       await loadEvaluations(selectedOrgId)
+      setSelectedAgent(created)
+      setTab('agents')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not create agent')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function handleCreateSecret(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (!selectedOrgId) return
+    setError(null)
+    setBusy(true)
+    const formEl = event.currentTarget
+    const form = new FormData(formEl)
+    try {
+      await api<SecretMeta>(`/api/v1/orgs/${selectedOrgId}/secrets`, {
+        method: 'POST',
+        body: JSON.stringify({
+          name: String(form.get('name') || ''),
+          purpose: 'AGENT',
+          plaintext: String(form.get('plaintext') || ''),
+        }),
+      })
+      formEl.reset()
+      await loadAgents(selectedOrgId)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not create secret')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function handleTestAgentConnection(agentId: string) {
+    if (!selectedOrgId) return
+    setError(null)
+    setBusy(true)
+    try {
+      const result = await api<{ ok: boolean; provider: string; detail: string }>(
+        `/api/v1/orgs/${selectedOrgId}/agents/${agentId}/test-connection`,
+        { method: 'POST' },
+      )
+      setError(result.ok ? null : result.detail)
+      if (result.ok) {
+        window.alert(`${result.provider}: ${result.detail}`)
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Connection test failed')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function handleToggleAgent(agent: Agent) {
+    if (!selectedOrgId) return
+    setError(null)
+    setBusy(true)
+    try {
+      await api<Agent>(`/api/v1/orgs/${selectedOrgId}/agents/${agent.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ enabled: !agent.enabled }),
+      })
+      await loadAgents(selectedOrgId)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not update agent')
     } finally {
       setBusy(false)
     }
@@ -734,6 +836,13 @@ function App() {
             </button>
             <button
               type="button"
+              className={tab === 'agents' ? 'tab active' : 'tab'}
+              onClick={() => setTab('agents')}
+            >
+              Agents
+            </button>
+            <button
+              type="button"
               className={tab === 'projects' ? 'tab active' : 'tab'}
               onClick={() => setTab('projects')}
             >
@@ -741,7 +850,153 @@ function App() {
             </button>
           </div>
 
-          {tab === 'evaluations' ? (
+          {tab === 'agents' ? (
+            <>
+              <h2>Agents {selectedOrg ? `· ${selectedOrg.name}` : ''}</h2>
+              {selectedOrg ? (
+                <>
+                  <p className="muted small">
+                    Provider-independent adapters. API keys live in org secrets — never in agent config.
+                  </p>
+                  {agents.length === 0 ? (
+                    <p className="muted">No agents registered yet.</p>
+                  ) : (
+                    <ul className="list">
+                      {agents.map((agent) => (
+                        <li key={agent.id}>
+                          <button
+                            type="button"
+                            className={
+                              selectedAgent?.id === agent.id ? 'list-item active' : 'list-item'
+                            }
+                            onClick={() => setSelectedAgent(agent)}
+                          >
+                            <span>
+                              <strong>{agent.name}</strong>{' '}
+                              <span className="badge">{agent.adapterType}</span>{' '}
+                              {!agent.enabled && <span className="badge">disabled</span>}
+                            </span>
+                            <span className="muted small">
+                              {agent.secretRefId ? 'secret linked' : 'no secret'} ·{' '}
+                              {agent.id.slice(0, 8)}
+                            </span>
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                  {selectedAgent && (
+                    <div className="detail-block">
+                      <h3>{selectedAgent.name}</h3>
+                      <p className="muted small">
+                        {selectedAgent.adapterType}
+                        {selectedAgent.config?.model
+                          ? ` · model ${String(selectedAgent.config.model)}`
+                          : ''}
+                        {selectedAgent.config?.baseUrl
+                          ? ` · ${String(selectedAgent.config.baseUrl)}`
+                          : ''}
+                      </p>
+                      {canEdit && (
+                        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                          <button
+                            type="button"
+                            className="cta secondary"
+                            disabled={busy}
+                            onClick={() => handleTestAgentConnection(selectedAgent.id)}
+                          >
+                            Test connection
+                          </button>
+                          <button
+                            type="button"
+                            className="cta secondary"
+                            disabled={busy}
+                            onClick={() => handleToggleAgent(selectedAgent)}
+                          >
+                            {selectedAgent.enabled ? 'Disable' : 'Enable'}
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  {canEdit && (
+                    <>
+                      <form className="form compact" onSubmit={handleCreateSecret}>
+                        <h3>Store agent API key</h3>
+                        <label>
+                          Secret name
+                          <input name="name" required maxLength={100} placeholder="openai-prod" />
+                        </label>
+                        <label>
+                          Plaintext (write-only)
+                          <input name="plaintext" required type="password" autoComplete="off" />
+                        </label>
+                        <button className="cta" type="submit" disabled={busy}>
+                          Save encrypted secret
+                        </button>
+                      </form>
+                      <form className="form compact" onSubmit={handleCreateAgent}>
+                        <h3>Register agent</h3>
+                        <label>
+                          Name
+                          <input name="name" required maxLength={120} placeholder="OpenAI fixer" />
+                        </label>
+                        <label>
+                          Adapter
+                          <select name="adapterType" defaultValue="FAKE">
+                            <option value="FAKE">FAKE (deterministic CI)</option>
+                            <option value="OPENAI_COMPATIBLE">OPENAI_COMPATIBLE</option>
+                            <option value="HTTP">HTTP webhook</option>
+                            <option value="CODING_CLI">CODING_CLI (skeleton)</option>
+                          </select>
+                        </label>
+                        <label>
+                          Secret ref
+                          <select name="secretRefId" defaultValue="">
+                            <option value="">None</option>
+                            {secrets.map((secret) => (
+                              <option key={secret.id} value={secret.id}>
+                                {secret.name} ({secret.purpose})
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                        <label>
+                          Model
+                          <input name="model" placeholder="gpt-4o-mini" />
+                        </label>
+                        <label>
+                          Base URL (OpenAI-compatible)
+                          <input name="baseUrl" placeholder="https://api.openai.com" />
+                        </label>
+                        <label>
+                          HTTP endpoint
+                          <input name="endpoint" placeholder="https://agent.example/invoke" />
+                        </label>
+                        <label>
+                          Max retries
+                          <input name="maxRetries" type="number" min={0} max={5} defaultValue={2} />
+                        </label>
+                        <label>
+                          Timeout (sec)
+                          <input name="timeoutSec" type="number" min={5} max={600} defaultValue={60} />
+                        </label>
+                        <label>
+                          Fixture patch (FAKE / CLI demos)
+                          <textarea name="patch" rows={3} placeholder="Optional unified diff" />
+                        </label>
+                        <button className="cta" type="submit" disabled={busy}>
+                          Create agent
+                        </button>
+                      </form>
+                    </>
+                  )}
+                </>
+              ) : (
+                <p className="muted">Select or create an organization to manage agents.</p>
+              )}
+            </>
+          ) : tab === 'evaluations' ? (
             <>
               <h2>Evaluations {selectedOrg ? `· ${selectedOrg.name}` : ''}</h2>
               {selectedOrg ? (
@@ -777,20 +1032,9 @@ function App() {
                   )}
                   {canEdit && (
                     <>
-                      <form className="form compact" onSubmit={handleCreateAgent}>
-                        <h3>Register fake agent</h3>
-                        <label>
-                          Name
-                          <input name="name" required maxLength={120} placeholder="Fake fixer" />
-                        </label>
-                        <label>
-                          Patch (optional unified diff)
-                          <textarea name="patch" rows={3} placeholder="Uses task reference patch if empty" />
-                        </label>
-                        <button className="cta" type="submit" disabled={busy}>
-                          Create agent
-                        </button>
-                      </form>
+                      <p className="muted small">
+                        Configure providers on the Agents tab. FAKE agents still work for local demos.
+                      </p>
                       <form className="form compact" onSubmit={handleCreateEvaluation}>
                         <h3>Enqueue evaluation</h3>
                         <label>
@@ -990,6 +1234,41 @@ function App() {
               Sealed patch · {selectedEvaluation.patch.format} · {selectedEvaluation.patch.byteSize}{' '}
               bytes · {selectedEvaluation.patch.contentDigest.slice(0, 12)}…
             </p>
+          )}
+          {(selectedEvaluation.agentInvocations?.length ?? 0) > 0 && (
+            <>
+              <h3>Agent runs</h3>
+              <ul className="list plain">
+                {selectedEvaluation.agentInvocations.map((invocation) => (
+                  <li key={invocation.id}>
+                    <strong>
+                      {invocation.provider} · {invocation.status} · attempt {invocation.attempt}/
+                      {invocation.maxAttempts}
+                    </strong>
+                    <div className="muted small">
+                      {invocation.model || 'model n/a'}
+                      {invocation.providerVersion ? ` · ${invocation.providerVersion}` : ''}
+                      {invocation.totalTokens != null ? ` · ${invocation.totalTokens} tokens` : ''}
+                      {invocation.estimatedCostUsd != null
+                        ? ` · ~$${invocation.estimatedCostUsd}`
+                        : ''}
+                      {invocation.patchDigest
+                        ? ` · patch ${invocation.patchDigest.slice(0, 12)}…`
+                        : ''}
+                    </div>
+                    {invocation.errorMessage && (
+                      <div className="error small">{invocation.errorMessage}</div>
+                    )}
+                    <div className="muted small">
+                      {new Date(invocation.startedAt).toLocaleString()}
+                      {invocation.finishedAt
+                        ? ` → ${new Date(invocation.finishedAt).toLocaleString()}`
+                        : ''}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </>
           )}
           {selectedEvaluation.testRuns.length > 0 && (
             <>

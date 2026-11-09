@@ -78,6 +78,15 @@ agentbench:
     default-max-queued: 20
     default-max-duration-sec: 1800
     default-max-patch-bytes: 5242880
+  agents:
+    default-max-retries: ${AGENTBENCH_AGENTS_MAX_RETRIES:2}
+    default-timeout-sec: ${AGENTBENCH_AGENTS_TIMEOUT_SEC:60}
+    retry-backoff-ms: ${AGENTBENCH_AGENTS_RETRY_BACKOFF_MS:250}
+    openai:
+      default-base-url: ${AGENTBENCH_OPENAI_BASE_URL:https://api.openai.com}
+      default-timeout-sec: ${AGENTBENCH_OPENAI_TIMEOUT_SEC:60}
+    http:
+      default-timeout-sec: ${AGENTBENCH_HTTP_AGENT_TIMEOUT_SEC:60}
 
 logging:
   structured:
