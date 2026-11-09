@@ -1,0 +1,12 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: agentbench
+resources:
+  - namespace.yaml
+  - configmap.yaml
+  - secrets.yaml
+  - backend-deployment.yaml
+  - worker-deployment.yaml
+  - frontend-deployment.yaml
+commonLabels:
+  app.kubernetes.io/part-of: agentbench

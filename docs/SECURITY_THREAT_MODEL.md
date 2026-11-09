@@ -1,6 +1,6 @@
 # AgentBench — Security Threat Model
 
-**Status:** Updated for Milestone 7 (Docker hardening + quality analysis)  
+**Status:** Updated for Milestone 9 (production readiness review)  
 **Method:** Informal STRIDE-oriented review for v1 (Docker-first). Not a formal certification artifact.
 
 ---
@@ -49,36 +49,38 @@
 
 ## 4. STRIDE summary
 
-| Threat | Example | Mitigation (v1 / M7) | Later |
+| Threat | Example | Mitigation (v1 / M7–M9) | Later |
 |---|---|---|---|
-| **Spoofing** | Stolen JWT / agent callback token | Short-lived JWT; rotate agent secrets; TLS | mTLS to workers |
+| **Spoofing** | Stolen JWT / agent callback token | Short-lived JWT; rotate agent secrets; TLS at edge | OIDC + mTLS to workers |
 | **Tampering** | Mutate sealed patch mid-run | Content digest; seal flag; immutable storage | Signed artifacts |
 | **Repudiation** | Deny hidden-test access | Audit log for suite reads & state transitions | WORM storage |
-| **Info disclosure** | Hidden tests in agent prompt / logs | Separate stages; DTO filtering; log redaction; RBAC | Dedicated hidden runner pool |
-| **DoS** | Fork bomb / disk fill in container | Docker CPU/mem/pids/ulimit; timeouts; queue quotas per org | cgroup v2 + Fair share |
+| **Info disclosure** | Hidden tests in agent prompt / logs | Separate stages; DTO filtering; `SecretRedactor`; RBAC | Dedicated hidden runner pool |
+| **DoS** | Fork bomb / disk fill in container | Docker CPU/mem/pids/ulimit; timeouts; org quotas; DLQ | cgroup v2 + fair share |
 | **Elevation** | Escape to host via Docker | No docker.sock in workload; non-root; dropped caps; read-only root FS | gVisor/Firecracker (ADR-004) |
 
 ---
 
-## 5. Critical controls (M7 checklist)
+## 5. Critical controls checklist (verified in M7–M9)
 
 1. **Never mount Docker socket** into evaluation containers (`RuntimeIsolator` rejects sock/privileged fragments).
 2. **Network:** default deny egress from eval containers (`--network none`); allowlist only if task requires.
 3. **Hidden tests:** loaded only in `RUNNING_HIDDEN_TESTS`; staged under a separate root; cleaned after the stage; not present during `INVOKING_AGENT`.
-4. **Secrets:** encrypt at rest; never in API responses; `SecretRedactor` on logs/errors/reports/artifacts.
-5. **Org isolation:** every query constrained by `org_id`; automated IDOR tests (must stay green).
+4. **Secrets:** encrypt at rest; never in API responses; `SecretRedactor` on logs/errors/reports/artifacts/DLQ logs.
+5. **Org isolation:** every query constrained by `org_id`; automated IDOR tests.
 6. **Resource limits** mandatory on every hardened `docker run` (CPU/mem/pids/time/ulimit).
 7. **Image allowlist** — configurable runner image; optional digest pin (`image@sha256:…`).
 8. **Patch size limits** and reject suspicious paths (`../`, absolute paths, `.git/hooks`, encoded traversal).
 9. **Ephemeral containers** (`--rm`) + best-effort name cleanup after timeout/kill.
 10. **Artifact retention** — configurable TTL sweep + max log bytes; cleanup audit table.
+11. **Recovery:** listener retry → DLQ; stage infra retry budget; cancel between stages; duration watchdog; invalid baseline fails closed.
+12. **Health:** liveness/readiness probes; graceful shutdown for rolling updates.
 
 ---
 
 ## 6. Explicit non-claim (mandatory)
 
 **Docker-only isolation is NOT production-safe for arbitrary untrusted workloads.**  
-Shared-kernel breakout residual risk remains. Use only for early trusted demos / lab orgs until **gVisor** and/or **Firecracker** land behind `RuntimeIsolator` (ADR-004 / M9+).
+Shared-kernel breakout residual risk remains. Use only for early trusted demos / lab orgs until **gVisor** and/or **Firecracker** land behind `RuntimeIsolator` (ADR-004). M9 adds operational readiness — **not** stronger sandboxing.
 
 ---
 
@@ -120,7 +122,7 @@ Shared-kernel breakout residual risk remains. Use only for early trusted demos /
 
 ---
 
-## 10. Code quality stage (M7)
+## 10. Code quality stage
 
 - Tools: **Checkstyle + SpotBugs + PMD** (XML when present; builtin Java heuristics otherwise).
 - **Sonar** is an optional/extensible stub only — never invents scores.
@@ -129,7 +131,7 @@ Shared-kernel breakout residual risk remains. Use only for early trusted demos /
 
 ---
 
-## 11. Residual risks (accepted for early milestones)
+## 11. Residual risks (accepted; updated M9)
 
 | Risk | Acceptance |
 |---|---|
@@ -137,6 +139,9 @@ Shared-kernel breakout residual risk remains. Use only for early trusted demos /
 | LLM provider stores prompts | Prefer self-hosted or enterprise no-retention contracts |
 | Author malice within own org | Org trust boundary; cannot fully prevent |
 | Local isolator fallback | Used when Docker unavailable (CI); not a security boundary |
+| K8s templates lack NetworkPolicy/mTLS | Operator must add before hostile multi-tenant |
+| AES secret-key rotation not automated | Dual-key re-encrypt before rotating encryption keys |
+| Public leaderboards / OIDC absent | Intentional deferral — see portfolio checklist |
 
 ---
 
@@ -147,3 +152,4 @@ Shared-kernel breakout residual risk remains. Use only for early trusted demos /
 - Secret redaction unit tests.
 - RestAssured/MockMvc IDOR suites (org authorization regression).
 - Quality parsers + new-vs-pre-existing aggregation tests.
+- M9 recovery: invalid baseline, mid-flight cancel, timeout watchdog, retry policy, DLQ topology.

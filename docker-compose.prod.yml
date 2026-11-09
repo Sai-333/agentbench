@@ -1,0 +1,56 @@
+# Production-ish Compose overlay for demos / single-host staging.
+# Usage:
+#   cp .env.example .env   # set strong secrets first
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+#
+# This is NOT a hardened multi-tenant SaaS profile. See docs/DEPLOYMENT.md.
+
+services:
+  postgres:
+    restart: always
+    # Prefer named volume backups over host binds for portability.
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+
+  redis:
+    restart: always
+    command: ["redis-server", "--appendonly", "yes", "--save", "60", "1000"]
+
+  rabbitmq:
+    restart: always
+    environment:
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:?set RABBITMQ_PASSWORD in .env}
+
+  backend:
+    restart: always
+    environment:
+      AGENTBENCH_JWT_SECRET: ${AGENTBENCH_JWT_SECRET:?set AGENTBENCH_JWT_SECRET (>=32 chars)}
+      AGENTBENCH_SECRETS_ENCRYPTION_KEY: ${AGENTBENCH_SECRETS_ENCRYPTION_KEY:?set base64 32-byte AES key}
+      AGENTBENCH_SHUTDOWN_TIMEOUT: ${AGENTBENCH_SHUTDOWN_TIMEOUT:-30s}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
+      SPRING_RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD}
+      JAVA_OPTS: ${BACKEND_JAVA_OPTS:--XX:MaxRAMPercentage=75.0 -Djava.security.egd=file:/dev/./urandom}
+    # Publish readiness/liveness only; avoid exposing management details publicly via reverse proxy.
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/actuator/health/readiness | grep -q UP || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 18
+      start_period: 50s
+    stop_grace_period: 45s
+
+  worker:
+    restart: always
+    environment:
+      AGENTBENCH_JWT_SECRET: ${AGENTBENCH_JWT_SECRET}
+      AGENTBENCH_SECRETS_ENCRYPTION_KEY: ${AGENTBENCH_SECRETS_ENCRYPTION_KEY}
+      AGENTBENCH_SHUTDOWN_TIMEOUT: ${AGENTBENCH_SHUTDOWN_TIMEOUT:-30s}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
+      SPRING_RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD}
+      JAVA_OPTS: ${WORKER_JAVA_OPTS:--XX:MaxRAMPercentage=75.0}
+      AGENTBENCH_EXECUTION_MODE: ${AGENTBENCH_EXECUTION_MODE:-docker}
+    stop_grace_period: 60s
+
+  frontend:
+    restart: always
+    stop_grace_period: 20s

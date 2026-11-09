@@ -22,11 +22,12 @@ public class PlatformInfoController {
     public Map<String, Object> info() {
         return Map.of(
                 "name", "agentbench",
-                "milestone", "M8",
+                "milestone", "M9",
                 "apiBase", ApiPaths.API_V1,
                 "orgScopedApiBase", "/api/v1/orgs/{orgId}/...",
                 "auth", "JWT bearer (local email/password)",
-                "analytics", "org-private overview/leaderboard/comparisons/costs/exports"
+                "analytics", "org-private overview/leaderboard/comparisons/costs/exports",
+                "readiness", "production-minded Compose/K8s path; Docker isolation not hostile multi-tenant"
         );
     }
 }

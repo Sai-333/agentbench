@@ -618,8 +618,7 @@ public class EvaluationStageProcessor {
             }
         }
 
-        if (command.attempt() < maxAttempts
-                && failureCode.failureClass() == FailureClass.INFRASTRUCTURE) {
+        if (StageRetryPolicy.shouldRetry(failureCode, command.attempt(), maxAttempts)) {
             int nextAttempt = command.attempt() + 1;
             evaluationRepository.updateLifecycle(
                     evaluation.orgId(),
