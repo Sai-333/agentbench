@@ -1,5 +1,7 @@
 package com.agentbench.platform.api;
 
+import com.agentbench.identity.security.JwtAuthenticationFilter;
+import com.agentbench.identity.security.JwtService;
 import com.agentbench.platform.config.SecurityConfig;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -14,8 +16,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(controllers = PlatformInfoController.class)
-@Import(SecurityConfig.class)
-@TestPropertySource(properties = "logging.structured.format.console=")
+@Import({SecurityConfig.class, JwtAuthenticationFilter.class, JwtService.class})
+@TestPropertySource(properties = {
+        "logging.structured.format.console=",
+        "agentbench.jwt.secret=test-only-jwt-secret-key-32chars-min!!"
+})
 class PlatformInfoControllerTest {
 
     @Autowired
@@ -26,7 +31,7 @@ class PlatformInfoControllerTest {
         mockMvc.perform(get("/api/v1/info"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.name").value("agentbench"))
-                .andExpect(jsonPath("$.milestone").value("M1"))
+                .andExpect(jsonPath("$.milestone").value("M2"))
                 .andExpect(jsonPath("$.orgScopedApiBase", containsString("/api/v1/orgs/{orgId}/")));
     }
 }

@@ -2,7 +2,7 @@
 
 Multi-tenant platform for evaluating coding agents against versioned benchmarks with visible and hidden tests.
 
-**Current milestone:** M1 — modular monolith foundation (no product CRUD yet).
+**Current milestone:** M2 — authentication, organizations, RBAC, projects, and GitHub repo configuration.
 
 ## Stack
 
@@ -13,24 +13,25 @@ Multi-tenant platform for evaluating coding agents against versioned benchmarks 
 | Data | PostgreSQL 16, Flyway (single forward-only stream) |
 | Cache | Redis 7 |
 | Messaging | RabbitMQ 3.13 |
+| Auth | Local email/password + JWT (access + refresh); BCrypt; AES-GCM secret refs |
 | API docs | springdoc OpenAPI + Swagger UI |
 | Local runtime | Docker Compose |
 
-## Architecture (M1)
+## Architecture
 
 Single Spring Boot deployable with modular package boundaries:
 
 `identity` · `projects` · `benchmarks` · `agents` · `evaluation` · `execution` · `analytics` · `platform`
 
-Future tenant APIs use an explicit org base:
+Tenant APIs use an explicit org base with membership checks on every request:
 
 ```text
 /api/v1/orgs/{orgId}/...
 ```
 
-Milestone 1 exposes platform info, Actuator health/readiness, and Swagger UI only. Module packages are stubbed for later milestones.
+Roles (org-scoped): `OWNER`, `ADMIN`, `DEVELOPER`, `VIEWER`.
 
-`ArtifactStorage` is defined in `platform` with a local filesystem implementation (Compose volume). S3-compatible storage comes later.
+Workspaces as a separate entity are **deferred** (not in the approved database design); organizations are the tenant boundary.
 
 ## Quick start (Compose)
 
@@ -48,7 +49,18 @@ docker compose up -d --build
 | OpenAPI JSON | http://localhost:8080/v3/api-docs |
 | RabbitMQ management | http://localhost:15672 |
 
-Compose runs `backend` (API) and `worker` (same image, `worker` profile) as **non-root**, with **no privileged mode** and **no docker.sock** mounts.
+## Milestone 2 API surface
+
+| Area | Paths |
+|---|---|
+| Auth | `POST /api/v1/auth/register`, `/login`, `/refresh`, `/logout`; `GET /api/v1/me` |
+| Orgs | `POST/GET /api/v1/orgs`, `GET /api/v1/orgs/{orgId}`, members CRUD |
+| Secrets | `/api/v1/orgs/{orgId}/secrets` (metadata only in responses) |
+| Projects | `/api/v1/orgs/{orgId}/projects` CRUD |
+| Repo config | `/projects/{projectId}/repository` (+ `/validate`) |
+| Snapshots | `/projects/{projectId}/snapshots`, `/snapshots/{snapshotId}` |
+
+GitHub accessibility validation uses an org `GIT` secret or `AGENTBENCH_GITHUB_TOKEN`. Without a token, status is `SKIPPED` (clear message), not a hard failure.
 
 ## Local development
 
@@ -71,38 +83,38 @@ docker compose up -d postgres redis rabbitmq
 ```bash
 cd frontend
 npm ci
+npm run build
 npm run dev
 ```
 
-Vite proxies `/api`, `/actuator`, and Swagger paths to `http://localhost:8080`.
-
 ## Configuration
 
-Environment variables are documented in `.env.example`. Do not commit real secrets.
+See `.env.example`. Do not commit real secrets.
 
-Key Spring settings (Compose-injected):
+Notable M2 variables:
 
-- `SPRING_DATASOURCE_*`
-- `SPRING_DATA_REDIS_*`
-- `SPRING_RABBITMQ_*`
-- `AGENTBENCH_ARTIFACTS_ROOT`
-- `LOGGING_STRUCTURED_FORMAT_CONSOLE=logstash`
+- `AGENTBENCH_JWT_SECRET` (≥ 32 chars)
+- `AGENTBENCH_SECRETS_ENCRYPTION_KEY` (base64 32-byte AES key)
+- `AGENTBENCH_GITHUB_TOKEN` (optional live repo validation)
 
 ## Flyway
 
 Single migration stream under `backend/src/main/resources/db/migration`.
 
-`V1__platform_baseline.sql` enables `pgcrypto` + `citext`, creates the `platform` schema, and inserts a schema marker. Product entity tables start in Milestone 2+.
+- `V1__platform_baseline.sql` — extensions + platform schema marker
+- `V2__identity_projects.sql` — users, orgs, memberships, refresh tokens, secret refs, projects, repo config, snapshots
+
+Never edit applied migrations; forward-only only.
 
 ## CI
 
-GitHub Actions (`.github/workflows/ci.yml`) builds the backend (`mvn verify`) and frontend (`npm ci && npm run build`) on pushes and pull requests to `main`.
+GitHub Actions builds backend (`mvn verify`, including Testcontainers auth/org isolation tests when Docker is available) and frontend (`npm ci && npm run build`).
 
-## Security notes (M1)
+## Security notes
 
-- Actuator, OpenAPI, and `/api/v1/info` are open; JWT + org membership arrive in M2.
-- Evaluation containers and Docker socket access are intentionally absent in M1.
-- Isolation policy for later milestones: no privileged containers, no docker.sock in workloads, non-root app services.
+- Never returns plaintext secrets, ciphertext, or raw tokens in API responses.
+- Org isolation is enforced in the application/repository layer (Postgres RLS deferred).
+- Extensible `AuthProvider` SPI; only local password provider in M2 (OIDC later).
 
 ## License
 

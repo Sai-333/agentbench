@@ -1,4 +1,4 @@
 /**
- * Identity & access module (orgs, users, roles, JWT). Stub package for Milestone 1.
+ * Identity & access: users, organizations, memberships, JWT, encrypted secret refs.
  */
 package com.agentbench.identity;

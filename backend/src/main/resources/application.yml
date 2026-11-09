@@ -58,6 +58,17 @@ springdoc:
 agentbench:
   artifacts:
     root: ${AGENTBENCH_ARTIFACTS_ROOT:/var/agentbench/artifacts}
+  jwt:
+    # Override in production. Must be >= 32 characters.
+    secret: ${AGENTBENCH_JWT_SECRET:local-dev-only-change-me-agentbench-jwt-secret-key}
+    access-ttl-seconds: ${AGENTBENCH_JWT_ACCESS_TTL_SECONDS:900}
+    refresh-ttl-seconds: ${AGENTBENCH_JWT_REFRESH_TTL_SECONDS:604800}
+  secrets:
+    # Base64-encoded 32-byte AES key. Default is for local/Compose only.
+    encryption-key: ${AGENTBENCH_SECRETS_ENCRYPTION_KEY:MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=}
+  github:
+    token: ${AGENTBENCH_GITHUB_TOKEN:}
+    validation-enabled: ${AGENTBENCH_GITHUB_VALIDATION_ENABLED:true}
 
 logging:
   structured:
