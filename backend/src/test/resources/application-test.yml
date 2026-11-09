@@ -1,0 +1,37 @@
+spring:
+  datasource:
+    url: jdbc:h2:mem:agentbench;MODE=PostgreSQL;DB_CLOSE_DELAY=-1;DATABASE_TO_LOWER=TRUE
+    username: sa
+    password:
+    driver-class-name: org.h2.Driver
+  flyway:
+    enabled: false
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.data.redis.RedisAutoConfiguration
+      - org.springframework.boot.autoconfigure.data.redis.RedisRepositoriesAutoConfiguration
+      - org.springframework.boot.autoconfigure.amqp.RabbitAutoConfiguration
+  data:
+    redis:
+      host: localhost
+  rabbitmq:
+    host: localhost
+    listener:
+      simple:
+        auto-startup: false
+
+management:
+  health:
+    redis:
+      enabled: false
+    rabbit:
+      enabled: false
+
+agentbench:
+  artifacts:
+    root: ${java.io.tmpdir}/agentbench-test-artifacts
+
+logging:
+  level:
+    root: WARN
+    com.agentbench: INFO
