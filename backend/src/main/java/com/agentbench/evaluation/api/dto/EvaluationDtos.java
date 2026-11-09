@@ -1,5 +1,6 @@
 package com.agentbench.evaluation.api.dto;
 
+import com.agentbench.agents.api.dto.AgentDtos;
 import jakarta.validation.constraints.NotNull;
 
 import java.time.Instant;
@@ -82,7 +83,8 @@ public final class EvaluationDtos {
             EvaluationResponse evaluation,
             List<TransitionResponse> transitions,
             List<TestRunResponse> testRuns,
-            PatchResponse patch
+            PatchResponse patch,
+            List<AgentDtos.AgentInvocationResponse> agentInvocations
     ) {
     }
 }

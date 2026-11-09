@@ -2,7 +2,7 @@
 
 Multi-tenant platform for evaluating coding agents against versioned benchmarks with visible and hidden tests.
 
-**Current milestone:** M4 — evaluation orchestration (durable state machine, RabbitMQ outbox/worker, baseline + patch validation).
+**Current milestone:** M5 — AI agent integration (provider-independent SPI, OpenAI-compatible adapter, invocation audit).
 
 ## Stack
 
@@ -31,7 +31,11 @@ Tenant APIs use an explicit org base with membership checks on every request:
 
 Roles (org-scoped): `OWNER`, `ADMIN`, `DEVELOPER`, `VIEWER`.
 
-Workspaces as a separate entity are **deferred** (not in the approved database design); organizations are the tenant boundary.
+Agent providers are selected via the `AgentProvider` SPI (no Spring AI / vendor SDK types in domain):
+
+```text
+FAKE · OPENAI_COMPATIBLE · HTTP · CODING_CLI (skeleton)
+```
 
 ## Quick start (Compose)
 
@@ -49,18 +53,23 @@ docker compose up -d --build
 | OpenAPI JSON | http://localhost:8080/v3/api-docs |
 | RabbitMQ management | http://localhost:15672 |
 
-## Milestone 4 API surface
+## Milestone 5 API surface
 
 | Area | Paths |
 |---|---|
-| Evaluations | `POST/GET /api/v1/orgs/{orgId}/evaluations`, `GET .../{id}`, `POST .../{id}/cancel`, `GET .../{id}/transitions` |
-| Agents (stub) | `POST/GET /api/v1/orgs/{orgId}/agents` |
-| Benchmarks | retained from M3 (versioned tasks, visible/hidden suites) |
-| Auth / orgs / projects | retained from M2 |
+| Agents | `POST/GET/PATCH/DELETE /api/v1/orgs/{orgId}/agents`, `POST .../{id}/test-connection` |
+| Evaluations | retained from M4; detail includes `agentInvocations` (provider, model, tokens, cost, retries, status) |
+| Secrets | org secret refs for API keys (metadata only in responses) |
+| Benchmarks / auth / projects | retained from M2–M3 |
 
-**Evaluation lifecycle (PRD states):** `QUEUED` → `PREPARING_REPO` → `RUNNING_BASELINE` → `INVOKING_AGENT` → `COLLECTING_PATCH` → `VALIDATING_PATCH` → `APPLYING_PATCH` → `RUNNING_VISIBLE_TESTS` → `RUNNING_HIDDEN_TESTS` → `ANALYZING_QUALITY` → `SCORING` → `COMPLETED` (plus `FAILED` / `CANCELLED` / `TIMED_OUT`).
+**Adapters**
 
-**Hidden confidentiality:** VIEWER (evaluator) responses omit hidden fixture content, storage URIs, entry commands, digests, and expected outcomes. Agent-facing `agent-context` is an allowlist DTO with no hidden fields. Published versions freeze an immutable JSON snapshot and reject further task/suite edits.
+- `FAKE` — deterministic CI/demo patches (no external API)
+- `OPENAI_COMPATIBLE` — Chat Completions HTTP client; credentials via `secretRefId`
+- `HTTP` — webhook-style agent endpoint expecting `{ "patch": "..." }`
+- `CODING_CLI` — SPI + stub (fixture `config.patch` for demos; process isolation later)
+
+**Hidden confidentiality:** agent prompts receive visible task context only. Secrets are never returned in API/logs; inline `apiKey` in agent config is rejected.
 
 ## Local development
 
@@ -96,6 +105,8 @@ Notable variables:
 - `AGENTBENCH_JWT_SECRET` (≥ 32 chars)
 - `AGENTBENCH_SECRETS_ENCRYPTION_KEY` (base64 32-byte AES key)
 - `AGENTBENCH_GITHUB_TOKEN` (optional live repo validation)
+- `AGENTBENCH_AGENTS_MAX_RETRIES` / `AGENTBENCH_AGENTS_TIMEOUT_SEC`
+- `AGENTBENCH_OPENAI_BASE_URL` (default `https://api.openai.com`)
 
 ## Flyway
 
@@ -105,12 +116,13 @@ Single migration stream under `backend/src/main/resources/db/migration`.
 - `V2__identity_projects.sql` — users, orgs, memberships, refresh tokens, secret refs, projects, repo config, snapshots
 - `V3__benchmarks.sql` — benchmarks, versions, tasks, visible/hidden test suites
 - `V4__evaluations.sql` — agents stub, evaluations, transitions, stage attempts, patches, test results, outbox
+- `V5__agent_invocations.sql` — expanded adapter types + `agents.agent_invocations` audit
 
 Never edit applied migrations; forward-only only.
 
 ## CI
 
-GitHub Actions builds backend (`mvn verify`, including Testcontainers when Docker is available) and frontend (`npm ci && npm run build`).
+GitHub Actions builds backend (`mvn verify`, including Testcontainers when Docker is available) and frontend (`npm ci && npm run build`). WireMock covers OpenAI-compatible HTTP without paid APIs.
 
 **Docker 29 note:** Engine 29 defaults to a minimum API of 1.44 while Testcontainers 1.21.x still negotiates an older client API. Local/daemon workaround:
 
@@ -124,7 +136,8 @@ echo '{"min-api-version":"1.24"}' | sudo tee /etc/docker/daemon.json
 - Never returns plaintext secrets, ciphertext, or raw tokens in API responses.
 - Hidden suite fixtures are RBAC-gated; agent-facing projections never include them.
 - Org isolation is enforced in the application/repository layer (Postgres RLS deferred).
-- Extensible `AuthProvider` SPI; only local password provider in M2/M3 (OIDC later).
+- Extensible `AuthProvider` SPI; only local password provider in M2–M5 (OIDC later).
+- Agent API keys use encrypted `secret_refs`; never store keys in `config_json`.
 
 ## License
 

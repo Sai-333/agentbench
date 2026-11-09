@@ -1,7 +1,10 @@
 package com.agentbench.evaluation.service;
 
+import com.agentbench.agents.api.dto.AgentDtos;
 import com.agentbench.agents.domain.Agent;
+import com.agentbench.agents.domain.AgentInvocation;
 import com.agentbench.agents.infra.AgentRepository;
+import com.agentbench.agents.service.AgentInvocationService;
 import com.agentbench.benchmarks.domain.BenchmarkStatus;
 import com.agentbench.benchmarks.domain.BenchmarkVersion;
 import com.agentbench.benchmarks.domain.Task;
@@ -31,6 +34,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @Service
@@ -39,6 +43,7 @@ public class EvaluationService {
     private final EvaluationRepository evaluationRepository;
     private final BenchmarkRepository benchmarkRepository;
     private final AgentRepository agentRepository;
+    private final AgentInvocationService agentInvocationService;
     private final OrgAccessService orgAccessService;
     private final ObjectMapper objectMapper;
 
@@ -46,11 +51,13 @@ public class EvaluationService {
             EvaluationRepository evaluationRepository,
             BenchmarkRepository benchmarkRepository,
             AgentRepository agentRepository,
+            AgentInvocationService agentInvocationService,
             OrgAccessService orgAccessService,
             ObjectMapper objectMapper) {
         this.evaluationRepository = evaluationRepository;
         this.benchmarkRepository = benchmarkRepository;
         this.agentRepository = agentRepository;
+        this.agentInvocationService = agentInvocationService;
         this.orgAccessService = orgAccessService;
         this.objectMapper = objectMapper;
     }
@@ -170,14 +177,60 @@ public class EvaluationService {
             ));
         }
         PatchArtifact patch = evaluationRepository.findPatch(evaluationId).orElse(null);
+        List<AgentDtos.AgentInvocationResponse> invocations = agentInvocationService
+                .listForEvaluation(orgId, evaluationId)
+                .stream()
+                .map(this::toInvocationResponse)
+                .toList();
         return new EvaluationDtos.EvaluationDetailResponse(
                 toResponse(evaluation),
                 transitions.stream().map(this::toTransition).toList(),
                 runResponses,
                 patch == null ? null : new EvaluationDtos.PatchResponse(
                         patch.id(), patch.contentDigest(), patch.format(), patch.byteSize(),
-                        patch.collectedAt(), patch.sealed())
+                        patch.collectedAt(), patch.sealed()),
+                invocations
         );
+    }
+
+    private AgentDtos.AgentInvocationResponse toInvocationResponse(AgentInvocation inv) {
+        return new AgentDtos.AgentInvocationResponse(
+                inv.id(),
+                inv.evaluationId(),
+                inv.agentId(),
+                inv.taskId(),
+                inv.provider(),
+                inv.model(),
+                inv.providerVersion(),
+                inv.prompt(),
+                inv.status(),
+                inv.attempt(),
+                inv.maxAttempts(),
+                inv.startedAt(),
+                inv.finishedAt(),
+                inv.patchDigest(),
+                inv.patchByteSize(),
+                inv.promptTokens(),
+                inv.completionTokens(),
+                inv.totalTokens(),
+                inv.estimatedCostUsd(),
+                inv.errorCode(),
+                inv.errorMessage(),
+                readMeta(inv.metaJson()),
+                inv.createdAt()
+        );
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> readMeta(String json) {
+        try {
+            if (json == null || json.isBlank()) {
+                return Map.of();
+            }
+            return objectMapper.readValue(json, Map.class);
+        } catch (Exception ex) {
+            return Map.of();
+        }
     }
 
     @Transactional(readOnly = true)

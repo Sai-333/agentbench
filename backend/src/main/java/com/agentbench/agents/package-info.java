@@ -1,4 +1,5 @@
 /**
- * Agent registry and adapters. Milestone 4 ships FAKE adapter stubs; HTTP/Spring AI in M5.
+ * Agent registry and provider-independent adapter SPI (M5).
+ * Providers: FAKE, OPENAI_COMPATIBLE, HTTP, CODING_CLI (skeleton).
  */
 package com.agentbench.agents;
