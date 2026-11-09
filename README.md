@@ -2,7 +2,7 @@
 
 Multi-tenant platform for evaluating coding agents against versioned benchmarks with visible and hidden tests.
 
-**Current milestone:** M2 — authentication, organizations, RBAC, projects, and GitHub repo configuration.
+**Current milestone:** M3 — benchmark management (versioned tasks, visible/hidden suites, immutable publish snapshots).
 
 ## Stack
 
@@ -49,18 +49,19 @@ docker compose up -d --build
 | OpenAPI JSON | http://localhost:8080/v3/api-docs |
 | RabbitMQ management | http://localhost:15672 |
 
-## Milestone 2 API surface
+## Milestone 3 API surface
 
 | Area | Paths |
 |---|---|
-| Auth | `POST /api/v1/auth/register`, `/login`, `/refresh`, `/logout`; `GET /api/v1/me` |
-| Orgs | `POST/GET /api/v1/orgs`, `GET /api/v1/orgs/{orgId}`, members CRUD |
-| Secrets | `/api/v1/orgs/{orgId}/secrets` (metadata only in responses) |
-| Projects | `/api/v1/orgs/{orgId}/projects` CRUD |
-| Repo config | `/projects/{projectId}/repository` (+ `/validate`) |
-| Snapshots | `/projects/{projectId}/snapshots`, `/snapshots/{snapshotId}` |
+| Benchmarks | `POST/GET/PUT/DELETE /api/v1/orgs/{orgId}/benchmarks` |
+| Versions | `/benchmarks/{id}/versions`, `/benchmark-versions/{id}`, `/publish` |
+| Tasks | `/benchmark-versions/{id}/tasks`, `/tasks/{id}` |
+| Suites | `/tasks/{id}/suites/visible`, `/tasks/{id}/suites/hidden` |
+| Agent context | `GET /tasks/{id}/agent-context` (never includes hidden suites) |
 
-GitHub accessibility validation uses an org `GIT` secret or `AGENTBENCH_GITHUB_TOKEN`. Without a token, status is `SKIPPED` (clear message), not a hard failure.
+Also retains M2 auth/orgs/secrets/projects.
+
+**Hidden confidentiality:** VIEWER (evaluator) responses omit hidden fixture content, storage URIs, entry commands, digests, and expected outcomes. Agent-facing `agent-context` is an allowlist DTO with no hidden fields. Published versions freeze an immutable JSON snapshot and reject further task/suite edits.
 
 ## Local development
 
@@ -91,7 +92,7 @@ npm run dev
 
 See `.env.example`. Do not commit real secrets.
 
-Notable M2 variables:
+Notable variables:
 
 - `AGENTBENCH_JWT_SECRET` (≥ 32 chars)
 - `AGENTBENCH_SECRETS_ENCRYPTION_KEY` (base64 32-byte AES key)
@@ -103,18 +104,27 @@ Single migration stream under `backend/src/main/resources/db/migration`.
 
 - `V1__platform_baseline.sql` — extensions + platform schema marker
 - `V2__identity_projects.sql` — users, orgs, memberships, refresh tokens, secret refs, projects, repo config, snapshots
+- `V3__benchmarks.sql` — benchmarks, versions, tasks, visible/hidden test suites
 
 Never edit applied migrations; forward-only only.
 
 ## CI
 
-GitHub Actions builds backend (`mvn verify`, including Testcontainers auth/org isolation tests when Docker is available) and frontend (`npm ci && npm run build`).
+GitHub Actions builds backend (`mvn verify`, including Testcontainers when Docker is available) and frontend (`npm ci && npm run build`).
+
+**Docker 29 note:** Engine 29 defaults to a minimum API of 1.44 while Testcontainers 1.21.x still negotiates an older client API. Local/daemon workaround:
+
+```bash
+echo '{"min-api-version":"1.24"}' | sudo tee /etc/docker/daemon.json
+# restart dockerd
+```
 
 ## Security notes
 
 - Never returns plaintext secrets, ciphertext, or raw tokens in API responses.
+- Hidden suite fixtures are RBAC-gated; agent-facing projections never include them.
 - Org isolation is enforced in the application/repository layer (Postgres RLS deferred).
-- Extensible `AuthProvider` SPI; only local password provider in M2 (OIDC later).
+- Extensible `AuthProvider` SPI; only local password provider in M2/M3 (OIDC later).
 
 ## License
 

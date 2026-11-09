@@ -26,6 +26,74 @@ export type Project = {
   updatedAt: string
 }
 
+export type Benchmark = {
+  id: string
+  orgId: string
+  projectId: string | null
+  name: string
+  description: string
+  createdBy: string
+  createdAt: string
+  updatedAt: string
+}
+
+export type BenchmarkVersion = {
+  id: string
+  benchmarkId: string
+  orgId: string
+  version: string
+  status: string
+  changelog: string
+  scoringProfileKey: string
+  publishedAt: string | null
+  publishedBy: string | null
+  hasImmutableSnapshot: boolean
+  createdAt: string
+  updatedAt: string
+}
+
+export type SuiteSummary = {
+  id: string
+  visibility: string
+  framework: string
+  caseCount: number | null
+  contentRestricted: boolean
+  storageUri?: string | null
+  entryCommand?: string | null
+  contentDigest?: string | null
+  fixtureContent?: string | null
+  expectedOutcomes?: Record<string, unknown> | null
+}
+
+export type Task = {
+  id: string
+  benchmarkVersionId: string
+  orgId: string
+  slug: string
+  title: string
+  prompt: string
+  acceptanceCriteria: string
+  category: string | null
+  difficulty: string | null
+  languageTags: string[]
+  repoSnapshotId: string | null
+  baselineCommitSha: string | null
+  referencePatch: string
+  expectedBehavior: string
+  timeoutSec: number
+  memoryMb: number
+  cpuLimit: number | null
+  maxPatchBytes: number
+  evalConfig: Record<string, unknown>
+  ordinal: number
+  hasVisibleSuite: boolean
+  hasHiddenSuite: boolean
+  visibleSuite: SuiteSummary | null
+  hiddenSuite: SuiteSummary | null
+  createdAt: string
+  updatedAt: string
+}
+
 export function getAccessToken(): string | null {
   return localStorage.getItem(TOKEN_KEY)
 }
