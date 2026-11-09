@@ -190,6 +190,37 @@ export type EvaluationScore = {
   computedAt: string
 }
 
+export type QualityFinding = {
+  ruleId: string
+  severity: string
+  filePath: string
+  line: number
+  message: string
+  introduced: boolean
+}
+
+export type QualityToolSummary = {
+  tool: string
+  stub: boolean
+  notes: string
+  totalFindings: number
+  newFindings: number
+  preExistingFindings: number
+  findingsSample: QualityFinding[]
+}
+
+export type QualityReport = {
+  id: string
+  tool: string
+  normalizedScore: number | null
+  stub: boolean
+  newFindingCount: number
+  preExistingFindingCount: number
+  tools: QualityToolSummary[]
+  metrics: Record<string, unknown>
+  createdAt: string
+}
+
 export type EvaluationDetail = {
   evaluation: Evaluation
   transitions: EvaluationTransition[]
@@ -217,6 +248,7 @@ export type EvaluationDetail = {
   } | null
   agentInvocations: AgentInvocation[]
   score: EvaluationScore | null
+  qualityReports?: QualityReport[]
 }
 
 export function getAccessToken(): string | null {

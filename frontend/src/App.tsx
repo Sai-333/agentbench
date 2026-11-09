@@ -1270,6 +1270,69 @@ function App() {
               </ul>
             </>
           )}
+          {(selectedEvaluation.qualityReports?.length ?? 0) > 0 && (
+            <>
+              <h3>Code quality findings</h3>
+              {selectedEvaluation.qualityReports!.map((report) => (
+                <div key={report.id} className="quality-report">
+                  <p>
+                    <span className="badge">{report.tool}</span>
+                    {report.normalizedScore != null ? (
+                      <>
+                        {' '}
+                        · normalized <strong>{Number(report.normalizedScore).toFixed(3)}</strong>
+                      </>
+                    ) : (
+                      <span className="muted"> · score withheld (stub / unavailable)</span>
+                    )}
+                    <span className="muted small">
+                      {' '}
+                      · new {report.newFindingCount} · pre-existing {report.preExistingFindingCount}
+                      {report.stub ? ' · stub' : ''}
+                    </span>
+                  </p>
+                  {(report.tools?.length ?? 0) > 0 && (
+                    <table className="metrics-table">
+                      <thead>
+                        <tr>
+                          <th>Tool</th>
+                          <th>New</th>
+                          <th>Pre-existing</th>
+                          <th>Total</th>
+                          <th>Notes</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {report.tools.map((tool) => (
+                          <tr key={tool.tool}>
+                            <td>{tool.tool}</td>
+                            <td>{tool.newFindings}</td>
+                            <td>{tool.preExistingFindings}</td>
+                            <td>{tool.totalFindings}</td>
+                            <td className="muted small">
+                              {tool.stub ? 'stub' : tool.notes || ''}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+                  {report.tools?.some((tool) => (tool.findingsSample?.length ?? 0) > 0) && (
+                    <ul className="muted small">
+                      {report.tools.flatMap((tool) =>
+                        (tool.findingsSample ?? []).slice(0, 8).map((finding, idx) => (
+                          <li key={`${tool.tool}-${finding.ruleId}-${idx}`}>
+                            [{tool.tool}] {finding.introduced ? 'NEW' : 'pre'} · {finding.severity}{' '}
+                            · {finding.filePath}:{finding.line} — {finding.message}
+                          </li>
+                        )),
+                      )}
+                    </ul>
+                  )}
+                </div>
+              ))}
+            </>
+          )}
           {selectedEvaluation.score && (
             <>
               <h3>Score</h3>

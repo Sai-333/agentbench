@@ -32,8 +32,8 @@ import java.util.UUID;
 
 /**
  * Computes weighted scores from raw metrics. Raw metrics are always persisted separately.
- * Quality/edge/efficiency may be structural stubs (raw=0, stub=true) until M7 tools land —
- * never invent fake quality scores.
+ * {@code code_quality} uses Checkstyle/SpotBugs/PMD results when present; otherwise stub raw=0
+ * with {@code stub=true}. Never invents fake quality scores.
  */
 @Service
 public class ScoringService {
@@ -180,20 +180,36 @@ public class ScoringService {
         }
         metrics.put(ScoringProfile.MetricKeys.HIDDEN, new MetricComputation(hiddenRaw, false, hiddenMeta));
 
-        // Code quality: stub zeros until M7 tools — do not invent fake scores
-        Optional<QualityReport> quality = evaluationRepository.findQualityReports(evaluation.id()).stream().findFirst();
+        // Code quality: real normalized score from Checkstyle/SpotBugs/PMD aggregate when available
+        Optional<QualityReport> quality = evaluationRepository.findQualityReports(evaluation.id()).stream()
+                .filter(r -> r.normalizedScore() != null)
+                .findFirst()
+                .or(() -> evaluationRepository.findQualityReports(evaluation.id()).stream().findFirst());
         ObjectNode qualityMeta = objectMapper.createObjectNode();
         double qualityRaw = 0.0;
+        boolean qualityStub = true;
         if (quality.isPresent() && quality.get().normalizedScore() != null) {
-            qualityRaw = quality.get().normalizedScore().doubleValue();
+            qualityRaw = clamp01(quality.get().normalizedScore().doubleValue());
             qualityMeta.put("tool", quality.get().tool());
             qualityMeta.put("stub", false);
+            qualityStub = false;
+            try {
+                JsonNode qMetrics = objectMapper.readTree(
+                        quality.get().metricsJson() == null ? "{}" : quality.get().metricsJson());
+                qualityMeta.put("newFindingCount", qMetrics.path("newFindingCount").asInt(0));
+                qualityMeta.put("preExistingFindingCount", qMetrics.path("preExistingFindingCount").asInt(0));
+                qualityMeta.put("postFindingCount", qMetrics.path("postFindingCount").asInt(0));
+            } catch (Exception ignored) {
+                // meta enrichment optional
+            }
         } else {
             qualityMeta.put("stub", true);
-            qualityMeta.put("reason", "quality_tools_deferred_to_m7");
-            warnings.add("code_quality stubbed at 0 (tools land in M7)");
+            qualityMeta.put("reason", quality.isPresent()
+                    ? "quality_report_without_normalized_score"
+                    : "quality_tools_unavailable");
+            warnings.add("code_quality stubbed at 0 (no normalized tool score)");
         }
-        metrics.put(ScoringProfile.MetricKeys.CODE_QUALITY, new MetricComputation(qualityRaw, true, qualityMeta));
+        metrics.put(ScoringProfile.MetricKeys.CODE_QUALITY, new MetricComputation(qualityRaw, qualityStub, qualityMeta));
 
         // Edge-case suite/tags
         List<TestCaseResult> edgeCases = new ArrayList<>();

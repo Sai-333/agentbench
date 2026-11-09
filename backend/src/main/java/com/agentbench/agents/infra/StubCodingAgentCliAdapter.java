@@ -13,9 +13,9 @@ import org.springframework.stereotype.Component;
 import java.util.Map;
 
 /**
- * Skeleton CLI coding-agent adapter. Full process isolation / sandboxing is deferred
- * (execution hardening). M5 registers the SPI and returns NOT_IMPLEMENTED unless a
- * deterministic fixture patch is configured for local demos.
+ * CLI coding-agent adapter. Process isolation uses {@code RuntimeIsolator} when spawning
+ * real commands (M7). Returns NOT_IMPLEMENTED unless {@code config.patch} is set for
+ * deterministic CI demos (no host process spawn).
  */
 @Component
 public class StubCodingAgentCliAdapter implements CodingAgentCliAdapter, AgentProvider {
@@ -56,19 +56,19 @@ public class StubCodingAgentCliAdapter implements CodingAgentCliAdapter, AgentPr
                     Map.of(
                             "mode", "fixture-patch",
                             "command", command == null ? "" : command,
-                            "isolation", "deferred"
+                            "isolation", "fixture-no-spawn"
                     )
             );
         }
         return AgentInvocationResult.failure(
                 AgentInvocationStatus.NOT_IMPLEMENTED,
                 "CODING_CLI_NOT_IMPLEMENTED",
-                "Coding CLI adapter is a skeleton in M5; configure config.patch for demos or wait for execution isolation",
+                "Coding CLI requires config.patch for CI demos, or a sandboxed command path via RuntimeIsolator",
                 config.path("model").asText(null),
                 Map.of(
                         "command", command == null ? "" : command,
                         "workingDirectory", workingDirectory == null ? "" : workingDirectory,
-                        "isolation", "deferred"
+                        "isolation", "runtime-isolator-available"
                 )
         );
     }

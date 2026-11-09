@@ -30,6 +30,11 @@ management:
 agentbench:
   artifacts:
     root: ${java.io.tmpdir}/agentbench-test-artifacts
+    retention:
+      enabled: false
+  execution:
+    mode: local
+    docker-enabled: false
   jwt:
     secret: test-only-jwt-secret-key-32chars-min!!
     access-ttl-seconds: 900

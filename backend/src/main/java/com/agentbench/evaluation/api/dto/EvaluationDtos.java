@@ -106,13 +106,48 @@ public final class EvaluationDtos {
     ) {
     }
 
+    public record QualityFindingResponse(
+            String ruleId,
+            String severity,
+            String filePath,
+            int line,
+            String message,
+            boolean introduced
+    ) {
+    }
+
+    public record QualityToolSummaryResponse(
+            String tool,
+            boolean stub,
+            String notes,
+            int totalFindings,
+            int newFindings,
+            int preExistingFindings,
+            List<QualityFindingResponse> findingsSample
+    ) {
+    }
+
+    public record QualityReportResponse(
+            UUID id,
+            String tool,
+            BigDecimal normalizedScore,
+            boolean stub,
+            int newFindingCount,
+            int preExistingFindingCount,
+            List<QualityToolSummaryResponse> tools,
+            Map<String, Object> metrics,
+            Instant createdAt
+    ) {
+    }
+
     public record EvaluationDetailResponse(
             EvaluationResponse evaluation,
             List<TransitionResponse> transitions,
             List<TestRunResponse> testRuns,
             PatchResponse patch,
             List<AgentDtos.AgentInvocationResponse> agentInvocations,
-            ScoreResponse score
+            ScoreResponse score,
+            List<QualityReportResponse> qualityReports
     ) {
     }
 
@@ -121,7 +156,8 @@ public final class EvaluationDtos {
             ScoreResponse score,
             Map<String, Integer> visibleTransitions,
             HiddenSummary hidden,
-            List<TestRunResponse> testRuns
+            List<TestRunResponse> testRuns,
+            List<QualityReportResponse> qualityReports
     ) {
     }
 

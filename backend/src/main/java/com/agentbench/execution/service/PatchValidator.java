@@ -27,6 +27,13 @@ public class PatchValidator {
     private static final Pattern DIFF_PATH = Pattern.compile("^(?:--- |\\+\\+\\+ )(?:a/|b/)?(.+)$");
     private static final Pattern HUNK_HEADER = Pattern.compile("^@@\\s+-([0-9]+)(?:,([0-9]+))?\\s+\\+([0-9]+)(?:,([0-9]+))?\\s+@@");
     private static final Set<String> FORBIDDEN_SEGMENTS = Set.of("..", ".git");
+    private static final Set<String> FORBIDDEN_SUFFIXES = Set.of(
+            ".git/hooks",
+            ".git/hooks/pre-commit",
+            ".git/hooks/post-checkout",
+            ".git/config",
+            ".gitmodules"
+    );
 
     public ValidatedPatch validate(String patchText, int maxBytes, List<String> allowedPathPrefixes) {
         if (patchText == null) {
@@ -49,23 +56,63 @@ public class PatchValidator {
         }
         List<String> allowed = allowedPathPrefixes == null ? List.of() : allowedPathPrefixes;
         for (String rawPath : paths) {
+            rejectMaliciousPath(rawPath);
             String path = normalizePath(rawPath);
             if (path.isBlank() || "/dev/null".equals(path)) {
                 continue;
             }
+            rejectMaliciousPath(path);
             for (String segment : path.split("/")) {
-                if (FORBIDDEN_SEGMENTS.contains(segment.toLowerCase(Locale.ROOT))) {
+                String lower = segment.toLowerCase(Locale.ROOT);
+                if (FORBIDDEN_SEGMENTS.contains(lower)) {
+                    throw invalid("Patch path rejected: " + path);
+                }
+                if (segment.contains("\0")) {
                     throw invalid("Patch path rejected: " + path);
                 }
             }
-            if (path.startsWith("/") || path.contains(":")) {
+            if (path.startsWith("/") || path.matches("^[A-Za-z]:.*") || path.contains(":")) {
                 throw invalid("Absolute patch paths are not allowed: " + path);
+            }
+            String lowerPath = path.toLowerCase(Locale.ROOT);
+            for (String suffix : FORBIDDEN_SUFFIXES) {
+                if (lowerPath.equals(suffix) || lowerPath.startsWith(suffix + "/")
+                        || lowerPath.contains("/" + suffix + "/") || lowerPath.endsWith("/" + suffix)
+                        || lowerPath.contains("/.git/")) {
+                    throw invalid("Patch path rejected (vcs/hooks): " + path);
+                }
             }
             if (!allowed.isEmpty() && allowed.stream().noneMatch(prefix -> pathEqualsOrUnder(path, prefix))) {
                 throw invalid("Patch path not in allowlist: " + path);
             }
         }
         return new ValidatedPatch(patchText, bytes.length, paths);
+    }
+
+    /**
+     * Rejects traversal encodings, UNC paths, and absolute URIs before normalization.
+     */
+    static void rejectMaliciousPath(String rawPath) {
+        if (rawPath == null) {
+            throw invalid("Patch path rejected");
+        }
+        String trimmed = rawPath.trim();
+        String lower = trimmed.toLowerCase(Locale.ROOT);
+        if (trimmed.contains("..")
+                || trimmed.contains("\\..")
+                || trimmed.contains("/..")
+                || lower.startsWith("file:")
+                || lower.startsWith("\\\\")
+                || trimmed.startsWith("~")
+                || trimmed.contains("%2e%2e")
+                || trimmed.contains("%2E%2E")
+                || trimmed.contains("..%2f")
+                || trimmed.contains("..%5c")) {
+            throw invalid("Patch path traversal rejected: " + trimmed);
+        }
+        if (lower.contains(".git/hooks") || lower.endsWith(".git/hooks") || lower.contains("/hooks/pre-")) {
+            throw invalid("Patch path rejected (git hooks): " + trimmed);
+        }
     }
 
     public void applyUnifiedDiff(Path workspaceRoot, String patchText) {

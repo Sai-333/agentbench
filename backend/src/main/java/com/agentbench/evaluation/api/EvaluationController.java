@@ -23,7 +23,7 @@ import java.util.UUID;
 
 @RestController
 @RequestMapping(ApiPaths.ORG_BASE + "/evaluations")
-@Tag(name = "Evaluations", description = "Evaluation orchestration + scoring (Milestone 6)")
+@Tag(name = "Evaluations", description = "Evaluation orchestration, scoring, and quality reports (M6–M7)")
 @SecurityRequirement(name = "bearerAuth")
 public class EvaluationController {
 
