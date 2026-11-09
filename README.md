@@ -2,7 +2,46 @@
 
 Multi-tenant platform for evaluating coding agents against versioned benchmarks with visible and hidden tests.
 
-**Current milestone:** M8 — Analytics and reporting dashboards (org-private; real backend aggregates).
+**Current milestone:** M9 — Production readiness (final planned milestone).  
+**Honesty:** Docker isolation remains lab/demo grade for untrusted workloads; see [docs/PORTFOLIO_CHECKLIST.md](docs/PORTFOLIO_CHECKLIST.md).
+
+## Clone → Compose → demo
+
+```bash
+git clone https://github.com/Sai-333/agentbench.git
+cd agentbench
+cp .env.example .env
+docker compose up -d --build
+```
+
+| Service | URL |
+|---|---|
+| Frontend | http://localhost:3000 |
+| Backend API | http://localhost:8080 |
+| Liveness | http://localhost:8080/actuator/health/liveness |
+| Readiness | http://localhost:8080/actuator/health/readiness |
+| Swagger UI | http://localhost:8080/swagger-ui.html |
+| OpenAPI JSON | http://localhost:8080/v3/api-docs |
+| RabbitMQ management | http://localhost:15672 (user/pass from `.env`) |
+
+Quick API check:
+
+```bash
+curl -sf http://localhost:8080/api/v1/info
+curl -sf -X POST http://localhost:8080/api/v1/auth/register \
+  -H 'Content-Type: application/json' \
+  -d '{"email":"demo@example.com","password":"password123","displayName":"Demo"}'
+```
+
+Open the frontend, sign in, create an org/project, publish a benchmark version, register a **FAKE** agent, and run an evaluation. Org-private analytics live under the dashboard tabs.
+
+### Production-ish Compose overlay
+
+```bash
+# Set strong POSTGRES_PASSWORD, RABBITMQ_PASSWORD, AGENTBENCH_JWT_SECRET,
+# AGENTBENCH_SECRETS_ENCRYPTION_KEY in .env first.
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+```
 
 ## Stack
 
@@ -12,11 +51,12 @@ Multi-tenant platform for evaluating coding agents against versioned benchmarks 
 | Frontend | React, TypeScript, Vite |
 | Data | PostgreSQL 16, Flyway (single forward-only stream) |
 | Cache | Redis 7 |
-| Messaging | RabbitMQ 3.13 |
-| Auth | Local email/password + JWT (access + refresh); BCrypt; AES-GCM secret refs |
+| Messaging | RabbitMQ 3.13 (evaluation commands + DLQ) |
+| Auth | Local email/password + JWT (OIDC deferred) |
 | API docs | springdoc OpenAPI + Swagger UI |
-| Local runtime | Docker Compose |
+| Local runtime | Docker Compose (+ `docker-compose.prod.yml`) |
 | Eval isolation | Hardened Docker via `RuntimeIsolator` (local fallback for CI) |
+| K8s | Templates under `deploy/kubernetes/` (no real secrets) |
 
 ## Architecture
 
@@ -32,49 +72,19 @@ Tenant APIs use an explicit org base with membership checks on every request:
 
 Roles (org-scoped): `OWNER`, `ADMIN`, `DEVELOPER`, `VIEWER`.
 
-## Quick start (Compose)
-
-```bash
-cp .env.example .env
-docker compose up -d --build
-```
-
-| Service | URL |
-|---|---|
-| Frontend | http://localhost:3000 |
-| Backend API | http://localhost:8080 |
-| Health | http://localhost:8080/actuator/health |
-| Swagger UI | http://localhost:8080/swagger-ui.html |
-| OpenAPI JSON | http://localhost:8080/v3/api-docs |
-| RabbitMQ management | http://localhost:15672 |
-
-## Milestone 8 highlights
+## Milestone 9 highlights
 
 | Area | Behavior |
 |---|---|
-| Overview | `/analytics/overview` — counts by state, avg score, tokens/cost, recent evals, daily volume |
-| Leaderboard | Org-private `/benchmark-versions/{id}/leaderboard` (best score per agent×task; not public) |
-| Comparisons | `/analytics/comparisons` across identical benchmark versions with raw metric columns |
-| Costs | `/analytics/costs` — tokens + estimated USD where adapters recorded them |
-| History | Paginated `/analytics/evaluations` with search/state filters |
-| Exports | Evaluation + leaderboard download as **JSON/CSV** (practical; no PDF stack) |
-| Live status | Frontend polls in-flight evaluation detail every 3s |
-| Ops | `/analytics/health` — actuator summary + org workload counts |
-| UI | Dark/light themes; accessible loading/empty/error states on dashboard panels |
-| Schema | Flyway `V8` analytics indexes only (no materialized metric tables) |
+| Recovery | DLQ topology + listener retry; infra stage retry budget; cancel mid-flight; timeout watchdog; invalid baseline fails closed |
+| Shutdown | `server.shutdown=graceful` + documented probes |
+| Deploy | Compose prod overlay; Kubernetes Deployment/Service/ConfigMap/Secret templates |
+| Perf | k6 smoke script + load-test **plan** (no unverified throughput claims) |
+| Security review | Isolator constraints, hidden confidentiality, secret redaction; threat model residual risks updated |
+| Ops | Backup / migrate / upgrade / DLQ snippets in `docs/OPERATIONS.md` |
+| Portfolio | Honest done vs deferred checklist |
 
-**Explicit non-claim:** M8 is analytics/reporting polish — **not** full production readiness (M9). Docker-only isolation remains unsuitable for arbitrary untrusted public workloads.
-
-**Scoring (default-v1 weights)**
-
-| Metric | Weight |
-|---|---|
-| `target_failure_resolution` | 30% |
-| `regression` | 25% |
-| `hidden` (post-only pass rate; never labeled F2P) | 20% |
-| `code_quality` | 10% (real when tools run; else stub=0) |
-| `edge_case` | 10% |
-| `efficiency` | 5% |
+**Explicit non-claims:** no gVisor/Firecracker yet; no public leaderboards; no OIDC; not certified hostile multi-tenant SaaS.
 
 ## Local development
 
@@ -114,15 +124,28 @@ Notable variables:
 - `AGENTBENCH_EXEC_MEMORY_MB` / `AGENTBENCH_EXEC_CPU` / `AGENTBENCH_EXEC_PIDS` / `AGENTBENCH_EXEC_TIMEOUT_SEC`
 - `AGENTBENCH_ARTIFACT_RETENTION_DAYS` / `AGENTBENCH_ARTIFACT_MAX_LOG_BYTES`
 - `AGENTBENCH_EVAL_FLAKY_REPEAT_RUNS`
+- `AGENTBENCH_SHUTDOWN_TIMEOUT` / `AGENTBENCH_RABBIT_LISTENER_MAX_ATTEMPTS`
 
 ## Flyway
 
 Single migration stream under `backend/src/main/resources/db/migration`.
 
-- `V1`–`V6` — platform through scoring engine
-- `V7__security_quality.sql` — artifact cleanup audit + M7 marker
+- `V1`–`V8` — platform through analytics indexes
+- `V9__production_readiness.sql` — recovery indexes + M9 marker
 
 Never edit applied migrations; forward-only only.
+
+## Docs map
+
+| Doc | Topic |
+|---|---|
+| [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) | Compose + K8s + health/shutdown |
+| [docs/OPERATIONS.md](docs/OPERATIONS.md) | Backup / migrate / DLQ |
+| [docs/PERFORMANCE.md](docs/PERFORMANCE.md) | Load-test plan + k6 |
+| [docs/SECURITY_THREAT_MODEL.md](docs/SECURITY_THREAT_MODEL.md) | Threat model |
+| [docs/PORTFOLIO_CHECKLIST.md](docs/PORTFOLIO_CHECKLIST.md) | Done vs deferred |
+| [deploy/kubernetes/](deploy/kubernetes/) | K8s templates |
+| [deploy/loadtest/k6-smoke.js](deploy/loadtest/k6-smoke.js) | Smoke script |
 
 ## CI
 

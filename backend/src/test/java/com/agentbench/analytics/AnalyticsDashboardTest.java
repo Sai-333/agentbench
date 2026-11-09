@@ -63,6 +63,8 @@ class AnalyticsDashboardTest {
         registry.add("agentbench.execution.mode", () -> "local");
         registry.add("agentbench.execution.docker-enabled", () -> "false");
         registry.add("agentbench.artifacts.retention.enabled", () -> "false");
+        registry.add("agentbench.artifacts.root", () -> System.getProperty("java.io.tmpdir") + "/agentbench-m8-it");
+        registry.add("logging.structured.format.console", () -> "");
     }
 
     @Autowired
@@ -151,7 +153,7 @@ class AnalyticsDashboardTest {
                         .content("""
                                 {"email":"%s","password":"Password123!","displayName":"%s"}
                                 """.formatted(email, displayName)))
-                .andExpect(status().isOk())
+                .andExpect(status().isCreated())
                 .andReturn();
         return objectMapper.readTree(result.getResponse().getContentAsString()).path("accessToken").asText();
     }

@@ -1,0 +1,23 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: agentbench-config
+  namespace: agentbench
+  labels:
+    app.kubernetes.io/name: agentbench
+data:
+  SERVER_PORT: "8080"
+  SPRING_DATASOURCE_URL: "jdbc:postgresql://postgres:5432/agentbench"
+  SPRING_DATASOURCE_USERNAME: "agentbench"
+  SPRING_DATA_REDIS_HOST: "redis"
+  SPRING_DATA_REDIS_PORT: "6379"
+  SPRING_RABBITMQ_HOST: "rabbitmq"
+  SPRING_RABBITMQ_PORT: "5672"
+  SPRING_RABBITMQ_USERNAME: "agentbench"
+  AGENTBENCH_ARTIFACTS_ROOT: "/var/agentbench/artifacts"
+  AGENTBENCH_EXECUTION_MODE: "docker"
+  AGENTBENCH_DOCKER_ENABLED: "true"
+  AGENTBENCH_GITHUB_VALIDATION_ENABLED: "false"
+  AGENTBENCH_SHUTDOWN_TIMEOUT: "30s"
+  LOGGING_STRUCTURED_FORMAT_CONSOLE: "logstash"
+  MANAGEMENT_ENDPOINT_HEALTH_PROBES_ENABLED: "true"

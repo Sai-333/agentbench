@@ -1,0 +1,7 @@
+# Template only — no cluster credentials. Apply after editing image/secret values.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: agentbench
+  labels:
+    app.kubernetes.io/name: agentbench

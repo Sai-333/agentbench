@@ -1,6 +1,6 @@
 # ADR-004: Docker-First Isolation with Stronger Isolation Later
 
-**Status:** Accepted (M7 implements hardened Docker path; stronger isolation still planned)  
+**Status:** Accepted (M7 implements hardened Docker path; M9 production readiness does **not** add gVisor/Firecracker — still planned post-M9)  
 **Date:** 2026-11-09  
 **Deciders:** Sai (approved with M0 decisions)
 

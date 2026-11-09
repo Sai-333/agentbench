@@ -1,0 +1,99 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: agentbench-worker
+  namespace: agentbench
+  labels:
+    app.kubernetes.io/name: agentbench
+    app.kubernetes.io/component: worker
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: agentbench
+      app.kubernetes.io/component: worker
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: agentbench
+        app.kubernetes.io/component: worker
+    spec:
+      terminationGracePeriodSeconds: 60
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: worker
+          image: ghcr.io/example/agentbench-backend:REPLACE_TAG
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8081
+          envFrom:
+            - configMapRef:
+                name: agentbench-config
+            - secretRef:
+                name: agentbench-secrets
+          env:
+            - name: SERVER_PORT
+              value: "8081"
+            - name: SPRING_PROFILES_ACTIVE
+              value: worker
+            - name: AGENTBENCH_EVAL_LISTENER_ENABLED
+              value: "true"
+          readinessProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: http
+            initialDelaySeconds: 20
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: http
+            initialDelaySeconds: 40
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "1Gi"
+            limits:
+              cpu: "4"
+              memory: "4Gi"
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: artifacts
+              mountPath: /var/agentbench/artifacts
+            # DO NOT mount docker.sock into evaluation containers.
+            # If the worker uses host Docker for RuntimeIsolator, mount sock ONLY here
+            # on a trusted node pool — never into workload sandboxes.
+            # - name: docker-sock
+            #   mountPath: /var/run/docker.sock
+      volumes:
+        - name: artifacts
+          emptyDir: {}
+        # - name: docker-sock
+        #   hostPath:
+        #     path: /var/run/docker.sock
+        #     type: Socket
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: agentbench-worker
+  namespace: agentbench
+  labels:
+    app.kubernetes.io/name: agentbench
+    app.kubernetes.io/component: worker
+spec:
+  selector:
+    app.kubernetes.io/name: agentbench
+    app.kubernetes.io/component: worker
+  ports:
+    - name: http
+      port: 8081
+      targetPort: http
