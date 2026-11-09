@@ -43,6 +43,13 @@ Open the frontend, sign in, create an org/project, publish a benchmark version, 
 docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
 ```
 
+### Deploy on Oracle Always Free
+
+Single-host Ampere A1 runbook (VM shape, ports, Docker, secrets, health checks, TLS/firewall):  
+[docs/DEPLOYMENT_ORACLE_ALWAYS_FREE.md](docs/DEPLOYMENT_ORACLE_ALWAYS_FREE.md) · helpers in `scripts/oracle/`.
+
+**No live public URL is claimed** until Sai provisions an Always Free VM and applies that guide (needs OCID/IP/SSH).
+
 ## Stack
 
 | Layer | Choice |
@@ -140,6 +147,7 @@ Never edit applied migrations; forward-only only.
 | Doc | Topic |
 |---|---|
 | [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) | Compose + K8s + health/shutdown |
+| [docs/DEPLOYMENT_ORACLE_ALWAYS_FREE.md](docs/DEPLOYMENT_ORACLE_ALWAYS_FREE.md) | Oracle Cloud Always Free VM path |
 | [docs/OPERATIONS.md](docs/OPERATIONS.md) | Backup / migrate / DLQ |
 | [docs/PERFORMANCE.md](docs/PERFORMANCE.md) | Load-test plan + k6 |
 | [docs/SECURITY_THREAT_MODEL.md](docs/SECURITY_THREAT_MODEL.md) | Threat model |

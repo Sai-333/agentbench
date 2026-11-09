@@ -77,6 +77,7 @@ Out of scope for these templates: managed Postgres/Redis/Rabbit operators, Ingre
 
 ## 5. Related docs
 
+- `docs/DEPLOYMENT_ORACLE_ALWAYS_FREE.md` — Oracle Cloud Always Free Ampere A1 Compose path
 - `docs/OPERATIONS.md` — backup / migrate / upgrade / DLQ
 - `docs/PERFORMANCE.md` — load-test plan (no unverified throughput claims)
 - `docs/SECURITY_THREAT_MODEL.md` — residual isolation limits
