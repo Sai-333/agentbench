@@ -1,25 +1,36 @@
 package com.agentbench.evaluation.infra;
 
+import com.agentbench.evaluation.domain.CaseCategory;
 import com.agentbench.evaluation.domain.Evaluation;
+import com.agentbench.evaluation.domain.EvaluationScore;
 import com.agentbench.evaluation.domain.EvaluationState;
 import com.agentbench.evaluation.domain.EvaluationTransition;
 import com.agentbench.evaluation.domain.FailureClass;
 import com.agentbench.evaluation.domain.OrgEvaluationLimits;
 import com.agentbench.evaluation.domain.PatchArtifact;
+import com.agentbench.evaluation.domain.QualityReport;
+import com.agentbench.evaluation.domain.ScoreMetric;
+import com.agentbench.evaluation.domain.ScoreStatus;
+import com.agentbench.evaluation.domain.ScoringProfile;
 import com.agentbench.evaluation.domain.TestCaseResult;
 import com.agentbench.evaluation.domain.TestCaseStatus;
 import com.agentbench.evaluation.domain.TestPhase;
 import com.agentbench.evaluation.domain.TestRun;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.jdbc.support.GeneratedKeyHolder;
 import org.springframework.stereotype.Repository;
 
+import java.math.BigDecimal;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.time.Instant;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -27,9 +38,11 @@ import java.util.UUID;
 public class EvaluationRepository {
 
     private final NamedParameterJdbcTemplate jdbc;
+    private final ObjectMapper objectMapper;
 
-    public EvaluationRepository(NamedParameterJdbcTemplate jdbc) {
+    public EvaluationRepository(NamedParameterJdbcTemplate jdbc, ObjectMapper objectMapper) {
         this.jdbc = jdbc;
+        this.objectMapper = objectMapper;
     }
 
     public OrgEvaluationLimits getOrDefaultLimits(UUID orgId) {
@@ -444,9 +457,11 @@ public class EvaluationRepository {
     public void insertTestCaseResult(TestCaseResult result) {
         jdbc.update("""
                 INSERT INTO evaluations.test_case_results
-                    (id, test_run_id, org_id, case_key, status, duration_ms, transition, message, log_excerpt_uri)
+                    (id, test_run_id, org_id, case_key, status, duration_ms, transition, message, log_excerpt_uri,
+                     category, flaky, attempt_count, meta_json)
                 VALUES
-                    (:id, :testRunId, :orgId, :caseKey, :status, :durationMs, :transition, :message, :logExcerptUri)
+                    (:id, :testRunId, :orgId, :caseKey, :status, :durationMs, :transition, :message, :logExcerptUri,
+                     :category, :flaky, :attemptCount, CAST(:metaJson AS jsonb))
                 """,
                 new MapSqlParameterSource()
                         .addValue("id", result.id())
@@ -457,28 +472,23 @@ public class EvaluationRepository {
                         .addValue("durationMs", result.durationMs())
                         .addValue("transition", result.transition())
                         .addValue("message", result.message() == null ? "" : result.message())
-                        .addValue("logExcerptUri", result.logExcerptUri()));
+                        .addValue("logExcerptUri", result.logExcerptUri())
+                        .addValue("category", result.category() == null ? null : result.category().name())
+                        .addValue("flaky", result.flaky())
+                        .addValue("attemptCount", result.attemptCount() <= 0 ? 1 : result.attemptCount())
+                        .addValue("metaJson", result.metaJson() == null || result.metaJson().isBlank() ? "{}" : result.metaJson()));
     }
 
     public List<TestCaseResult> listTestCaseResults(UUID testRunId) {
         return jdbc.query("""
-                SELECT id, test_run_id, org_id, case_key, status, duration_ms, transition, message, log_excerpt_uri
+                SELECT id, test_run_id, org_id, case_key, status, duration_ms, transition, message, log_excerpt_uri,
+                       category, flaky, attempt_count, meta_json::text AS meta_json
                 FROM evaluations.test_case_results
                 WHERE test_run_id = :testRunId
                 ORDER BY case_key
                 """,
                 new MapSqlParameterSource("testRunId", testRunId),
-                (rs, rowNum) -> new TestCaseResult(
-                        rs.getObject("id", UUID.class),
-                        rs.getObject("test_run_id", UUID.class),
-                        rs.getObject("org_id", UUID.class),
-                        rs.getString("case_key"),
-                        TestCaseStatus.valueOf(rs.getString("status")),
-                        rs.getInt("duration_ms"),
-                        rs.getString("transition"),
-                        rs.getString("message"),
-                        rs.getString("log_excerpt_uri")
-                ));
+                (rs, rowNum) -> mapTestCaseResult(rs));
     }
 
     public List<TestRun> listTestRuns(UUID evaluationId) {
@@ -490,6 +500,153 @@ public class EvaluationRepository {
                 """,
                 new MapSqlParameterSource("evaluationId", evaluationId),
                 (rs, rowNum) -> mapTestRun(rs));
+    }
+
+    public void insertFlakyAttempt(
+            UUID evaluationId,
+            UUID orgId,
+            UUID testRunId,
+            TestPhase phase,
+            int attemptIndex,
+            String caseKey,
+            TestCaseStatus status) {
+        jdbc.update("""
+                INSERT INTO evaluations.flaky_detection_attempts
+                    (id, evaluation_id, org_id, test_run_id, phase, attempt_index, case_key, status)
+                VALUES
+                    (:id, :evaluationId, :orgId, :testRunId, :phase, :attemptIndex, :caseKey, :status)
+                """,
+                new MapSqlParameterSource()
+                        .addValue("id", UUID.randomUUID())
+                        .addValue("evaluationId", evaluationId)
+                        .addValue("orgId", orgId)
+                        .addValue("testRunId", testRunId)
+                        .addValue("phase", phase.name())
+                        .addValue("attemptIndex", attemptIndex)
+                        .addValue("caseKey", caseKey)
+                        .addValue("status", status.name()));
+    }
+
+    public Optional<ScoringProfile> findScoringProfile(String profileKey) {
+        var list = jdbc.query("""
+                SELECT id, profile_key, display_name, description, weights_json::text AS weights_json,
+                       flaky_repeat_runs, active, created_at
+                FROM evaluations.scoring_profiles
+                WHERE profile_key = :profileKey AND active = TRUE
+                """,
+                new MapSqlParameterSource("profileKey", profileKey),
+                (rs, rowNum) -> mapScoringProfile(rs));
+        return list.stream().findFirst();
+    }
+
+    public QualityReport insertQualityReport(QualityReport report) {
+        jdbc.update("""
+                INSERT INTO evaluations.quality_reports
+                    (id, evaluation_id, org_id, tool, metrics_json, normalized_score, created_at)
+                VALUES
+                    (:id, :evaluationId, :orgId, :tool, CAST(:metricsJson AS jsonb), :normalizedScore, :createdAt)
+                """,
+                new MapSqlParameterSource()
+                        .addValue("id", report.id())
+                        .addValue("evaluationId", report.evaluationId())
+                        .addValue("orgId", report.orgId())
+                        .addValue("tool", report.tool())
+                        .addValue("metricsJson", report.metricsJson() == null ? "{}" : report.metricsJson())
+                        .addValue("normalizedScore", report.normalizedScore())
+                        .addValue("createdAt", Timestamp.from(report.createdAt())));
+        return report;
+    }
+
+    public List<QualityReport> findQualityReports(UUID evaluationId) {
+        return jdbc.query("""
+                SELECT id, evaluation_id, org_id, tool, metrics_json::text AS metrics_json, normalized_score, created_at
+                FROM evaluations.quality_reports
+                WHERE evaluation_id = :evaluationId
+                ORDER BY created_at ASC
+                """,
+                new MapSqlParameterSource("evaluationId", evaluationId),
+                (rs, rowNum) -> new QualityReport(
+                        rs.getObject("id", UUID.class),
+                        rs.getObject("evaluation_id", UUID.class),
+                        rs.getObject("org_id", UUID.class),
+                        rs.getString("tool"),
+                        rs.getString("metrics_json"),
+                        rs.getBigDecimal("normalized_score"),
+                        rs.getTimestamp("created_at").toInstant()
+                ));
+    }
+
+    public void insertScore(EvaluationScore score, List<ScoreMetric> metrics) {
+        jdbc.update("""
+                INSERT INTO evaluations.evaluation_scores
+                    (id, evaluation_id, org_id, weighted_total, profile_id, profile_key, score_status,
+                     transition_summary_json, raw_summary_json, warnings_json, computed_at)
+                VALUES
+                    (:id, :evaluationId, :orgId, :weightedTotal, :profileId, :profileKey, :scoreStatus,
+                     CAST(:transitionSummary AS jsonb), CAST(:rawSummary AS jsonb), CAST(:warnings AS jsonb), :computedAt)
+                """,
+                new MapSqlParameterSource()
+                        .addValue("id", score.id())
+                        .addValue("evaluationId", score.evaluationId())
+                        .addValue("orgId", score.orgId())
+                        .addValue("weightedTotal", score.weightedTotal())
+                        .addValue("profileId", score.profileId() == null ? "default-v1" : score.profileId())
+                        .addValue("profileKey", score.profileKey())
+                        .addValue("scoreStatus", score.scoreStatus().name())
+                        .addValue("transitionSummary", score.transitionSummaryJson())
+                        .addValue("rawSummary", score.rawSummaryJson())
+                        .addValue("warnings", score.warningsJson())
+                        .addValue("computedAt", Timestamp.from(score.computedAt())));
+        for (ScoreMetric metric : metrics) {
+            jdbc.update("""
+                    INSERT INTO evaluations.score_metrics
+                        (id, evaluation_score_id, metric_key, raw_value, weight, weighted_value, meta_json)
+                    VALUES
+                        (:id, :scoreId, :metricKey, :rawValue, :weight, :weightedValue, CAST(:metaJson AS jsonb))
+                    """,
+                    new MapSqlParameterSource()
+                            .addValue("id", metric.id())
+                            .addValue("scoreId", metric.evaluationScoreId())
+                            .addValue("metricKey", metric.metricKey())
+                            .addValue("rawValue", metric.rawValue())
+                            .addValue("weight", metric.weight())
+                            .addValue("weightedValue", metric.weightedValue())
+                            .addValue("metaJson", metric.metaJson() == null ? "{}" : metric.metaJson()));
+        }
+    }
+
+    public Optional<EvaluationScore> findScore(UUID evaluationId) {
+        var list = jdbc.query("""
+                SELECT id, evaluation_id, org_id, weighted_total, profile_id, profile_key, score_status,
+                       transition_summary_json::text AS transition_summary_json,
+                       raw_summary_json::text AS raw_summary_json,
+                       warnings_json::text AS warnings_json,
+                       computed_at
+                FROM evaluations.evaluation_scores
+                WHERE evaluation_id = :evaluationId
+                """,
+                new MapSqlParameterSource("evaluationId", evaluationId),
+                (rs, rowNum) -> mapScore(rs));
+        return list.stream().findFirst();
+    }
+
+    public List<ScoreMetric> listScoreMetrics(UUID evaluationScoreId) {
+        return jdbc.query("""
+                SELECT id, evaluation_score_id, metric_key, raw_value, weight, weighted_value, meta_json::text AS meta_json
+                FROM evaluations.score_metrics
+                WHERE evaluation_score_id = :scoreId
+                ORDER BY metric_key
+                """,
+                new MapSqlParameterSource("scoreId", evaluationScoreId),
+                (rs, rowNum) -> new ScoreMetric(
+                        rs.getObject("id", UUID.class),
+                        rs.getObject("evaluation_score_id", UUID.class),
+                        rs.getString("metric_key"),
+                        rs.getBigDecimal("raw_value"),
+                        rs.getBigDecimal("weight"),
+                        rs.getBigDecimal("weighted_value"),
+                        rs.getString("meta_json")
+                ));
     }
 
     public record OutboxRow(long id, UUID aggregateId, UUID orgId, String eventType, String payload, int publishAttempts) {
@@ -554,6 +711,67 @@ public class EvaluationRepository {
                 rs.getTimestamp("started_at").toInstant(),
                 rs.getTimestamp("finished_at") == null ? null : rs.getTimestamp("finished_at").toInstant(),
                 rs.getString("container_meta")
+        );
+    }
+
+    private static TestCaseResult mapTestCaseResult(ResultSet rs) throws SQLException {
+        String category = rs.getString("category");
+        return new TestCaseResult(
+                rs.getObject("id", UUID.class),
+                rs.getObject("test_run_id", UUID.class),
+                rs.getObject("org_id", UUID.class),
+                rs.getString("case_key"),
+                TestCaseStatus.valueOf(rs.getString("status")),
+                rs.getInt("duration_ms"),
+                rs.getString("transition"),
+                rs.getString("message"),
+                rs.getString("log_excerpt_uri"),
+                category == null ? null : CaseCategory.valueOf(category),
+                rs.getBoolean("flaky"),
+                rs.getInt("attempt_count"),
+                rs.getString("meta_json")
+        );
+    }
+
+    private EvaluationScore mapScore(ResultSet rs) throws SQLException {
+        BigDecimal weighted = rs.getBigDecimal("weighted_total");
+        return new EvaluationScore(
+                rs.getObject("id", UUID.class),
+                rs.getObject("evaluation_id", UUID.class),
+                rs.getObject("org_id", UUID.class),
+                weighted,
+                rs.getString("profile_id"),
+                rs.getString("profile_key"),
+                ScoreStatus.valueOf(rs.getString("score_status")),
+                rs.getString("transition_summary_json"),
+                rs.getString("raw_summary_json"),
+                rs.getString("warnings_json"),
+                rs.getTimestamp("computed_at").toInstant()
+        );
+    }
+
+    private ScoringProfile mapScoringProfile(ResultSet rs) throws SQLException {
+        Map<String, Double> weights = new HashMap<>(ScoringProfile.DEFAULT_WEIGHTS);
+        try {
+            Map<String, Object> raw = objectMapper.readValue(
+                    rs.getString("weights_json"), new TypeReference<>() {});
+            for (Map.Entry<String, Object> entry : raw.entrySet()) {
+                if (entry.getValue() instanceof Number number) {
+                    weights.put(entry.getKey(), number.doubleValue());
+                }
+            }
+        } catch (Exception ignored) {
+            // keep defaults
+        }
+        return new ScoringProfile(
+                rs.getObject("id", UUID.class),
+                rs.getString("profile_key"),
+                rs.getString("display_name"),
+                rs.getString("description"),
+                Map.copyOf(weights),
+                rs.getInt("flaky_repeat_runs"),
+                rs.getBoolean("active"),
+                rs.getTimestamp("created_at").toInstant()
         );
     }
 }

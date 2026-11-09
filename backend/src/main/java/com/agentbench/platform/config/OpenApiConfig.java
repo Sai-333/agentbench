@@ -15,7 +15,7 @@ public class OpenApiConfig {
         return new OpenAPI()
                 .info(new Info()
                         .title("AgentBench API")
-                        .description("Multi-tenant agent evaluation platform. Milestone 5: agent provider integration.")
+                        .description("Multi-tenant agent evaluation platform. Milestone 6: evaluation scoring and transitions.")
                         .version("0.5.0"))
                 .components(new Components()
                         .addSecuritySchemes("bearerAuth", new SecurityScheme()

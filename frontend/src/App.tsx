@@ -1270,6 +1270,81 @@ function App() {
               </ul>
             </>
           )}
+          {selectedEvaluation.score && (
+            <>
+              <h3>Score</h3>
+              <p>
+                <span className="badge">{selectedEvaluation.score.scoreStatus}</span>
+                {selectedEvaluation.score.weightedTotal != null ? (
+                  <>
+                    {' '}
+                    · weighted{' '}
+                    <strong>{Number(selectedEvaluation.score.weightedTotal).toFixed(2)}</strong> / 100
+                  </>
+                ) : (
+                  <span className="muted"> · weighted total withheld</span>
+                )}
+                <span className="muted small"> · profile {selectedEvaluation.score.profileKey}</span>
+              </p>
+              {selectedEvaluation.score.transitionSummary && (
+                <>
+                  <h4>Visible transitions</h4>
+                  <table className="metrics-table">
+                    <thead>
+                      <tr>
+                        <th>F2P</th>
+                        <th>P2P</th>
+                        <th>P2F</th>
+                        <th>F2F</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr>
+                        <td>{selectedEvaluation.score.transitionSummary.F2P ?? 0}</td>
+                        <td>{selectedEvaluation.score.transitionSummary.P2P ?? 0}</td>
+                        <td>{selectedEvaluation.score.transitionSummary.P2F ?? 0}</td>
+                        <td>{selectedEvaluation.score.transitionSummary.F2F ?? 0}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </>
+              )}
+              <h4>Raw metrics (separate from weighted total)</h4>
+              <table className="metrics-table">
+                <thead>
+                  <tr>
+                    <th>Metric</th>
+                    <th>Raw</th>
+                    <th>Weight</th>
+                    <th>Weighted</th>
+                    <th>Notes</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {selectedEvaluation.score.metrics.map((metric) => (
+                    <tr key={metric.metricKey}>
+                      <td>{metric.metricKey}</td>
+                      <td>{Number(metric.rawValue).toFixed(3)}</td>
+                      <td>{(Number(metric.weight) * 100).toFixed(0)}%</td>
+                      <td>{Number(metric.weightedValue).toFixed(2)}</td>
+                      <td className="muted small">
+                        {metric.meta?.stub ? 'stub' : ''}
+                        {metric.meta?.neverF2P ? ' post-only · never F2P' : ''}
+                        {metric.meta?.withheld ? ' withheld' : ''}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {(selectedEvaluation.score.warnings?.length ?? 0) > 0 && (
+                <ul className="muted small">
+                  {selectedEvaluation.score.warnings.map((warning) => (
+                    <li key={warning}>{warning}</li>
+                  ))}
+                </ul>
+              )}
+            </>
+          )}
           {selectedEvaluation.testRuns.length > 0 && (
             <>
               <h3>Test runs</h3>
@@ -1278,12 +1353,15 @@ function App() {
                   <li key={run.id}>
                     <strong>
                       {run.phase} · {run.status}
+                      {run.phase === 'HIDDEN_POST' ? ' · hidden pass-rate only (never F2P)' : ''}
                     </strong>
                     <ul className="muted small">
                       {run.results.map((result) => (
                         <li key={result.caseKey}>
                           {result.caseKey}: {result.status}
-                          {result.transition ? ` (${result.transition})` : ''} · {result.durationMs}ms
+                          {result.transition ? ` (${result.transition})` : ''}
+                          {result.category ? ` · ${result.category}` : ''}
+                          {result.flaky ? ' · flaky' : ''} · {result.durationMs}ms
                         </li>
                       ))}
                     </ul>

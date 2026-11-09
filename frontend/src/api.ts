@@ -170,6 +170,26 @@ export type EvaluationTransition = {
   createdAt: string
 }
 
+export type ScoreMetric = {
+  metricKey: string
+  rawValue: number
+  weight: number
+  weightedValue: number
+  meta: Record<string, unknown>
+}
+
+export type EvaluationScore = {
+  id: string
+  scoreStatus: string
+  weightedTotal: number | null
+  profileKey: string
+  transitionSummary: Record<string, number>
+  rawSummary: Record<string, unknown>
+  warnings: string[]
+  metrics: ScoreMetric[]
+  computedAt: string
+}
+
 export type EvaluationDetail = {
   evaluation: Evaluation
   transitions: EvaluationTransition[]
@@ -183,6 +203,9 @@ export type EvaluationDetail = {
       durationMs: number
       transition: string | null
       message: string
+      category?: string | null
+      flaky?: boolean
+      attemptCount?: number
     }>
   }>
   patch: {
@@ -193,6 +216,7 @@ export type EvaluationDetail = {
     sealed: boolean
   } | null
   agentInvocations: AgentInvocation[]
+  score: EvaluationScore | null
 }
 
 export function getAccessToken(): string | null {

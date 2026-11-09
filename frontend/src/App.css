@@ -293,3 +293,27 @@ textarea {
   border-radius: 50%;
   background: var(--accent);
 }
+
+h4 {
+  margin: 1rem 0 0.4rem;
+  font-size: 0.9rem;
+}
+
+.metrics-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+  margin: 0.35rem 0 0.75rem;
+}
+
+.metrics-table th,
+.metrics-table td {
+  border: 1px solid var(--line);
+  padding: 0.4rem 0.55rem;
+  text-align: left;
+}
+
+.metrics-table th {
+  background: #eef3f9;
+  font-weight: 600;
+}

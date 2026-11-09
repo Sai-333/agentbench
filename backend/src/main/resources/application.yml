@@ -78,6 +78,9 @@ agentbench:
     default-max-queued: 20
     default-max-duration-sec: 1800
     default-max-patch-bytes: 5242880
+    flaky:
+      # Configurable repeated suite runs for flaky detection (1 = disabled).
+      repeat-runs: ${AGENTBENCH_EVAL_FLAKY_REPEAT_RUNS:1}
   agents:
     default-max-retries: ${AGENTBENCH_AGENTS_MAX_RETRIES:2}
     default-timeout-sec: ${AGENTBENCH_AGENTS_TIMEOUT_SEC:60}
