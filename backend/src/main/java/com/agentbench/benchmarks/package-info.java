@@ -1,4 +1,4 @@
 /**
- * Benchmarks module (tasks, suites, versions). Stub package for Milestone 1.
+ * Benchmarks module: versioned tasks, visible/hidden suites, immutable publish snapshots (M3).
  */
 package com.agentbench.benchmarks;

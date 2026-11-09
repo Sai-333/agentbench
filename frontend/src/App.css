@@ -145,7 +145,9 @@ label {
   font-size: 0.9rem;
 }
 
-input {
+input,
+textarea,
+select {
   width: 100%;
   padding: 0.55rem 0.65rem;
   border: 1px solid var(--line);
@@ -153,6 +155,33 @@ input {
   font: inherit;
   background: #fff;
   color: var(--ink);
+}
+
+textarea {
+  resize: vertical;
+  min-height: 4rem;
+}
+
+.detail-grid {
+  margin-top: 1rem;
+}
+
+.task-detail {
+  margin-top: 1rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--line);
+}
+
+.badge {
+  display: inline-block;
+  margin-left: 0.35rem;
+  padding: 0.1rem 0.4rem;
+  border: 1px solid var(--line);
+  border-radius: 0.25rem;
+  font-size: 0.75rem;
+  letter-spacing: 0.02em;
+  color: var(--muted);
+  vertical-align: middle;
 }
 
 .cta {
