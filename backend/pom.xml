@@ -15,7 +15,7 @@
     <artifactId>agentbench</artifactId>
     <version>0.1.0-SNAPSHOT</version>
     <name>agentbench</name>
-    <description>AgentBench modular monolith — Milestone 3 benchmark management</description>
+    <description>AgentBench modular monolith — Milestone 4 evaluation orchestration</description>
 
     <properties>
         <java.version>21</java.version>

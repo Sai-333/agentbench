@@ -69,6 +69,15 @@ agentbench:
   github:
     token: ${AGENTBENCH_GITHUB_TOKEN:}
     validation-enabled: ${AGENTBENCH_GITHUB_VALIDATION_ENABLED:true}
+  evaluation:
+    # API process publishes outbox; worker profile consumes commands.
+    listener-enabled: ${AGENTBENCH_EVAL_LISTENER_ENABLED:false}
+    outbox-poll-ms: ${AGENTBENCH_EVAL_OUTBOX_POLL_MS:1000}
+    max-stage-attempts: ${AGENTBENCH_EVAL_MAX_STAGE_ATTEMPTS:5}
+    default-max-concurrent: 2
+    default-max-queued: 20
+    default-max-duration-sec: 1800
+    default-max-patch-bytes: 5242880
 
 logging:
   structured:
@@ -86,6 +95,11 @@ spring:
   main:
     web-application-type: servlet
 
+agentbench:
+  evaluation:
+    listener-enabled: true
+
 logging:
   level:
     com.agentbench.platform.config.WorkerPingListener: INFO
+    com.agentbench.evaluation: INFO

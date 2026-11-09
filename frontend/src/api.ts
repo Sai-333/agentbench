@@ -94,6 +94,68 @@ export type Task = {
   updatedAt: string
 }
 
+export type Agent = {
+  id: string
+  orgId: string
+  name: string
+  adapterType: string
+  enabled: boolean
+  createdAt: string
+}
+
+export type Evaluation = {
+  id: string
+  orgId: string
+  benchmarkVersionId: string
+  taskId: string
+  agentId: string
+  state: string
+  attempt: number
+  failureClass: string | null
+  errorCode: string | null
+  errorMessage: string | null
+  cancelRequested: boolean
+  createdBy: string
+  createdAt: string
+  updatedAt: string
+  startedAt: string | null
+  completedAt: string | null
+}
+
+export type EvaluationTransition = {
+  id: number
+  fromState: string | null
+  toState: string
+  reason: string
+  actor: string
+  attempt: number
+  createdAt: string
+}
+
+export type EvaluationDetail = {
+  evaluation: Evaluation
+  transitions: EvaluationTransition[]
+  testRuns: Array<{
+    id: string
+    phase: string
+    status: string
+    results: Array<{
+      caseKey: string
+      status: string
+      durationMs: number
+      transition: string | null
+      message: string
+    }>
+  }>
+  patch: {
+    id: string
+    contentDigest: string
+    format: string
+    byteSize: number
+    sealed: boolean
+  } | null
+}
+
 export function getAccessToken(): string | null {
   return localStorage.getItem(TOKEN_KEY)
 }
