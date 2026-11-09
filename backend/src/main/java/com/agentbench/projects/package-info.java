@@ -1,4 +1,4 @@
 /**
- * Projects module (projects, repo snapshots). Stub package for Milestone 1.
+ * Projects: org-scoped projects, GitHub/git repository config, and repo snapshots.
  */
 package com.agentbench.projects;

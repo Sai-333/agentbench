@@ -30,6 +30,15 @@ management:
 agentbench:
   artifacts:
     root: ${java.io.tmpdir}/agentbench-test-artifacts
+  jwt:
+    secret: test-only-jwt-secret-key-32chars-min!!
+    access-ttl-seconds: 900
+    refresh-ttl-seconds: 3600
+  secrets:
+    encryption-key: MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=
+  github:
+    token:
+    validation-enabled: false
 
 logging:
   level:
