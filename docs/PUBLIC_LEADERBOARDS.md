@@ -71,4 +71,4 @@ Config (`application.yml` / env):
 
 - Full CDN product / edge network
 - Anonymous votes, comments, or other public writes
-- SAML / mTLS / WORM / Oracle Always Free hosting
+- Multi-IdP SAML admin UI / mTLS / AWS Object Lock WORM / Oracle Always Free hosting

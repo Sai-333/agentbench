@@ -131,7 +131,7 @@ helm uninstall agentbench -n agentbench
 
 **Dependency strategy:** default is **external** Postgres / Redis / RabbitMQ (`config.*` hosts). Optional `dependencies.*.enabled` spins single-replica lab Deployments only — not HA, not operators. Prefer `secrets.existingSecret` in real clusters.
 
-**Honest limits:** not certified multi-tenant SaaS; no CRDs/operators; NetworkPolicies are included (opt-out); mTLS and WORM audit remain deferred. See `deploy/helm/agentbench/README.md` and §3c.
+**Honest limits:** not certified multi-tenant SaaS; no CRDs/operators; NetworkPolicies are included (opt-out); mTLS remains deferred. Postgres WORM/append-only audit landed (`docs/AUDIT_WORM.md`) — not AWS Object Lock. See `deploy/helm/agentbench/README.md` and §3c.
 
 ## 3c. NetworkPolicies
 
@@ -170,7 +170,7 @@ helm upgrade agentbench deploy/helm/agentbench -n agentbench \
 kubectl apply -k deploy/kubernetes/
 ```
 
-**Residual risk (honest):** NetworkPolicy is L3/L4 only — not mTLS, not identity-aware authz between services, not WORM audit. `allowExternalDataPlane` / `allowWorldHttps` intentionally permit broad destinations on known ports so external managed services and OIDC/S3/LLM calls work; operators should replace those with CIDR/`namespaceSelector` rules via `networkPolicy.egress.extra` and `networkPolicy.ingress.from` before hostile multi-tenant use. Evaluation containers still use Docker `--network none` (or gVisor) independently of these cluster policies.
+**Residual risk (honest):** NetworkPolicy is L3/L4 only — not mTLS, not identity-aware authz between services. Audit WORM is Postgres-side (triggers + hash chain), not Object Lock — see `docs/AUDIT_WORM.md`. `allowExternalDataPlane` / `allowWorldHttps` intentionally permit broad destinations on known ports so external managed services and OIDC/S3/LLM calls work; operators should replace those with CIDR/`namespaceSelector` rules via `networkPolicy.egress.extra` and `networkPolicy.ingress.from` before hostile multi-tenant use. Evaluation containers still use Docker `--network none` (or gVisor) independently of these cluster policies.
 
 ## 4. Graceful shutdown
 
