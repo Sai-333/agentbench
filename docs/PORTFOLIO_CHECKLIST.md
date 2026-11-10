@@ -1,6 +1,6 @@
 # AgentBench — Portfolio checklist (honest)
 
-**As of post-M9 public leaderboards + OIDC auth + S3-compatible artifact storage + Postgres RLS + measured local k6 smoke + opt-in gVisor.** Marked items are evidenced in `main` / this repo. Deferred items are explicit non-claims.
+**As of post-M9 public leaderboards + OIDC auth + S3-compatible artifact storage + Postgres RLS + measured local k6 smoke + opt-in gVisor + Helm chart.** Marked items are evidenced in `main` / this repo. Deferred items are explicit non-claims.
 
 ## Done (M0–M9 + deferred follow-ups landed)
 
@@ -21,6 +21,7 @@
 | Recovery tests (baseline / cancel / timeout / retry policy / DLQ topology) | M9 tests |
 | Graceful shutdown + prod-ish Compose overlay | `application.yml`, `docker-compose.prod.yml` |
 | Kubernetes templates (deploy/svc/config/secrets) | `deploy/kubernetes/` |
+| Helm chart (API/worker/frontend; not operators/CRDs) | `deploy/helm/agentbench/`; `scripts/helm/smoke.sh`; CI `helm` job; `docs/DEPLOYMENT.md` §3b |
 | Ops runbook snippets + load-test **plan** + k6 smoke script | `docs/OPERATIONS.md`, `docs/PERFORMANCE.md` |
 | Measured **local Compose** k6 smoke (laptop; not production) | `docs/PERFORMANCE.md` dated 2026-11-10 section; `deploy/loadtest/results/measured-2026-11-10-*` |
 | Threat model + portfolio honesty | this file + threat model |
@@ -34,7 +35,7 @@
 |---|---|
 | Firecracker microVM isolation | **Deferred** — gVisor opt-in landed; Firecracker not implemented |
 | Full enterprise SSO (SAML / multi-IdP admin UI) | **Deferred** — Google/GitHub OIDC authorization-code only (Q1 partial) |
-| Managed cloud Helm chart / operators | **Deferred** — raw manifests only |
+| Operators / CRDs / certified multi-cloud SaaS Helm | **Deferred** — app Helm chart landed; no operators/CRDs |
 | Certified hostile multi-tenant SaaS security | **Not claimed** — Docker residual risk; gVisor opt-in stronger but not a formal certification |
 | Measured **production** throughput / capacity numbers | **Not claimed** — only attached local Compose laptop smoke exists |
 | Live public hosted demo on Oracle Always Free | **Guide-ready** (`docs/DEPLOYMENT_ORACLE_ALWAYS_FREE.md`) — **not actually hosted** until Sai’s VM + SSH apply the runbook |

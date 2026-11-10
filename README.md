@@ -64,7 +64,7 @@ Single-host Ampere A1 runbook (VM shape, ports, Docker, secrets, health checks, 
 | Local runtime | Docker Compose (+ `docker-compose.prod.yml`) |
 | Artifacts | `ArtifactStorage`: local volume (default) or S3-compatible (`ARTIFACT_STORAGE=s3`, Compose `--profile s3` / MinIO) |
 | Eval isolation | Hardened Docker via `RuntimeIsolator` (default); optional `mode=gvisor` (`docker --runtime=runsc`); local CI fallback |
-| K8s | Templates under `deploy/kubernetes/` (no real secrets) |
+| K8s | Templates under `deploy/kubernetes/`; Helm chart `deploy/helm/agentbench/` (no real secrets; not operators) |
 
 ## Architecture
 
@@ -86,7 +86,7 @@ Roles (org-scoped): `OWNER`, `ADMIN`, `DEVELOPER`, `VIEWER`.
 |---|---|
 | Recovery | DLQ topology + listener retry; infra stage retry budget; cancel mid-flight; timeout watchdog; invalid baseline fails closed |
 | Shutdown | `server.shutdown=graceful` + documented probes |
-| Deploy | Compose prod overlay; Kubernetes Deployment/Service/ConfigMap/Secret templates |
+| Deploy | Compose prod overlay; Kubernetes templates + Helm chart (`deploy/helm/agentbench/`) |
 | Perf | k6 smoke script + load-test **plan** (no unverified throughput claims) |
 | Security review | Isolator constraints, hidden confidentiality, secret redaction; threat model residual risks updated |
 | Ops | Backup / migrate / upgrade / DLQ snippets in `docs/OPERATIONS.md` |
@@ -167,11 +167,13 @@ Never edit applied migrations; forward-only only.
 | [docs/ARCHITECTURE_DECISIONS/ADR-004-docker-first-isolation.md](docs/ARCHITECTURE_DECISIONS/ADR-004-docker-first-isolation.md) | Docker default + optional gVisor |
 | [docs/PORTFOLIO_CHECKLIST.md](docs/PORTFOLIO_CHECKLIST.md) | Done vs deferred |
 | [deploy/kubernetes/](deploy/kubernetes/) | K8s templates |
+| [deploy/helm/agentbench/](deploy/helm/agentbench/) | Helm chart (install/upgrade/uninstall) |
+| [scripts/helm/smoke.sh](scripts/helm/smoke.sh) | `helm lint` + `helm template` smoke |
 | [deploy/loadtest/k6-smoke.js](deploy/loadtest/k6-smoke.js) | Smoke script |
 
 ## CI
 
-GitHub Actions builds backend (`mvn verify`, including Testcontainers when Docker is available) and frontend (`npm ci && npm run build`). WireMock covers OpenAI-compatible HTTP without paid APIs.
+GitHub Actions builds backend (`mvn verify`, including Testcontainers when Docker is available), frontend (`npm ci && npm run build`), and Helm (`./scripts/helm/smoke.sh`). WireMock covers OpenAI-compatible HTTP without paid APIs.
 
 **Docker 29 note:** Engine 29 defaults to a minimum API of 1.44 while Testcontainers 1.21.x still negotiates an older client API. Local/daemon workaround:
 
