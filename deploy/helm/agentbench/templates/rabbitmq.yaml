@@ -13,9 +13,16 @@ spec:
     {{- include "agentbench.selectorLabels" . | nindent 4 }}
     app.kubernetes.io/component: rabbitmq
   ports:
+    {{- if not (and .Values.amqps.enabled .Values.amqps.requireTls) }}
     - name: amqp
       port: 5672
       targetPort: amqp
+    {{- end }}
+    {{- if .Values.amqps.enabled }}
+    - name: amqps
+      port: {{ include "agentbench.amqps.port" . | int }}
+      targetPort: amqps
+    {{- end }}
     - name: management
       port: 15672
       targetPort: management
@@ -45,8 +52,14 @@ spec:
           image: "{{ .Values.dependencies.rabbitmq.image.repository }}:{{ .Values.dependencies.rabbitmq.image.tag }}"
           imagePullPolicy: {{ .Values.dependencies.rabbitmq.image.pullPolicy }}
           ports:
+            {{- if not (and .Values.amqps.enabled .Values.amqps.requireTls) }}
             - name: amqp
               containerPort: 5672
+            {{- end }}
+            {{- if .Values.amqps.enabled }}
+            - name: amqps
+              containerPort: {{ include "agentbench.amqps.port" . | int }}
+            {{- end }}
             - name: management
               containerPort: 15672
           env:
@@ -61,4 +74,30 @@ spec:
             periodSeconds: 10
           resources:
             {{- toYaml .Values.dependencies.rabbitmq.resources | nindent 12 }}
+          {{- if .Values.amqps.enabled }}
+          volumeMounts:
+            - name: amqps-config
+              mountPath: /etc/rabbitmq/rabbitmq.conf
+              subPath: rabbitmq.conf
+              readOnly: true
+            - name: amqps-server
+              mountPath: /etc/rabbitmq/certs
+              readOnly: true
+          {{- end }}
+      {{- if .Values.amqps.enabled }}
+      volumes:
+        - name: amqps-config
+          configMap:
+            name: {{ include "agentbench.fullname" . }}-rabbitmq-amqps
+        - name: amqps-server
+          secret:
+            secretName: {{ include "agentbench.amqps.serverSecretName" . }}
+            items:
+              - key: ca.crt
+                path: ca.crt
+              - key: tls.crt
+                path: server.crt
+              - key: tls.key
+                path: server.key
+      {{- end }}
 {{- end }}

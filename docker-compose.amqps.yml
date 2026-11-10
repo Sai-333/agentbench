@@ -1,0 +1,51 @@
+# Opt-in RabbitMQ AMQPS (TLS) overlay. Default Compose stays plain AMQP on 5672.
+#
+#   ./scripts/rabbitmq/generate-amqps-certs.sh
+#   docker compose -f docker-compose.yml -f docker-compose.amqps.yml up -d --build
+#
+# Residual: lab self-signed PEMs; not Istio/Linkerd; management UI stays HTTP on 15672.
+# See docs/DEPLOYMENT.md §3f.
+services:
+  rabbitmq:
+    ports:
+      - "${RABBITMQ_PORT:-5672}:5672"
+      - "${RABBITMQ_AMQPS_PORT:-5671}:5671"
+      - "${RABBITMQ_MANAGEMENT_PORT:-15672}:15672"
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+      - ./.amqps-certs/rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf:ro
+      - ./.amqps-certs/ca.crt:/etc/rabbitmq/certs/ca.crt:ro
+      - ./.amqps-certs/server.crt:/etc/rabbitmq/certs/server.crt:ro
+      - ./.amqps-certs/server.key:/etc/rabbitmq/certs/server.key:ro
+
+  backend:
+    environment:
+      SPRING_RABBITMQ_HOST: rabbitmq
+      SPRING_RABBITMQ_PORT: 5671
+      SPRING_RABBITMQ_SSL_ENABLED: "true"
+      SPRING_RABBITMQ_SSL_BUNDLE: rabbitmq
+      SPRING_RABBITMQ_SSL_VERIFY_HOSTNAME: "${SPRING_RABBITMQ_SSL_VERIFY_HOSTNAME:-true}"
+      SPRING_SSL_BUNDLE_PEM_RABBITMQ_TRUSTSTORE_CERTIFICATE: file:/var/agentbench/amqps/ca.crt
+      SPRING_SSL_BUNDLE_PEM_RABBITMQ_KEYSTORE_CERTIFICATE: file:/var/agentbench/amqps/client.crt
+      SPRING_SSL_BUNDLE_PEM_RABBITMQ_KEYSTORE_PRIVATE_KEY: file:/var/agentbench/amqps/client.key
+    volumes:
+      - artifacts_data:/var/agentbench/artifacts
+      - ./.amqps-certs/ca.crt:/var/agentbench/amqps/ca.crt:ro
+      - ./.amqps-certs/client.crt:/var/agentbench/amqps/client.crt:ro
+      - ./.amqps-certs/client.key:/var/agentbench/amqps/client.key:ro
+
+  worker:
+    environment:
+      SPRING_RABBITMQ_HOST: rabbitmq
+      SPRING_RABBITMQ_PORT: 5671
+      SPRING_RABBITMQ_SSL_ENABLED: "true"
+      SPRING_RABBITMQ_SSL_BUNDLE: rabbitmq
+      SPRING_RABBITMQ_SSL_VERIFY_HOSTNAME: "${SPRING_RABBITMQ_SSL_VERIFY_HOSTNAME:-true}"
+      SPRING_SSL_BUNDLE_PEM_RABBITMQ_TRUSTSTORE_CERTIFICATE: file:/var/agentbench/amqps/ca.crt
+      SPRING_SSL_BUNDLE_PEM_RABBITMQ_KEYSTORE_CERTIFICATE: file:/var/agentbench/amqps/client.crt
+      SPRING_SSL_BUNDLE_PEM_RABBITMQ_KEYSTORE_PRIVATE_KEY: file:/var/agentbench/amqps/client.key
+    volumes:
+      - artifacts_data:/var/agentbench/artifacts
+      - ./.amqps-certs/ca.crt:/var/agentbench/amqps/ca.crt:ro
+      - ./.amqps-certs/client.crt:/var/agentbench/amqps/client.crt:ro
+      - ./.amqps-certs/client.key:/var/agentbench/amqps/client.key:ro

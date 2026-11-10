@@ -50,6 +50,18 @@ See **[POSTGRES_RLS.md](./POSTGRES_RLS.md)** for full caveats. Short version:
 - `EvaluationDlqListener` logs redacted poison messages; **does not auto-replay**.
 - Manual requeue (RabbitMQ management UI or `rabbitmqadmin`) only after inspecting root cause.
 
+## Optional RabbitMQ AMQPS (TLS)
+
+Default Compose / Helm leave the broker on **plain AMQP 5672**. To encrypt API/worker → RabbitMQ:
+
+| Path | How |
+|---|---|
+| Compose lab | `./scripts/rabbitmq/generate-amqps-certs.sh` then `docker compose -f docker-compose.yml -f docker-compose.amqps.yml up -d` |
+| Helm | `--set amqps.enabled=true` (+ openssl Secrets or `amqps.certManager.enabled`) |
+| Spring knobs | `SPRING_RABBITMQ_SSL_ENABLED`, port `5671`, PEM bundle `rabbitmq` or PKCS12 trust/key stores |
+
+Ops checks: broker `rabbitmq-diagnostics listeners` shows SSL on 5671; API/worker readiness stays UP; cert expiry is an operator concern (lab PEMs default ~825d leaf). **Not claimed:** Istio/Linkerd mesh; managed multi-AZ RabbitMQ; TLS for the management UI in the lab overlay. Detail: `docs/DEPLOYMENT.md` §3f.
+
 ## Cancel / timeout
 
 - `POST .../evaluations/{id}/cancel` — immediate if `QUEUED`; otherwise sets `cancel_requested` and worker cancels between stages.

@@ -154,7 +154,7 @@ Default-deny + allow-needed policies cover API (backend), worker, frontend, and 
 | Backend ingress | TCP 8080 (any source by default; tighten `networkPolicy.ingress.from`) | Other ports |
 | Worker ingress | TCP 8081 | Other ports |
 | Frontend ingress | TCP 8080 | Other ports; no data-plane egress |
-| Backend/worker egress | Postgres 5432, Redis 6379, RabbitMQ 5672; HTTP/HTTPS 80/443 (excl. link-local) | Arbitrary non-HTTP ports; lateral to unrelated pods except via those ports |
+| Backend/worker egress | Postgres 5432, Redis 6379, RabbitMQ 5672 (+ 5671 when AMQPS); HTTP/HTTPS 80/443 (excl. link-local) | Arbitrary non-HTTP ports; lateral to unrelated pods except via those ports |
 | In-cluster Postgres/Redis/Rabbit | Ingress only from backend + worker on data ports | Ingress from other pods; egress from data-plane pods (default-deny) |
 
 **Enable / disable**
@@ -209,7 +209,7 @@ helm upgrade --install agentbench deploy/helm/agentbench -n agentbench \
 
 **Frontend notes:** With Ingress, route `/api` to the backend Service and `/` to the frontend (edge TLS ≠ pod mTLS). The nginx overlay matters when the UI proxies `/api` in-cluster. Browser→frontend remains HTTP unless you terminate TLS at Ingress.
 
-**Residual (honest):** This is **not** a service mesh product (no Istio/Linkerd, no automatic sidecar identity). API↔worker **evaluation traffic** is still primarily RabbitMQ (AMQP), not HTTPS — AMQPS / mesh mTLS for the broker is out of scope. Not certified multi-tenant SaaS. Chart CI only `helm lint` / `helm template` (+ openssl script dry-run); it does not spin a live cluster.
+**Residual (honest):** This is **not** a service mesh product (no Istio/Linkerd, no automatic sidecar identity). Pair with optional AMQPS (§3f) for TLS on the queue. Not certified multi-tenant SaaS. Chart CI only `helm lint` / `helm template` (+ openssl script dry-run); it does not spin a live cluster.
 
 ## 3e. Operator + CRD (optional)
 
@@ -235,6 +235,53 @@ kubectl apply -f deploy/operator/samples/agentbenchinstance.yaml
 ```
 
 **Honest limits:** operators/CRDs landed for portfolio packaging; **not** certified multi-cloud / multi-tenant SaaS; not a full custom Go Kubebuilder manager — helm-operator + `watches.yaml` only. See `deploy/operator/README.md`.
+
+## 3f. Optional RabbitMQ AMQPS (TLS)
+
+Encrypts API/worker → RabbitMQ traffic with TLS (AMQPS on port **5671**). **Default off.** Mac Docker Compose stays plain AMQP on 5672 unless you opt in with the overlay below.
+
+| Piece | Behavior when enabled |
+|---|---|
+| Spring Boot API / worker | `SPRING_RABBITMQ_SSL_ENABLED=true`, port `5671`, PEM SSL bundle `rabbitmq` (trust CA + optional client cert) **or** classic PKCS12/JKS `trust-store` / `key-store` |
+| Broker | `listeners.ssl.default = 5671` via `rabbitmq.conf`; optional `requireTls` disables plaintext `5672` |
+| Certs | **A)** `./scripts/rabbitmq/generate-amqps-certs.sh` → PEMs + Secret YAML, or **B)** Helm `amqps.certManager.enabled=true` |
+| NetworkPolicy | Allows egress/ingress on **5671** (and 5672 unless `requireTls`) |
+
+### Compose overlay (lab)
+
+```bash
+./scripts/rabbitmq/generate-amqps-certs.sh
+docker compose -f docker-compose.yml -f docker-compose.amqps.yml up -d --build
+# Broker listens on 5671 (TLS) and still 5672 (plain) unless you regenerate with --require-tls
+docker compose -f docker-compose.yml -f docker-compose.amqps.yml exec rabbitmq \
+  rabbitmq-diagnostics -q listeners
+```
+
+### Helm
+
+```bash
+# openssl path (no cert-manager)
+./scripts/rabbitmq/generate-amqps-certs.sh --namespace agentbench --release agentbench --apply
+helm upgrade --install agentbench deploy/helm/agentbench -n agentbench \
+  --set amqps.enabled=true \
+  --set dependencies.rabbitmq.enabled=true   # or point config.rabbitmqHost at a TLS-enabled broker
+
+# cert-manager path
+helm upgrade --install agentbench deploy/helm/agentbench -n agentbench \
+  --set amqps.enabled=true \
+  --set amqps.certManager.enabled=true \
+  --set dependencies.rabbitmq.enabled=true
+```
+
+| Knob | Default | Notes |
+|---|---|---|
+| `amqps.enabled` / `SPRING_RABBITMQ_SSL_ENABLED` | `false` | Opt-in |
+| `amqps.port` | `5671` | Standard AMQPS |
+| `amqps.mutualTls` | `true` | Client cert presented when enabled |
+| `amqps.requireTls` | `false` | When true, broker ConfigMap sets `listeners.tcp = none` |
+| `amqps.verifyHostname` | `true` | Spring client hostname check |
+
+**Residual (honest):** App-level AMQPS only — **not** Istio/Linkerd or a full service mesh. Management UI stays HTTP on 15672 in the lab overlay. Self-signed lab PEMs are for demos; production should use your PKI / managed broker TLS. Chart CI templates + openssl dry-run; no live AMQPS cluster in CI. Fail-fast: Spring refuses to start if SSL is enabled without a bundle or trust-store (`RabbitAmqpsConfiguration`).
 
 ## 4. Graceful shutdown
 

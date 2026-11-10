@@ -1,0 +1,105 @@
+{{- if and .Values.amqps.enabled .Values.amqps.certManager.enabled }}
+# cert-manager path for RabbitMQ AMQPS. Requires cert-manager CRDs in-cluster.
+# Alternative: ./scripts/rabbitmq/generate-amqps-certs.sh (openssl → Secrets).
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: {{ include "agentbench.fullname" . }}-amqps-selfsigned
+  namespace: {{ include "agentbench.namespace" . }}
+  labels:
+    {{- include "agentbench.labels" . | nindent 4 }}
+    app.kubernetes.io/component: amqps
+spec:
+  selfSigned: {}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: {{ include "agentbench.fullname" . }}-amqps-ca
+  namespace: {{ include "agentbench.namespace" . }}
+  labels:
+    {{- include "agentbench.labels" . | nindent 4 }}
+    app.kubernetes.io/component: amqps
+spec:
+  isCA: true
+  commonName: agentbench-amqps-ca
+  secretName: {{ include "agentbench.amqps.caSecretName" . }}
+  duration: {{ .Values.amqps.certManager.duration | quote }}
+  renewBefore: {{ .Values.amqps.certManager.renewBefore | quote }}
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+  issuerRef:
+    name: {{ include "agentbench.fullname" . }}-amqps-selfsigned
+    kind: Issuer
+---
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: {{ include "agentbench.fullname" . }}-amqps-ca
+  namespace: {{ include "agentbench.namespace" . }}
+  labels:
+    {{- include "agentbench.labels" . | nindent 4 }}
+    app.kubernetes.io/component: amqps
+spec:
+  ca:
+    secretName: {{ include "agentbench.amqps.caSecretName" . }}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: {{ include "agentbench.fullname" . }}-amqps-server
+  namespace: {{ include "agentbench.namespace" . }}
+  labels:
+    {{- include "agentbench.labels" . | nindent 4 }}
+    app.kubernetes.io/component: amqps
+spec:
+  secretName: {{ include "agentbench.amqps.serverSecretName" . }}
+  duration: {{ .Values.amqps.certManager.duration | quote }}
+  renewBefore: {{ .Values.amqps.certManager.renewBefore | quote }}
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+  usages:
+    - server auth
+    - client auth
+  commonName: {{ printf "%s-rabbitmq" (include "agentbench.fullname" .) | quote }}
+  dnsNames:
+    - rabbitmq
+    - {{ printf "%s-rabbitmq" (include "agentbench.fullname" .) }}
+    - {{ printf "%s-rabbitmq.%s" (include "agentbench.fullname" .) (include "agentbench.namespace" .) }}
+    - {{ printf "%s-rabbitmq.%s.svc" (include "agentbench.fullname" .) (include "agentbench.namespace" .) }}
+    - {{ printf "%s-rabbitmq.%s.svc.cluster.local" (include "agentbench.fullname" .) (include "agentbench.namespace" .) }}
+    - localhost
+  issuerRef:
+    name: {{ include "agentbench.fullname" . }}-amqps-ca
+    kind: Issuer
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: {{ include "agentbench.fullname" . }}-amqps-client
+  namespace: {{ include "agentbench.namespace" . }}
+  labels:
+    {{- include "agentbench.labels" . | nindent 4 }}
+    app.kubernetes.io/component: amqps
+spec:
+  secretName: {{ include "agentbench.amqps.clientSecretName" . }}
+  duration: {{ .Values.amqps.certManager.duration | quote }}
+  renewBefore: {{ .Values.amqps.certManager.renewBefore | quote }}
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+  usages:
+    - client auth
+    - server auth
+  commonName: {{ printf "%s-amqps-client" (include "agentbench.fullname" .) | quote }}
+  dnsNames:
+    - {{ printf "%s-amqps-client" (include "agentbench.fullname" .) }}
+    - {{ include "agentbench.backend.fullname" . }}
+    - {{ include "agentbench.worker.fullname" . }}
+    - localhost
+  issuerRef:
+    name: {{ include "agentbench.fullname" . }}-amqps-ca
+    kind: Issuer
+{{- end }}

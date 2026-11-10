@@ -58,7 +58,7 @@ Single-host Ampere A1 runbook (VM shape, ports, Docker, secrets, health checks, 
 | Frontend | React, TypeScript, Vite |
 | Data | PostgreSQL 16, Flyway (single forward-only stream) |
 | Cache | Redis 7 |
-| Messaging | RabbitMQ 3.13 (evaluation commands + DLQ) |
+| Messaging | RabbitMQ 3.13 (evaluation commands + DLQ); optional AMQPS TLS (`docs/DEPLOYMENT.md` §3f) |
 | Auth | Local email/password + JWT; optional Google/GitHub OIDC (`docs/AUTH_OIDC.md`); optional SAML 2.0 SP (`docs/AUTH_SAML.md`) |
 | API docs | springdoc OpenAPI + Swagger UI |
 | Local runtime | Docker Compose (+ `docker-compose.prod.yml`) |
@@ -66,7 +66,7 @@ Single-host Ampere A1 runbook (VM shape, ports, Docker, secrets, health checks, 
 | Eval isolation | Hardened Docker via `RuntimeIsolator` (default); optional `mode=gvisor` (`docker --runtime=runsc`) or `mode=firecracker` (Linux+KVM); local CI fallback |
 | Suite runners | Fixture-v1 + Maven/JUnit, pytest, Jest via `SuiteToolchainRunner` + isolator (`docs/RUNNERS.md`); hidden stays post-only |
 | Quality scanners | Checkstyle/SpotBugs/PMD primary; optional Sonar + opt-in ruff/eslint (`docs/QUALITY_SONAR.md`, `docs/QUALITY_LANGUAGE.md`) |
-| K8s | Templates under `deploy/kubernetes/` (incl. NetworkPolicies); Helm chart `deploy/helm/agentbench/` (optional `mtls.*`); optional Operator/CRD `deploy/operator/` (`AgentBenchInstance`); not certified multi-cloud SaaS; not a service mesh |
+| K8s | Templates under `deploy/kubernetes/` (incl. NetworkPolicies); Helm chart `deploy/helm/agentbench/` (optional `mtls.*`, `amqps.*`); optional Operator/CRD `deploy/operator/` (`AgentBenchInstance`); not certified multi-cloud SaaS; not a service mesh |
 
 ## Architecture
 

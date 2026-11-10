@@ -46,6 +46,9 @@ spec:
             {{- if .Values.mtls.enabled }}
             {{- include "agentbench.mtls.springSslEnv" . | nindent 12 }}
             {{- end }}
+            {{- if .Values.amqps.enabled }}
+            {{- include "agentbench.amqps.springSslEnv" . | nindent 12 }}
+            {{- end }}
             {{- with .Values.backend.extraEnv }}
             {{- toYaml . | nindent 12 }}
             {{- end }}
@@ -87,6 +90,11 @@ spec:
               mountPath: {{ include "agentbench.mtls.mountPath" . }}
               readOnly: true
             {{- end }}
+            {{- if .Values.amqps.enabled }}
+            - name: amqps
+              mountPath: {{ include "agentbench.amqps.mountPath" . }}
+              readOnly: true
+            {{- end }}
       volumes:
         - name: artifacts
           emptyDir: {}
@@ -94,6 +102,18 @@ spec:
         - name: mtls
           secret:
             secretName: {{ include "agentbench.mtls.backendSecretName" . }}
+            items:
+              - key: tls.crt
+                path: tls.crt
+              - key: tls.key
+                path: tls.key
+              - key: ca.crt
+                path: ca.crt
+        {{- end }}
+        {{- if .Values.amqps.enabled }}
+        - name: amqps
+          secret:
+            secretName: {{ include "agentbench.amqps.clientSecretName" . }}
             items:
               - key: tls.crt
                 path: tls.crt

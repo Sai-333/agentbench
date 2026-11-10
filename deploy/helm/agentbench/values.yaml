@@ -220,6 +220,31 @@ mtls:
     frontend: ""
 
 # ---------------------------------------------------------------------------
+# Optional RabbitMQ AMQPS (TLS) — OFF by default.
+# Mac Docker Compose stays plain AMQP on 5672. Not Istio/Linkerd.
+# See docs/DEPLOYMENT.md §3f. openssl: ./scripts/rabbitmq/generate-amqps-certs.sh
+# ---------------------------------------------------------------------------
+amqps:
+  enabled: false
+  port: "5671"
+  verifyHostname: true
+  validateServerCertificate: true
+  # Present client cert/key to the broker (mutual TLS). Lab default when enabled.
+  mutualTls: true
+  # When true with in-cluster RabbitMQ, disable plaintext listeners.tcp (5672).
+  requireTls: false
+  mountPath: /var/agentbench/amqps
+  certManager:
+    enabled: false
+    duration: 2160h
+    renewBefore: 360h
+  # Override Secret names (defaults: <release>-amqps-{ca,server,client}).
+  secrets:
+    ca: ""
+    server: ""
+    client: ""
+
+# ---------------------------------------------------------------------------
 # NetworkPolicies (default-deny + allow-needed)
 # Requires a NetworkPolicy-enforcing CNI. L3/L4 only — pair with mtls.* for TLS.
 # Disable with --set networkPolicy.enabled=false
