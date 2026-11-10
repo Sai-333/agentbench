@@ -59,7 +59,7 @@ Single-host Ampere A1 runbook (VM shape, ports, Docker, secrets, health checks, 
 | Data | PostgreSQL 16, Flyway (single forward-only stream) |
 | Cache | Redis 7 |
 | Messaging | RabbitMQ 3.13 (evaluation commands + DLQ) |
-| Auth | Local email/password + JWT (OIDC deferred) |
+| Auth | Local email/password + JWT; optional Google/GitHub OIDC (`docs/AUTH_OIDC.md`) |
 | API docs | springdoc OpenAPI + Swagger UI |
 | Local runtime | Docker Compose (+ `docker-compose.prod.yml`) |
 | Artifacts | `ArtifactStorage`: local volume (default) or S3-compatible (`ARTIFACT_STORAGE=s3`, Compose `--profile s3` / MinIO) |
@@ -92,7 +92,7 @@ Roles (org-scoped): `OWNER`, `ADMIN`, `DEVELOPER`, `VIEWER`.
 | Ops | Backup / migrate / upgrade / DLQ snippets in `docs/OPERATIONS.md` |
 | Portfolio | Honest done vs deferred checklist |
 
-**Explicit non-claims:** no gVisor/Firecracker yet; no public leaderboards; no OIDC; no Postgres RLS; not certified hostile multi-tenant SaaS.
+**Explicit non-claims:** no gVisor/Firecracker yet; no public leaderboards; no enterprise SAML/SSO admin UI; no Postgres RLS; not certified hostile multi-tenant SaaS. Google/GitHub OIDC is optional beside local JWT (see `docs/AUTH_OIDC.md`).
 
 ### Optional MinIO artifact store
 

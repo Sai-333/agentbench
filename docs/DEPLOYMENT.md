@@ -23,6 +23,16 @@ curl -sf http://localhost:8080/api/v1/info
 curl -sf http://localhost:3000/ | head
 ```
 
+### Optional OIDC (Google / GitHub)
+
+Disabled by default. Password registration/login always works. To enable “Continue with Google/GitHub”:
+
+1. Register OAuth apps and set redirect URIs — see **[docs/AUTH_OIDC.md](AUTH_OIDC.md)**.
+2. Put client id/secret + `*_ENABLED=true` in `.env` (Compose passes them to `backend`).
+3. `docker compose up -d --build` and open http://localhost:3000 — buttons appear only when configured.
+
+Never commit real client secrets. Endpoint overrides exist for CI mocks (`AGENTBENCH_OIDC_*_TOKEN_URI`, etc.).
+
 ### S3-compatible artifacts (MinIO profile)
 
 Local filesystem remains the simple-demo default. To store blobs in MinIO:

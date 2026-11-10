@@ -25,7 +25,7 @@ public class PlatformInfoController {
                 "milestone", "M9",
                 "apiBase", ApiPaths.API_V1,
                 "orgScopedApiBase", "/api/v1/orgs/{orgId}/...",
-                "auth", "JWT bearer (local email/password)",
+                "auth", "JWT bearer (local email/password + optional Google/GitHub OIDC)",
                 "analytics", "org-private overview/leaderboard/comparisons/costs/exports",
                 "readiness", "production-minded Compose/K8s path; Docker isolation not hostile multi-tenant"
         );

@@ -111,6 +111,28 @@ agentbench:
     secret: ${AGENTBENCH_JWT_SECRET:local-dev-only-change-me-agentbench-jwt-secret-key}
     access-ttl-seconds: ${AGENTBENCH_JWT_ACCESS_TTL_SECONDS:900}
     refresh-ttl-seconds: ${AGENTBENCH_JWT_REFRESH_TTL_SECONDS:604800}
+  oidc:
+    # Frontend URL that receives access/refresh tokens in the URL fragment after IdP callback.
+    success-redirect-url: ${AGENTBENCH_OIDC_SUCCESS_REDIRECT_URL:http://localhost:3000/}
+    google:
+      enabled: ${AGENTBENCH_OIDC_GOOGLE_ENABLED:false}
+      client-id: ${AGENTBENCH_OIDC_GOOGLE_CLIENT_ID:}
+      client-secret: ${AGENTBENCH_OIDC_GOOGLE_CLIENT_SECRET:}
+      redirect-uri: ${AGENTBENCH_OIDC_GOOGLE_REDIRECT_URI:http://localhost:3000/api/v1/auth/oidc/google/callback}
+      authorization-uri: ${AGENTBENCH_OIDC_GOOGLE_AUTHORIZATION_URI:https://accounts.google.com/o/oauth2/v2/auth}
+      token-uri: ${AGENTBENCH_OIDC_GOOGLE_TOKEN_URI:https://oauth2.googleapis.com/token}
+      user-info-uri: ${AGENTBENCH_OIDC_GOOGLE_USERINFO_URI:https://openidconnect.googleapis.com/userinfo}
+      scopes: ${AGENTBENCH_OIDC_GOOGLE_SCOPES:openid email profile}
+    github:
+      enabled: ${AGENTBENCH_OIDC_GITHUB_ENABLED:false}
+      client-id: ${AGENTBENCH_OIDC_GITHUB_CLIENT_ID:}
+      client-secret: ${AGENTBENCH_OIDC_GITHUB_CLIENT_SECRET:}
+      redirect-uri: ${AGENTBENCH_OIDC_GITHUB_REDIRECT_URI:http://localhost:3000/api/v1/auth/oidc/github/callback}
+      authorization-uri: ${AGENTBENCH_OIDC_GITHUB_AUTHORIZATION_URI:https://github.com/login/oauth/authorize}
+      token-uri: ${AGENTBENCH_OIDC_GITHUB_TOKEN_URI:https://github.com/login/oauth/access_token}
+      user-info-uri: ${AGENTBENCH_OIDC_GITHUB_USERINFO_URI:https://api.github.com/user}
+      email-uri: ${AGENTBENCH_OIDC_GITHUB_EMAIL_URI:https://api.github.com/user/emails}
+      scopes: ${AGENTBENCH_OIDC_GITHUB_SCOPES:read:user user:email}
   secrets:
     # Base64-encoded 32-byte AES key. Default is for local/Compose only.
     encryption-key: ${AGENTBENCH_SECRETS_ENCRYPTION_KEY:MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=}

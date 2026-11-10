@@ -51,7 +51,7 @@
 
 | Threat | Example | Mitigation (v1 / M7–M9) | Later |
 |---|---|---|---|
-| **Spoofing** | Stolen JWT / agent callback token | Short-lived JWT; rotate agent secrets; TLS at edge | OIDC + mTLS to workers |
+| **Spoofing** | Stolen JWT / agent callback token | Short-lived JWT; optional Google/GitHub OIDC; rotate agent secrets; TLS at edge | Enterprise SSO admin + mTLS to workers |
 | **Tampering** | Mutate sealed patch mid-run | Content digest; seal flag; immutable storage | Signed artifacts |
 | **Repudiation** | Deny hidden-test access | Audit log for suite reads & state transitions | WORM storage |
 | **Info disclosure** | Hidden tests in agent prompt / logs | Separate stages; DTO filtering; `SecretRedactor`; RBAC | Dedicated hidden runner pool |
@@ -141,7 +141,7 @@ Shared-kernel breakout residual risk remains. Use only for early trusted demos /
 | Local isolator fallback | Used when Docker unavailable (CI); not a security boundary |
 | K8s templates lack NetworkPolicy/mTLS | Operator must add before hostile multi-tenant |
 | AES secret-key rotation not automated | Dual-key re-encrypt before rotating encryption keys |
-| Public leaderboards / OIDC absent | Intentional deferral — see portfolio checklist |
+| Public leaderboards / enterprise SAML absent | Intentional deferral — Google/GitHub OIDC optional; see portfolio checklist |
 
 ---
 

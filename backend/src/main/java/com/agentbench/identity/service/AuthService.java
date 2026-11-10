@@ -74,6 +74,9 @@ public class AuthService {
                 .filter(p -> p.supports(providerType))
                 .findFirst()
                 .orElseThrow(() -> ApiException.validation("Unsupported auth provider: " + providerType));
+        if (!provider.enabled()) {
+            throw ApiException.validation("Auth provider not configured: " + providerType);
+        }
         var principal = provider.authenticate(new AuthCredentials(
                 providerType,
                 normalizeEmail(request.email()),
@@ -115,12 +118,43 @@ public class AuthService {
         return new AuthDtos.MeResponse(user.id(), user.email(), user.displayName(), user.createdAt(), memberships);
     }
 
+    @Transactional
+    public AuthDtos.TokenResponse issueTokensForPrincipal(java.util.UUID userId, String email) {
+        return issueTokens(userId, email);
+    }
+
+    @Transactional(readOnly = true)
+    public AuthDtos.ProvidersResponse listProviders() {
+        java.util.ArrayList<AuthDtos.ProviderView> providers = new java.util.ArrayList<>();
+        providers.add(new AuthDtos.ProviderView("local", "Email and password", "password", null));
+        for (AuthProvider provider : authProviders) {
+            if (!provider.enabled() || "local".equalsIgnoreCase(provider.id())) {
+                continue;
+            }
+            providers.add(new AuthDtos.ProviderView(
+                    provider.id(),
+                    displayName(provider.id()),
+                    "oidc",
+                    "/api/v1/auth/oidc/" + provider.id() + "/authorize"
+            ));
+        }
+        return new AuthDtos.ProvidersResponse(List.copyOf(providers));
+    }
+
     private AuthDtos.TokenResponse issueTokens(java.util.UUID userId, String email) {
         String access = jwtService.createAccessToken(userId, email);
         String refresh = jwtService.createRefreshTokenValue();
         Instant expiresAt = Instant.now().plusSeconds(jwtService.refreshTtlSeconds());
         refreshTokenRepository.insert(userId, hashToken(refresh), expiresAt);
         return new AuthDtos.TokenResponse(access, refresh, "Bearer", jwtService.accessTtlSeconds());
+    }
+
+    private static String displayName(String providerId) {
+        return switch (providerId.toLowerCase(Locale.ROOT)) {
+            case "google" -> "Google";
+            case "github" -> "GitHub";
+            default -> providerId;
+        };
     }
 
     static String normalizeEmail(String email) {
