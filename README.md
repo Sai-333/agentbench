@@ -3,7 +3,7 @@
 Multi-tenant platform for evaluating coding agents against versioned benchmarks with visible and hidden tests.
 
 **Current milestone:** M9 — Production readiness (final planned milestone).  
-**Honesty:** Docker isolation remains lab/demo grade for untrusted workloads; see [docs/PORTFOLIO_CHECKLIST.md](docs/PORTFOLIO_CHECKLIST.md).
+**Honesty:** Default Docker isolation remains lab/demo grade for untrusted workloads; optional Linux gVisor (`runsc`) is available behind `RuntimeIsolator` — see [docs/PORTFOLIO_CHECKLIST.md](docs/PORTFOLIO_CHECKLIST.md) and ADR-004.
 
 ## Clone → Compose → demo
 
@@ -63,7 +63,7 @@ Single-host Ampere A1 runbook (VM shape, ports, Docker, secrets, health checks, 
 | API docs | springdoc OpenAPI + Swagger UI |
 | Local runtime | Docker Compose (+ `docker-compose.prod.yml`) |
 | Artifacts | `ArtifactStorage`: local volume (default) or S3-compatible (`ARTIFACT_STORAGE=s3`, Compose `--profile s3` / MinIO) |
-| Eval isolation | Hardened Docker via `RuntimeIsolator` (local fallback for CI) |
+| Eval isolation | Hardened Docker via `RuntimeIsolator` (default); optional `mode=gvisor` (`docker --runtime=runsc`); local CI fallback |
 | K8s | Templates under `deploy/kubernetes/` (no real secrets) |
 
 ## Architecture
@@ -92,7 +92,7 @@ Roles (org-scoped): `OWNER`, `ADMIN`, `DEVELOPER`, `VIEWER`.
 | Ops | Backup / migrate / upgrade / DLQ snippets in `docs/OPERATIONS.md` |
 | Portfolio | Honest done vs deferred checklist |
 
-**Explicit non-claims:** no gVisor/Firecracker yet; no enterprise SAML/SSO admin UI; not certified hostile multi-tenant SaaS. Postgres RLS is defense-in-depth beside app-layer org filters (`docs/POSTGRES_RLS.md`). Public leaderboards are **opt-in** (OWNER/ADMIN publish; org-private default). Google/GitHub OIDC is optional beside local JWT (see `docs/AUTH_OIDC.md`).
+**Explicit non-claims:** no Firecracker; gVisor is **opt-in on Linux with runsc** (not Mac Compose default; not a certified hostile multi-tenant claim). No enterprise SAML/SSO admin UI. Postgres RLS is defense-in-depth beside app-layer org filters (`docs/POSTGRES_RLS.md`). Public leaderboards are **opt-in** (OWNER/ADMIN publish; org-private default). Google/GitHub OIDC is optional beside local JWT (see `docs/AUTH_OIDC.md`).
 
 ### Optional MinIO artifact store
 
@@ -136,7 +136,8 @@ Notable variables:
 
 - `AGENTBENCH_JWT_SECRET` (≥ 32 chars)
 - `AGENTBENCH_SECRETS_ENCRYPTION_KEY` (base64 32-byte AES key)
-- `AGENTBENCH_EXECUTION_MODE` (`docker` \| `local`)
+- `AGENTBENCH_EXECUTION_MODE` (`docker` \| `gvisor` \| `local`) — default `docker`; `gvisor` fail-fast without runsc
+- `AGENTBENCH_GVISOR_RUNTIME` / `AGENTBENCH_RUNSC_BINARY` (Linux gVisor; defaults `runsc`)
 - `AGENTBENCH_RUNNER_IMAGE` / `AGENTBENCH_RUNNER_IMAGE_DIGEST`
 - `AGENTBENCH_EXEC_MEMORY_MB` / `AGENTBENCH_EXEC_CPU` / `AGENTBENCH_EXEC_PIDS` / `AGENTBENCH_EXEC_TIMEOUT_SEC`
 - `ARTIFACT_STORAGE` (`local` \| `s3`) + `AGENTBENCH_S3_*` when using MinIO/S3
@@ -163,6 +164,7 @@ Never edit applied migrations; forward-only only.
 | [docs/POSTGRES_RLS.md](docs/POSTGRES_RLS.md) | RLS defense-in-depth ops caveats |
 | [docs/PERFORMANCE.md](docs/PERFORMANCE.md) | Load-test plan + k6 |
 | [docs/SECURITY_THREAT_MODEL.md](docs/SECURITY_THREAT_MODEL.md) | Threat model |
+| [docs/ARCHITECTURE_DECISIONS/ADR-004-docker-first-isolation.md](docs/ARCHITECTURE_DECISIONS/ADR-004-docker-first-isolation.md) | Docker default + optional gVisor |
 | [docs/PORTFOLIO_CHECKLIST.md](docs/PORTFOLIO_CHECKLIST.md) | Done vs deferred |
 | [deploy/kubernetes/](deploy/kubernetes/) | K8s templates |
 | [deploy/loadtest/k6-smoke.js](deploy/loadtest/k6-smoke.js) | Smoke script |

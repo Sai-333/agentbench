@@ -103,7 +103,7 @@ Manifests live under `deploy/kubernetes/`:
 kubectl apply -k deploy/kubernetes/
 ```
 
-Out of scope for these templates: managed Postgres/Redis/Rabbit operators, Ingress/TLS, NetworkPolicies, HPA, PDB, gVisor RuntimeClass.
+Out of scope for these templates: managed Postgres/Redis/Rabbit operators, Ingress/TLS, NetworkPolicies, HPA, PDB, cluster-wide gVisor RuntimeClass objects (workers can still set `AGENTBENCH_EXECUTION_MODE=gvisor` when nodes already expose the `runsc` Docker/containerd runtime).
 
 ## 4. Graceful shutdown
 

@@ -31,7 +31,8 @@ import java.util.concurrent.TimeUnit;
  * CPU/mem/pids/time limits, and optional read-only rootfs + tmpfs for /tmp.
  *
  * <p><strong>Residual risk:</strong> shared-kernel Docker breakout. Not production-safe for
- * arbitrary untrusted workloads — gVisor/Firecracker planned (ADR-004).
+ * arbitrary untrusted workloads — prefer {@code agentbench.execution.mode=gvisor} on Linux
+ * hosts with runsc (ADR-004). Firecracker is not implemented.
  */
 @Component
 public class DockerRuntimeIsolator implements RuntimeIsolator {

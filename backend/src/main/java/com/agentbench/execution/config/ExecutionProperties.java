@@ -3,17 +3,22 @@ package com.agentbench.execution.config;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 /**
- * Hardened execution defaults for evaluation workers (Milestone 7).
+ * Hardened execution defaults for evaluation workers (Milestone 7+).
  *
- * <p><strong>Not production-safe for arbitrary untrusted workloads on Docker alone.</strong>
- * Shared-kernel residual risk remains; gVisor/Firecracker is planned (ADR-004).
+ * <p><strong>Docker-only isolation is not production-safe for arbitrary untrusted workloads.</strong>
+ * Prefer {@code mode=gvisor} on Linux hosts with runsc when stronger sandboxing is required
+ * (ADR-004). Firecracker is not implemented in this codebase.
  */
 @ConfigurationProperties(prefix = "agentbench.execution")
 public class ExecutionProperties {
 
     /**
-     * {@code docker} prefers Docker when available; {@code local} forces host-process isolation
-     * (CI / demos without a Docker daemon on the worker).
+     * Isolation backend selection:
+     * <ul>
+     *   <li>{@code docker} — hardened Docker Engine (default; Mac Compose / trusted demos)</li>
+     *   <li>{@code gvisor} — Docker {@code --runtime=runsc}; fail-fast if runsc unavailable</li>
+     *   <li>{@code local} — host-process fallback (CI only; not a security boundary)</li>
+     * </ul>
      */
     private String mode = "docker";
 
@@ -38,6 +43,15 @@ public class ExecutionProperties {
      * evaluation containers. Compose may bind-mount the socket into the <em>worker</em> only.
      */
     private boolean dockerEnabled = true;
+
+    /**
+     * Docker runtime name registered for gVisor (typically {@code runsc}).
+     * Used as {@code docker run --runtime <name>} when {@code mode=gvisor}.
+     */
+    private String gvisorRuntime = "runsc";
+
+    /** Host binary used to probe gVisor availability ({@code runsc --version}). */
+    private String runscBinary = "runsc";
 
     public String getMode() {
         return mode;
@@ -141,6 +155,34 @@ public class ExecutionProperties {
 
     public void setDockerEnabled(boolean dockerEnabled) {
         this.dockerEnabled = dockerEnabled;
+    }
+
+    public String getGvisorRuntime() {
+        return gvisorRuntime;
+    }
+
+    public void setGvisorRuntime(String gvisorRuntime) {
+        this.gvisorRuntime = gvisorRuntime;
+    }
+
+    public String getRunscBinary() {
+        return runscBinary;
+    }
+
+    public void setRunscBinary(String runscBinary) {
+        this.runscBinary = runscBinary;
+    }
+
+    public boolean isGvisorMode() {
+        return "gvisor".equalsIgnoreCase(mode);
+    }
+
+    public boolean isLocalMode() {
+        return "local".equalsIgnoreCase(mode);
+    }
+
+    public boolean isDockerMode() {
+        return mode == null || mode.isBlank() || "docker".equalsIgnoreCase(mode);
     }
 
     public String resolvedImageRef() {
