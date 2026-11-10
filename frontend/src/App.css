@@ -407,6 +407,18 @@ h4 {
   gap: 0.35rem;
 }
 
+.publish-box {
+  margin: 0.5rem 0 0.85rem;
+  padding: 0.85rem 1rem;
+  border: 1px solid var(--line);
+  background: var(--surface-soft);
+}
+
+.publish-box h3 {
+  margin: 0 0 0.35rem;
+  font-size: 1rem;
+}
+
 .toolbar,
 .filter-row,
 .toolbar-actions {

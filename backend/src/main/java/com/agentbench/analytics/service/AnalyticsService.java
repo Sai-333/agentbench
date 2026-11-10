@@ -1,9 +1,12 @@
 package com.agentbench.analytics.service;
 
 import com.agentbench.analytics.api.dto.AnalyticsDtos;
+import com.agentbench.analytics.domain.LeaderboardPublication;
 import com.agentbench.analytics.infra.AnalyticsRepository;
+import com.agentbench.analytics.infra.PublicLeaderboardRepository;
 import com.agentbench.evaluation.api.dto.EvaluationDtos;
 import com.agentbench.evaluation.service.EvaluationService;
+import com.agentbench.identity.domain.Membership;
 import com.agentbench.identity.domain.OrgRole;
 import com.agentbench.identity.security.OrgAccessService;
 import com.agentbench.platform.error.ApiException;
@@ -25,9 +28,12 @@ import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 @Service
@@ -35,8 +41,10 @@ public class AnalyticsService {
 
     private static final Set<String> TERMINAL = Set.of("COMPLETED", "FAILED", "CANCELLED", "TIMED_OUT");
     private static final Set<String> QUEUED = Set.of("QUEUED");
+    private static final Pattern PUBLIC_SLUG = Pattern.compile("^[a-z0-9]+(?:-[a-z0-9]+)*$");
 
     private final AnalyticsRepository analyticsRepository;
+    private final PublicLeaderboardRepository publicLeaderboardRepository;
     private final OrgAccessService orgAccessService;
     private final EvaluationService evaluationService;
     private final ReportExportService reportExportService;
@@ -45,12 +53,14 @@ public class AnalyticsService {
 
     public AnalyticsService(
             AnalyticsRepository analyticsRepository,
+            PublicLeaderboardRepository publicLeaderboardRepository,
             OrgAccessService orgAccessService,
             EvaluationService evaluationService,
             ReportExportService reportExportService,
             HealthEndpoint healthEndpoint,
             ObjectMapper objectMapper) {
         this.analyticsRepository = analyticsRepository;
+        this.publicLeaderboardRepository = publicLeaderboardRepository;
         this.orgAccessService = orgAccessService;
         this.evaluationService = evaluationService;
         this.reportExportService = reportExportService;
@@ -257,6 +267,152 @@ public class AnalyticsService {
             }
             default -> throw ApiException.validation("Unsupported export format: " + format + " (use json or csv)");
         };
+    }
+
+    @Transactional(readOnly = true)
+    public AnalyticsDtos.LeaderboardPublicationStatus publicationStatus(UUID orgId, UUID benchmarkVersionId) {
+        orgAccessService.requireMembership(orgId, OrgRole.VIEWER);
+        requireVersion(orgId, benchmarkVersionId);
+        return toStatus(publicLeaderboardRepository.findByOrgAndVersion(orgId, benchmarkVersionId));
+    }
+
+    @Transactional
+    public AnalyticsDtos.LeaderboardPublicationStatus publishLeaderboard(
+            UUID orgId,
+            UUID benchmarkVersionId,
+            AnalyticsDtos.PublishLeaderboardRequest request) {
+        Membership actor = orgAccessService.requireMembership(orgId, OrgRole.ADMIN);
+        PublicLeaderboardRepository.VersionMeta meta = publicLeaderboardRepository
+                .findVersionMeta(orgId, benchmarkVersionId)
+                .orElseThrow(() -> ApiException.notFound("Benchmark version not found"));
+
+        Optional<LeaderboardPublication> existing =
+                publicLeaderboardRepository.findByOrgAndVersion(orgId, benchmarkVersionId);
+        String slug;
+        if (existing.isPresent() && existing.get().isActive()) {
+            slug = existing.get().publicSlug();
+        } else if (request != null && request.publicSlug() != null && !request.publicSlug().isBlank()) {
+            slug = normalizeSlug(request.publicSlug());
+        } else if (existing.isPresent()) {
+            slug = existing.get().publicSlug();
+        } else {
+            slug = defaultSlug(meta.orgSlug(), meta.benchmarkName(), meta.versionLabel());
+        }
+        if (!PUBLIC_SLUG.matcher(slug).matches() || slug.length() < 3 || slug.length() > 80) {
+            throw ApiException.validation("publicSlug must be 3–80 chars of lowercase kebab-case");
+        }
+        if (publicLeaderboardRepository.slugTaken(slug, orgId, benchmarkVersionId)) {
+            throw ApiException.conflict("publicSlug is already in use");
+        }
+
+        String title;
+        if (request != null && request.title() != null && !request.title().isBlank()) {
+            title = request.title().trim();
+        } else if (existing.isPresent()) {
+            title = existing.get().title();
+        } else {
+            title = meta.benchmarkName() + " " + meta.versionLabel() + " leaderboard";
+        }
+        if (title.length() > 200) {
+            throw ApiException.validation("title must be at most 200 characters");
+        }
+
+        LeaderboardPublication pub = publicLeaderboardRepository.upsertPublish(
+                orgId, benchmarkVersionId, slug, title, actor.userId());
+        return toStatus(Optional.of(pub));
+    }
+
+    @Transactional
+    public AnalyticsDtos.LeaderboardPublicationStatus unpublishLeaderboard(UUID orgId, UUID benchmarkVersionId) {
+        Membership actor = orgAccessService.requireMembership(orgId, OrgRole.ADMIN);
+        requireVersion(orgId, benchmarkVersionId);
+        Optional<LeaderboardPublication> existing =
+                publicLeaderboardRepository.findByOrgAndVersion(orgId, benchmarkVersionId);
+        if (existing.isEmpty() || !existing.get().isActive()) {
+            return toStatus(existing);
+        }
+        return toStatus(publicLeaderboardRepository.unpublish(orgId, benchmarkVersionId, actor.userId()));
+    }
+
+    @Transactional(readOnly = true)
+    public AnalyticsDtos.PublicLeaderboardResponse publicLeaderboard(
+            String publicSlug,
+            Integer page,
+            Integer size) {
+        String slug = publicSlug == null ? "" : publicSlug.trim().toLowerCase(Locale.ROOT);
+        LeaderboardPublication pub = publicLeaderboardRepository.findActiveBySlug(slug)
+                .orElseThrow(() -> ApiException.notFound("Public leaderboard not found"));
+        PublicLeaderboardRepository.VersionMeta meta = publicLeaderboardRepository
+                .findVersionMeta(pub.orgId(), pub.benchmarkVersionId())
+                .orElseThrow(() -> ApiException.notFound("Public leaderboard not found"));
+
+        int pageNum = page == null || page < 0 ? 0 : page;
+        int pageSize = size == null ? 25 : Math.min(Math.max(size, 1), 100);
+        long total = analyticsRepository.countLeaderboard(pub.orgId(), pub.benchmarkVersionId(), null);
+        List<AnalyticsDtos.LeaderboardEntry> privateEntries = analyticsRepository.leaderboard(
+                pub.orgId(), pub.benchmarkVersionId(), null, pageSize, pageNum * pageSize);
+        List<AnalyticsDtos.PublicLeaderboardEntry> entries = privateEntries.stream()
+                .map(e -> new AnalyticsDtos.PublicLeaderboardEntry(
+                        e.rank(),
+                        e.agentName(),
+                        e.adapterType(),
+                        e.taskSlug(),
+                        e.weightedTotal(),
+                        e.scoreStatus(),
+                        e.transitionSummary(),
+                        e.completedAt(),
+                        e.durationMs()
+                ))
+                .toList();
+        return new AnalyticsDtos.PublicLeaderboardResponse(
+                pub.publicSlug(),
+                pub.title(),
+                meta.orgSlug(),
+                meta.orgName(),
+                meta.benchmarkName(),
+                meta.versionLabel(),
+                meta.scoringProfileKey(),
+                "Public leaderboard snapshot. Explicitly published by the organization; no private IDs or secrets.",
+                pub.publishedAt(),
+                entries,
+                new AnalyticsDtos.PageMeta(pageNum, pageSize, total)
+        );
+    }
+
+    private static AnalyticsDtos.LeaderboardPublicationStatus toStatus(Optional<LeaderboardPublication> opt) {
+        if (opt.isEmpty()) {
+            return new AnalyticsDtos.LeaderboardPublicationStatus(
+                    false, null, null, null, null, null, null);
+        }
+        LeaderboardPublication pub = opt.get();
+        boolean active = pub.isActive();
+        return new AnalyticsDtos.LeaderboardPublicationStatus(
+                active,
+                pub.publicSlug(),
+                pub.title(),
+                pub.publishedAt(),
+                pub.publishedBy(),
+                pub.unpublishedAt(),
+                active ? "/public/leaderboards/" + pub.publicSlug() : null
+        );
+    }
+
+    private static String normalizeSlug(String raw) {
+        return raw.trim().toLowerCase(Locale.ROOT);
+    }
+
+    private static String defaultSlug(String orgSlug, String benchmarkName, String versionLabel) {
+        String base = (orgSlug + "-" + benchmarkName + "-" + versionLabel)
+                .toLowerCase(Locale.ROOT)
+                .replaceAll("[^a-z0-9]+", "-")
+                .replaceAll("^-+|-+$", "");
+        if (base.length() > 80) {
+            base = base.substring(0, 80).replaceAll("-+$", "");
+        }
+        if (base.length() < 3) {
+            base = (base + "-board").replaceAll("^-+", "");
+        }
+        return base;
     }
 
     private void requireVersion(UUID orgId, UUID benchmarkVersionId) {

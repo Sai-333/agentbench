@@ -75,6 +75,55 @@ public final class AnalyticsDtos {
     ) {
     }
 
+    public record PublishLeaderboardRequest(
+            String publicSlug,
+            String title
+    ) {
+    }
+
+    public record LeaderboardPublicationStatus(
+            boolean published,
+            String publicSlug,
+            String title,
+            Instant publishedAt,
+            UUID publishedBy,
+            Instant unpublishedAt,
+            String publicPath
+    ) {
+    }
+
+    /**
+     * Sanitized public leaderboard payload — no org/agent/evaluation UUIDs, secrets,
+     * hidden fixtures, tokens/cost, or private repo metadata.
+     */
+    public record PublicLeaderboardResponse(
+            String publicSlug,
+            String title,
+            String orgSlug,
+            String orgName,
+            String benchmarkName,
+            String benchmarkVersion,
+            String scoringProfileKey,
+            String note,
+            Instant publishedAt,
+            List<PublicLeaderboardEntry> entries,
+            PageMeta page
+    ) {
+    }
+
+    public record PublicLeaderboardEntry(
+            int rank,
+            String agentName,
+            String adapterType,
+            String taskSlug,
+            BigDecimal weightedTotal,
+            String scoreStatus,
+            Map<String, Integer> transitionSummary,
+            Instant completedAt,
+            Long durationMs
+    ) {
+    }
+
     public record ComparisonResponse(
             UUID benchmarkVersionId,
             String scoringProfileKey,

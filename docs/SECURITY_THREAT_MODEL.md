@@ -141,7 +141,7 @@ Shared-kernel breakout residual risk remains. Use only for early trusted demos /
 | Local isolator fallback | Used when Docker unavailable (CI); not a security boundary |
 | K8s templates lack NetworkPolicy/mTLS | Operator must add before hostile multi-tenant |
 | AES secret-key rotation not automated | Dual-key re-encrypt before rotating encryption keys |
-| Public leaderboards / enterprise SAML absent | Intentional deferral — Google/GitHub OIDC optional; see portfolio checklist |
+| Enterprise SAML absent; public boards opt-in only | Google/GitHub OIDC optional; public leaderboards require OWNER/ADMIN publish + sanitized payload |
 
 ---
 
