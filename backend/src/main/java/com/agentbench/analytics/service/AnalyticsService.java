@@ -10,6 +10,7 @@ import com.agentbench.identity.domain.Membership;
 import com.agentbench.identity.domain.OrgRole;
 import com.agentbench.identity.security.OrgAccessService;
 import com.agentbench.platform.error.ApiException;
+import com.agentbench.platform.rls.RlsContext;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.boot.actuate.health.CompositeHealth;
 import org.springframework.boot.actuate.health.Health;
@@ -301,7 +302,9 @@ public class AnalyticsService {
         if (!PUBLIC_SLUG.matcher(slug).matches() || slug.length() < 3 || slug.length() > 80) {
             throw ApiException.validation("publicSlug must be 3–80 chars of lowercase kebab-case");
         }
-        if (publicLeaderboardRepository.slugTaken(slug, orgId, benchmarkVersionId)) {
+        // Slug uniqueness is global; briefly bypass RLS to see other orgs' publications.
+        if (Boolean.TRUE.equals(RlsContext.callWithBypass(
+                () -> publicLeaderboardRepository.slugTaken(slug, orgId, benchmarkVersionId)))) {
             throw ApiException.conflict("publicSlug is already in use");
         }
 
@@ -340,8 +343,16 @@ public class AnalyticsService {
             Integer page,
             Integer size) {
         String slug = publicSlug == null ? "" : publicSlug.trim().toLowerCase(Locale.ROOT);
+        // Active-slug SELECT is allowed by a dedicated RLS policy; tenant data needs org GUC.
         LeaderboardPublication pub = publicLeaderboardRepository.findActiveBySlug(slug)
                 .orElseThrow(() -> ApiException.notFound("Public leaderboard not found"));
+        return RlsContext.callWithOrg(pub.orgId(), () -> buildPublicLeaderboard(pub, page, size));
+    }
+
+    private AnalyticsDtos.PublicLeaderboardResponse buildPublicLeaderboard(
+            LeaderboardPublication pub,
+            Integer page,
+            Integer size) {
         PublicLeaderboardRepository.VersionMeta meta = publicLeaderboardRepository
                 .findVersionMeta(pub.orgId(), pub.benchmarkVersionId())
                 .orElseThrow(() -> ApiException.notFound("Public leaderboard not found"));

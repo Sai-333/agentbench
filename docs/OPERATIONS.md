@@ -31,6 +31,18 @@ docker compose exec postgres psql -U agentbench -d agentbench \
   -c "SELECT version, description, success FROM flyway_schema_history ORDER BY installed_rank;"
 ```
 
+## Postgres RLS (defense-in-depth)
+
+See **[POSTGRES_RLS.md](./POSTGRES_RLS.md)** for full caveats. Short version:
+
+| Concern | Guidance |
+|---|---|
+| App vs migrate user | JDBC = `agentbench_app` (FORCE RLS); Flyway = `POSTGRES_USER` / `SPRING_FLYWAY_USER` (superuser) |
+| Pool sessions | GUC reapplied per statement from `RlsContext`; never leave org/bypass set across requests |
+| New tenant tables | New Flyway version: `ENABLE`+`FORCE` RLS + `tenant_isolation` policy |
+| Break-glass | Use migrate superuser; do not point the app pool at a superuser in prod |
+| Existing volumes | If `agentbench_app` is missing, run V12 (or `deploy/postgres/init-app-role.sh` logic) before switching `SPRING_DATASOURCE_USERNAME` |
+
 ## DLQ / retry exhaustion
 
 - Stage processor retries **infrastructure** failures up to `agentbench.evaluation.max-stage-attempts` (default 5) via outbox re-enqueue.

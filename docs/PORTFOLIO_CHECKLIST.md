@@ -1,6 +1,6 @@
 # AgentBench — Portfolio checklist (honest)
 
-**As of post-M9 public leaderboards + OIDC auth + S3-compatible artifact storage.** Marked items are evidenced in `main` / this repo. Deferred items are explicit non-claims.
+**As of post-M9 public leaderboards + OIDC auth + S3-compatible artifact storage + Postgres RLS.** Marked items are evidenced in `main` / this repo. Deferred items are explicit non-claims.
 
 ## Done (M0–M9 + deferred follow-ups landed)
 
@@ -23,6 +23,7 @@
 | Ops runbook snippets + load-test **plan** + k6 smoke script | `docs/OPERATIONS.md`, `docs/PERFORMANCE.md` |
 | Threat model + portfolio honesty | this file + threat model |
 | S3-compatible artifact store (MinIO / AWS SDK v2) | `ArtifactStorage` + Compose `--profile s3`; `ARTIFACT_STORAGE=s3\|local` |
+| Postgres RLS defense-in-depth | Flyway V12; `agentbench_app` + session GUC; `PostgresRlsIsolationTest`; `docs/POSTGRES_RLS.md` |
 
 ## Deferred / not claimed
 
@@ -30,7 +31,6 @@
 |---|---|
 | gVisor / Firecracker isolation | **Deferred** — interface ready (`RuntimeIsolator`); Docker residual risk remains |
 | Full enterprise SSO (SAML / multi-IdP admin UI) | **Deferred** — Google/GitHub OIDC authorization-code only (Q1 partial) |
-| Postgres RLS | **Deferred** — app-layer org isolation (Q12) |
 | Managed cloud Helm chart / operators | **Deferred** — raw manifests only |
 | Certified hostile multi-tenant SaaS security | **Not claimed** |
 | Measured production throughput / capacity numbers | **Not claimed** without attached runs |

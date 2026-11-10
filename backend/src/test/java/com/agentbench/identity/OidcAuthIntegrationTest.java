@@ -14,6 +14,7 @@ import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
+import com.agentbench.support.PostgresTestSupport;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
@@ -51,10 +52,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class OidcAuthIntegrationTest {
 
     @Container
-    static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:16-alpine")
-            .withDatabaseName("agentbench")
-            .withUsername("agentbench")
-            .withPassword("agentbench");
+    static PostgreSQLContainer<?> postgres = PostgresTestSupport.postgres();
 
     @RegisterExtension
     static WireMockExtension idp = WireMockExtension.newInstance()
@@ -63,23 +61,7 @@ class OidcAuthIntegrationTest {
 
     @DynamicPropertySource
     static void props(DynamicPropertyRegistry registry) {
-        registry.add("spring.datasource.url", postgres::getJdbcUrl);
-        registry.add("spring.datasource.username", postgres::getUsername);
-        registry.add("spring.datasource.password", postgres::getPassword);
-        registry.add("spring.flyway.enabled", () -> "true");
-        registry.add("spring.autoconfigure.exclude", () -> String.join(",",
-                "org.springframework.boot.autoconfigure.data.redis.RedisAutoConfiguration",
-                "org.springframework.boot.autoconfigure.data.redis.RedisRepositoriesAutoConfiguration",
-                "org.springframework.boot.autoconfigure.amqp.RabbitAutoConfiguration"));
-        registry.add("management.health.redis.enabled", () -> "false");
-        registry.add("management.health.rabbit.enabled", () -> "false");
-        registry.add("spring.rabbitmq.listener.simple.auto-startup", () -> "false");
-        registry.add("agentbench.jwt.secret", () -> "test-only-jwt-secret-key-32chars-min!!");
-        registry.add("agentbench.secrets.encryption-key", () -> "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=");
-        registry.add("agentbench.github.validation-enabled", () -> "false");
-        registry.add("agentbench.artifacts.root", () -> System.getProperty("java.io.tmpdir") + "/agentbench-oidc-it");
-        registry.add("logging.structured.format.console", () -> "");
-
+        PostgresTestSupport.registerRlsAwareDatasource(registry, postgres);
         registry.add("agentbench.oidc.success-redirect-url", () -> "http://localhost:3000/");
         registry.add("agentbench.oidc.google.enabled", () -> "true");
         registry.add("agentbench.oidc.google.client-id", () -> "google-client-id");
@@ -89,7 +71,6 @@ class OidcAuthIntegrationTest {
         registry.add("agentbench.oidc.google.token-uri", () -> idp.baseUrl() + "/oauth2/token");
         registry.add("agentbench.oidc.google.user-info-uri", () -> idp.baseUrl() + "/oauth2/userinfo");
         registry.add("agentbench.oidc.google.scopes", () -> "openid email profile");
-
         registry.add("agentbench.oidc.github.enabled", () -> "true");
         registry.add("agentbench.oidc.github.client-id", () -> "github-client-id");
         registry.add("agentbench.oidc.github.client-secret", () -> "github-client-secret");
