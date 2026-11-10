@@ -342,6 +342,7 @@ public class EvaluationService {
                                     r.message(),
                                     r.category() == null ? null : r.category().name(),
                                     r.flaky(),
+                                    FlakeQuarantineService.isQuarantinedMeta(r.metaJson()),
                                     r.attemptCount()))
                             .toList()
             ));

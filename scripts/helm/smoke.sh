@@ -29,6 +29,10 @@ echo "${DEFAULT_OUT}" | grep -q 'AGENTBENCH_ARTIFACT_SECRET_SCAN_ENABLED' \
   || { echo "expected AGENTBENCH_ARTIFACT_SECRET_SCAN_ENABLED in ConfigMap" >&2; exit 1; }
 echo "${DEFAULT_OUT}" | grep -q 'AGENTBENCH_ARTIFACT_SECRET_SCAN_MODE' \
   || { echo "expected AGENTBENCH_ARTIFACT_SECRET_SCAN_MODE in ConfigMap" >&2; exit 1; }
+echo "${DEFAULT_OUT}" | grep -q 'AGENTBENCH_EVAL_BASELINE_CONFIRMATION_ENABLED' \
+  || { echo "expected AGENTBENCH_EVAL_BASELINE_CONFIRMATION_ENABLED in ConfigMap" >&2; exit 1; }
+echo "${DEFAULT_OUT}" | grep -q 'AGENTBENCH_EVAL_BASELINE_CONFIRMATION_RUNS' \
+  || { echo "expected AGENTBENCH_EVAL_BASELINE_CONFIRMATION_RUNS in ConfigMap" >&2; exit 1; }
 echo "${DEFAULT_OUT}" | grep -q 'kind: NetworkPolicy' \
   || { echo "expected NetworkPolicy resources when networkPolicy.enabled=true" >&2; exit 1; }
 echo "${DEFAULT_OUT}" | grep -q 'agentbench-default-deny\|-default-deny' \

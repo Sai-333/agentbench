@@ -129,6 +129,46 @@ class ScoringServiceTest {
     }
 
     @Test
+    void quarantinedCasesExcludedFromScoringDenominators() {
+        UUID evalId = UUID.randomUUID();
+        UUID orgId = UUID.randomUUID();
+        Evaluation evaluation = evaluation(evalId, orgId);
+        TestRun baseline = run(evalId, orgId, TestPhase.BASELINE);
+        TestRun visible = run(evalId, orgId, TestPhase.VISIBLE_POST);
+
+        when(evaluationRepository.findScore(evalId)).thenReturn(Optional.empty());
+        when(evaluationRepository.findScoringProfile(ScoringProfile.DEFAULT_KEY))
+                .thenReturn(Optional.of(defaultProfile()));
+        when(evaluationRepository.findTestRun(evalId, TestPhase.BASELINE)).thenReturn(Optional.of(baseline));
+        when(evaluationRepository.findTestRun(evalId, TestPhase.VISIBLE_POST)).thenReturn(Optional.of(visible));
+        when(evaluationRepository.findTestRun(evalId, TestPhase.HIDDEN_POST)).thenReturn(Optional.empty());
+        when(evaluationRepository.listTestCaseResults(baseline.id())).thenReturn(List.of(
+                caseResult(baseline.id(), orgId, "target.a", TestCaseStatus.FAIL, null, CaseCategory.TARGET),
+                quarantinedResult(baseline.id(), orgId, "target.flake", TestCaseStatus.PASS, null, CaseCategory.TARGET)
+        ));
+        when(evaluationRepository.listTestCaseResults(visible.id())).thenReturn(List.of(
+                caseResult(visible.id(), orgId, "target.a", TestCaseStatus.PASS, "F2P", CaseCategory.TARGET),
+                quarantinedResult(visible.id(), orgId, "target.flake", TestCaseStatus.FAIL, null, CaseCategory.TARGET),
+                caseResult(visible.id(), orgId, "control.b", TestCaseStatus.PASS, "P2P", CaseCategory.CONTROL)
+        ));
+        when(evaluationRepository.findQualityReports(evalId)).thenReturn(List.of());
+
+        ObjectNode task = objectMapper.createObjectNode();
+        task.putObject("evalConfig").put("requireTargetFailAtBaseline", true);
+
+        scoringService.score(evaluation, task);
+
+        ArgumentCaptor<EvaluationScore> scoreCaptor = ArgumentCaptor.forClass(EvaluationScore.class);
+        verify(evaluationRepository).insertScore(scoreCaptor.capture(), anyList());
+        EvaluationScore score = scoreCaptor.getValue();
+        assertEquals(ScoreStatus.VALID, score.scoreStatus());
+        // Quarantined FAIL target must not dilute target resolution (still 1.0).
+        assertTrue(score.rawSummaryJson().contains("\"target_failure_resolution\":1")
+                || score.rawSummaryJson().contains("1.0"));
+        assertTrue(score.warningsJson().contains("quarantined"));
+    }
+
+    @Test
     void incompleteWhenMissingRuns() {
         UUID evalId = UUID.randomUUID();
         UUID orgId = UUID.randomUUID();
@@ -179,5 +219,12 @@ class ScoringServiceTest {
         return new TestCaseResult(
                 UUID.randomUUID(), runId, orgId, key, status, 1, transition, "", null,
                 category, false, 1, "{}");
+    }
+
+    private static TestCaseResult quarantinedResult(
+            UUID runId, UUID orgId, String key, TestCaseStatus status, String transition, CaseCategory category) {
+        return new TestCaseResult(
+                UUID.randomUUID(), runId, orgId, key, status, 1, transition, "", null,
+                category, false, 1, "{\"quarantined\":true}");
     }
 }

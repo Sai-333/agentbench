@@ -145,6 +145,7 @@ Notable variables:
 - `AGENTBENCH_ARTIFACT_RETENTION_ENABLED` / `AGENTBENCH_ARTIFACT_RETENTION_DAYS` / `AGENTBENCH_ARTIFACT_SWEEP_MS` / `AGENTBENCH_ARTIFACT_MAX_LOG_BYTES` / `AGENTBENCH_ARTIFACT_MAX_OBJECT_BYTES` (TTL + GC; see `docs/OPERATIONS.md`)
 - `AGENTBENCH_ARTIFACT_SECRET_SCAN_ENABLED` / `AGENTBENCH_ARTIFACT_SECRET_SCAN_MODE` (`REDACT`\|`QUARANTINE`) — pattern scan on artifact persist (not full DLP; see `docs/OPERATIONS.md`)
 - `AGENTBENCH_EVAL_FLAKY_REPEAT_RUNS`
+- `AGENTBENCH_EVAL_BASELINE_CONFIRMATION_ENABLED` / `AGENTBENCH_EVAL_BASELINE_CONFIRMATION_RUNS` (R5 gate; see `docs/SCORING_METHODOLOGY.md`)
 - `AGENTBENCH_SHUTDOWN_TIMEOUT` / `AGENTBENCH_RABBIT_LISTENER_MAX_ATTEMPTS`
 
 ## Flyway
@@ -155,6 +156,7 @@ Single migration stream under `backend/src/main/resources/db/migration`.
 - `V9__production_readiness.sql` — recovery indexes + M9 marker
 - `V17__artifact_ttl_gc.sql` — patch `purged_at` + cleanup `deleted_metadata` for TTL/GC
 - `V18__artifact_secret_scan.sql` — `platform.artifact_secret_findings` audit (pattern ids/counts only)
+- `V19__flake_quarantine_baseline_gates.sql` — `evaluations.flake_quarantines` + `test_runs.baseline_confirmed`
 
 Never edit applied migrations; forward-only only.
 
@@ -170,6 +172,7 @@ Never edit applied migrations; forward-only only.
 | [docs/SECURITY_THREAT_MODEL.md](docs/SECURITY_THREAT_MODEL.md) | Threat model |
 | [docs/ARCHITECTURE_DECISIONS/ADR-004-docker-first-isolation.md](docs/ARCHITECTURE_DECISIONS/ADR-004-docker-first-isolation.md) | Docker default + optional gVisor |
 | [docs/PORTFOLIO_CHECKLIST.md](docs/PORTFOLIO_CHECKLIST.md) | Done vs deferred |
+| [docs/SCORING_METHODOLOGY.md](docs/SCORING_METHODOLOGY.md) | F2P/P2P/P2F/F2F, hidden post-only, flake quarantine, baseline gates |
 | [docs/QUALITY_SONAR.md](docs/QUALITY_SONAR.md) | Optional SonarQube/SonarCloud quality path |
 | [deploy/kubernetes/](deploy/kubernetes/) | K8s templates |
 | [deploy/helm/agentbench/](deploy/helm/agentbench/) | Helm chart (install/upgrade/uninstall) |

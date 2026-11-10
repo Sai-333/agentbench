@@ -51,7 +51,9 @@ import java.util.ArrayList;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 /**
  * Idempotent stage executor. Re-entry with the same (evaluation, state, attempt)
@@ -73,6 +75,8 @@ public class EvaluationStageProcessor {
     private final ArtifactSecretScanner artifactSecretScanner;
     private final TransitionClassificationEngine classificationEngine;
     private final FlakyDetectionService flakyDetectionService;
+    private final FlakeQuarantineService flakeQuarantineService;
+    private final BaselineConfirmationService baselineConfirmationService;
     private final ScoringService scoringService;
     private final QualityAnalysisService qualityAnalysisService;
     private final ExecutionIsolatorService executionIsolatorService;
@@ -92,6 +96,8 @@ public class EvaluationStageProcessor {
             ArtifactSecretScanner artifactSecretScanner,
             TransitionClassificationEngine classificationEngine,
             FlakyDetectionService flakyDetectionService,
+            FlakeQuarantineService flakeQuarantineService,
+            BaselineConfirmationService baselineConfirmationService,
             ScoringService scoringService,
             QualityAnalysisService qualityAnalysisService,
             ExecutionIsolatorService executionIsolatorService,
@@ -109,6 +115,8 @@ public class EvaluationStageProcessor {
         this.artifactSecretScanner = artifactSecretScanner;
         this.classificationEngine = classificationEngine;
         this.flakyDetectionService = flakyDetectionService;
+        this.flakeQuarantineService = flakeQuarantineService;
+        this.baselineConfirmationService = baselineConfirmationService;
         this.scoringService = scoringService;
         this.qualityAnalysisService = qualityAnalysisService;
         this.executionIsolatorService = executionIsolatorService;
@@ -304,13 +312,18 @@ public class EvaluationStageProcessor {
         JsonNode visible = findSuite(task, "VISIBLE");
         UUID suiteId = visible.hasNonNull("id") ? UUID.fromString(visible.get("id").asText()) : null;
         Instant started = Instant.now();
-        String runnerMeta = "{\"runner\":\"" + resolveRunnerLabel(visible) + "\",\"phase\":\"BASELINE\"}";
+        boolean confirmationGate = baselineConfirmationService.isGateEnabled(task);
+        ObjectNode runnerMetaNode = objectMapper.createObjectNode();
+        runnerMetaNode.put("runner", resolveRunnerLabel(visible));
+        runnerMetaNode.put("phase", "BASELINE");
+        runnerMetaNode.put("confirmationGate", confirmationGate);
         TestRun run = new TestRun(
                 UUID.randomUUID(), evaluation.id(), evaluation.orgId(), TestPhase.BASELINE, suiteId,
-                "RUNNING", started, null, runnerMeta);
+                "RUNNING", started, null, writeJson(runnerMetaNode));
         evaluationRepository.insertTestRun(run);
 
-        int repeatRuns = resolveFlakyRepeats(task);
+        int flakyRepeats = resolveFlakyRepeats(task);
+        int repeatRuns = baselineConfirmationService.resolveConfirmationRuns(task, flakyRepeats);
         SuiteExecutionRequest suiteRequest = buildSuiteRequest(
                 evaluation, task, workspace, visible, FixtureSuiteRunner.Phase.BASELINE,
                 ExecutionStage.VISIBLE_TESTS, null);
@@ -325,6 +338,11 @@ public class EvaluationStageProcessor {
 
         Map<String, CaseCategory> categories = classificationEngine.categoriesFromFixtureCases(
                 suiteExecutionService.listCaseNodes(visible), false);
+        Set<String> knownKeys = flakyAware.canonicalOutcomes().stream()
+                .map(FixtureSuiteRunner.CaseOutcome::caseKey)
+                .collect(Collectors.toCollection(java.util.LinkedHashSet::new));
+        Set<String> quarantined = flakeQuarantineService.resolveQuarantinedCaseKeys(
+                evaluation.orgId(), suiteId, visible, task, knownKeys);
 
         boolean targetFailed = false;
         boolean anyFail = false;
@@ -333,10 +351,15 @@ public class EvaluationStageProcessor {
                     outcome.caseKey(),
                     CaseCategory.fromRole(inferRole(outcome.caseKey()), false));
             boolean flaky = flakyAware.flakyCaseKeys().contains(outcome.caseKey());
+            boolean quarantinedCase = quarantined.contains(outcome.caseKey());
             evaluationRepository.insertTestCaseResult(new TestCaseResult(
                     UUID.randomUUID(), run.id(), evaluation.orgId(), outcome.caseKey(),
                     outcome.status(), outcome.durationMs(), null, outcome.message(), null,
-                    category, flaky, flakyAware.attemptCount(), "{}"));
+                    category, flaky, flakyAware.attemptCount(),
+                    FlakeQuarantineService.quarantineMeta(quarantinedCase, flaky, false)));
+            if (quarantinedCase) {
+                continue;
+            }
             if (outcome.status() == TestCaseStatus.FAIL) {
                 anyFail = true;
                 if (category == CaseCategory.TARGET || outcome.caseKey().toLowerCase().contains("target")) {
@@ -346,11 +369,25 @@ public class EvaluationStageProcessor {
         }
         evaluationRepository.finishTestRun(run.id(), "SUCCEEDED", Instant.now());
 
+        if (confirmationGate) {
+            Set<String> blocking = baselineConfirmationService.blockingFlakyKeys(
+                    flakyAware.flakyCaseKeys(), quarantined);
+            if (!blocking.isEmpty()) {
+                evaluationRepository.markBaselineConfirmed(run.id(), false);
+                throw new ApiException(
+                        org.springframework.http.HttpStatus.CONFLICT,
+                        FailureCode.BASELINE_UNCONFIRMED.name(),
+                        "Baseline confirmation failed; unstable cases: " + String.join(",", blocking));
+            }
+            evaluationRepository.markBaselineConfirmed(run.id(), true);
+        }
+
         JsonNode requireTargetFail = task.path("evalConfig").path("requireTargetFailAtBaseline");
         boolean require = requireTargetFail.isMissingNode() || requireTargetFail.asBoolean(true);
         if (require && !anyFail && !targetFailed && !flakyAware.canonicalOutcomes().isEmpty()) {
             boolean hasTargetRole = categories.containsValue(CaseCategory.TARGET)
                     || flakyAware.canonicalOutcomes().stream()
+                    .filter(o -> !quarantined.contains(o.caseKey()))
                     .anyMatch(o -> o.caseKey().toLowerCase().contains("target"));
             if (hasTargetRole) {
                 throw new ApiException(
@@ -394,22 +431,28 @@ public class EvaluationStageProcessor {
 
         Map<String, CaseCategory> categories = classificationEngine.categoriesFromFixtureCases(
                 suiteExecutionService.listCaseNodes(visible), false);
+        Set<String> knownKeys = flakyAware.canonicalOutcomes().stream()
+                .map(FixtureSuiteRunner.CaseOutcome::caseKey)
+                .collect(Collectors.toCollection(java.util.LinkedHashSet::new));
+        Set<String> quarantined = flakeQuarantineService.resolveQuarantinedCaseKeys(
+                evaluation.orgId(), suiteId, visible, task, knownKeys);
 
         List<TransitionClassificationEngine.ClassifiedCase> classified =
                 classificationEngine.classifyVisible(baselineResults, flakyAware.canonicalOutcomes(), categories);
 
         for (TransitionClassificationEngine.ClassifiedCase outcome : classified) {
             boolean flaky = flakyAware.flakyCaseKeys().contains(outcome.caseKey());
-            // Flaky F2P must not be trusted as a clean fix signal — drop transition label.
+            boolean quarantinedCase = quarantined.contains(outcome.caseKey());
+            // Quarantined / flaky F2P must not be trusted as a clean fix signal — drop transition label.
             String transition = outcome.transition();
-            if (flaky && "F2P".equals(transition)) {
+            if (quarantinedCase || (flaky && "F2P".equals(transition))) {
                 transition = null;
             }
             evaluationRepository.insertTestCaseResult(new TestCaseResult(
                     UUID.randomUUID(), run.id(), evaluation.orgId(), outcome.caseKey(),
                     outcome.status(), outcome.durationMs(), transition, outcome.message(), null,
                     outcome.category(), flaky, flakyAware.attemptCount(),
-                    flaky ? "{\"flaky\":true}" : "{}"));
+                    FlakeQuarantineService.quarantineMeta(quarantinedCase, flaky, false)));
         }
         evaluationRepository.finishTestRun(run.id(), "SUCCEEDED", Instant.now());
     }
@@ -484,9 +527,15 @@ public class EvaluationStageProcessor {
                     suiteExecutionService.listCaseNodes(hidden), true);
             List<TransitionClassificationEngine.ClassifiedCase> classified =
                     classificationEngine.classifyHiddenPostOnly(flakyAware.canonicalOutcomes(), categories);
+            Set<String> knownKeys = flakyAware.canonicalOutcomes().stream()
+                    .map(FixtureSuiteRunner.CaseOutcome::caseKey)
+                    .collect(Collectors.toCollection(java.util.LinkedHashSet::new));
+            Set<String> quarantined = flakeQuarantineService.resolveQuarantinedCaseKeys(
+                    evaluation.orgId(), suiteId, hidden, task, knownKeys);
 
             for (TransitionClassificationEngine.ClassifiedCase outcome : classified) {
                 boolean flaky = flakyAware.flakyCaseKeys().contains(outcome.caseKey());
+                boolean quarantinedCase = quarantined.contains(outcome.caseKey());
                 String message = SecretRedactor.redact(outcome.message());
                 evaluationRepository.insertTestCaseResult(new TestCaseResult(
                         UUID.randomUUID(), run.id(), evaluation.orgId(), outcome.caseKey(),
@@ -494,7 +543,7 @@ public class EvaluationStageProcessor {
                         null, // never F2P/P2P/P2F/F2F on hidden
                         message == null ? "" : message, null,
                         outcome.category(), flaky, flakyAware.attemptCount(),
-                        "{\"hidden\":true,\"neverF2P\":true}"));
+                        FlakeQuarantineService.quarantineMeta(quarantinedCase, flaky, true)));
             }
             evaluationRepository.finishTestRun(run.id(), "SUCCEEDED", Instant.now());
         } finally {

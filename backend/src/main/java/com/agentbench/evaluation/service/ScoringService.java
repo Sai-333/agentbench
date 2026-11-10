@@ -75,14 +75,30 @@ public class ScoringService {
         }
 
         List<TestCaseResult> baselineResults = evaluationRepository.listTestCaseResults(baseline.get().id());
-        List<TestCaseResult> visibleResults = evaluationRepository.listTestCaseResults(visiblePost.get().id());
-        List<TestCaseResult> hiddenResults = hiddenPost
+        List<TestCaseResult> visibleResultsAll = evaluationRepository.listTestCaseResults(visiblePost.get().id());
+        List<TestCaseResult> hiddenResultsAll = hiddenPost
                 .map(run -> evaluationRepository.listTestCaseResults(run.id()))
                 .orElse(List.of());
 
+        long quarantinedVisible = visibleResultsAll.stream().filter(ScoringService::isQuarantined).count();
+        long quarantinedHidden = hiddenResultsAll.stream().filter(ScoringService::isQuarantined).count();
+        if (quarantinedVisible + quarantinedHidden > 0) {
+            warnings.add("Excluded " + (quarantinedVisible + quarantinedHidden)
+                    + " quarantined case(s) from scoring denominators");
+        }
+        List<TestCaseResult> baselineResultsScored = baselineResults.stream()
+                .filter(r -> !isQuarantined(r))
+                .toList();
+        List<TestCaseResult> visibleResults = visibleResultsAll.stream()
+                .filter(r -> !isQuarantined(r))
+                .toList();
+        List<TestCaseResult> hiddenResults = hiddenResultsAll.stream()
+                .filter(r -> !isQuarantined(r))
+                .toList();
+
         // Invalid baseline: require at least one target FAIL when configured.
         boolean requireTargetFail = taskSnapshot.path("evalConfig").path("requireTargetFailAtBaseline").asBoolean(true);
-        List<TestCaseResult> targetBaseline = baselineResults.stream()
+        List<TestCaseResult> targetBaseline = baselineResultsScored.stream()
                 .filter(r -> isTarget(r, taskSnapshot))
                 .toList();
         if (requireTargetFail && !targetBaseline.isEmpty()
@@ -170,7 +186,7 @@ public class ScoringService {
         if (hiddenResults.isEmpty()) {
             hiddenRaw = 0.0;
             hiddenMeta.put("stub", true);
-            hiddenMeta.put("reason", "no_hidden_suite");
+            hiddenMeta.put("reason", quarantinedHidden > 0 ? "all_hidden_quarantined" : "no_hidden_suite");
             warnings.add("No hidden suite results; hidden raw=0 (structure preserved)");
         } else {
             long pass = hiddenResults.stream().filter(r -> r.status() == TestCaseStatus.PASS).count();
@@ -475,6 +491,10 @@ public class ScoringService {
             return CaseCategory.CONTROL;
         }
         return CaseCategory.OTHER;
+    }
+
+    private static boolean isQuarantined(TestCaseResult result) {
+        return FlakeQuarantineService.isQuarantinedMeta(result.metaJson());
     }
 
     private static double clamp01(double value) {

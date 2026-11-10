@@ -60,6 +60,7 @@ public final class EvaluationDtos {
             String message,
             String category,
             boolean flaky,
+            boolean quarantined,
             int attemptCount
     ) {
     }

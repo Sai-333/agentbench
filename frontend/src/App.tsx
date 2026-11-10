@@ -2431,7 +2431,8 @@ function App() {
                           {result.caseKey}: {result.status}
                           {result.transition ? ` (${result.transition})` : ''}
                           {result.category ? ` · ${result.category}` : ''}
-                          {result.flaky ? ' · flaky' : ''} · {result.durationMs}ms
+                          {result.flaky ? ' · flaky' : ''}
+                          {result.quarantined ? ' · quarantined' : ''} · {result.durationMs}ms
                         </li>
                       ))}
                     </ul>
