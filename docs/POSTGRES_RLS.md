@@ -42,6 +42,7 @@ SPRING_FLYWAY_USER: agentbench
 - Forward-only Flyway only; never edit applied scripts.
 - Future migrations that touch tenant data while connected as a non-superuser must `SELECT set_config('app.rls_bypass', 'on', true)` (or run as the Flyway superuser — the default).
 - After adding a new tenant table: `ENABLE` + `FORCE ROW LEVEL SECURITY` and a `tenant_isolation` policy in a new `Vn__…sql`.
+- Append-only audit table `platform.worm_audit_events` (V15) is FORCE RLS’d the same way; see `docs/AUDIT_WORM.md` for WORM privileges (INSERT/SELECT only).
 
 ## Admin / bypass
 

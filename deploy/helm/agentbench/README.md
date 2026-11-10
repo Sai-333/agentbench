@@ -12,7 +12,8 @@ Packages the raw Kubernetes manifests under `deploy/kubernetes/` as a values-dri
 | Operators / CRDs | **No** — out of scope |
 | Certified multi-tenant SaaS | **Not claimed** |
 | NetworkPolicies | **Yes** — default-deny + allow-needed (`networkPolicy.enabled`, default true) |
-| mTLS / WORM audit | **Not in this chart** (deferred) |
+| mTLS | **Not in this chart** (deferred) |
+| WORM audit | **App/DB concern** — Postgres append-only + hash chain (`docs/AUDIT_WORM.md`); chart does not configure S3 Object Lock |
 | In-cluster Postgres/Redis/Rabbit | **Optional lab/demo only** — single replica, non-HA |
 
 ## NetworkPolicies
