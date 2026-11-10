@@ -1,0 +1,50 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "agentbench.configMapName" . }}
+  namespace: {{ include "agentbench.namespace" . }}
+  labels:
+    {{- include "agentbench.labels" . | nindent 4 }}
+data:
+  SERVER_PORT: {{ .Values.config.serverPort | quote }}
+  {{- if .Values.dependencies.postgres.enabled }}
+  SPRING_DATASOURCE_URL: {{ printf "jdbc:postgresql://%s-postgres:5432/%s" (include "agentbench.fullname" .) .Values.dependencies.postgres.auth.database | quote }}
+  SPRING_FLYWAY_URL: {{ printf "jdbc:postgresql://%s-postgres:5432/%s" (include "agentbench.fullname" .) .Values.dependencies.postgres.auth.database | quote }}
+  SPRING_DATASOURCE_USERNAME: {{ .Values.dependencies.postgres.auth.appUsername | quote }}
+  SPRING_FLYWAY_USER: {{ .Values.dependencies.postgres.auth.username | quote }}
+  {{- else }}
+  SPRING_DATASOURCE_URL: {{ .Values.config.datasourceUrl | quote }}
+  SPRING_DATASOURCE_USERNAME: {{ .Values.config.datasourceUsername | quote }}
+  SPRING_FLYWAY_URL: {{ .Values.config.flywayUrl | quote }}
+  SPRING_FLYWAY_USER: {{ .Values.config.flywayUser | quote }}
+  {{- end }}
+  {{- if .Values.dependencies.redis.enabled }}
+  SPRING_DATA_REDIS_HOST: {{ printf "%s-redis" (include "agentbench.fullname" .) | quote }}
+  {{- else }}
+  SPRING_DATA_REDIS_HOST: {{ .Values.config.redisHost | quote }}
+  {{- end }}
+  SPRING_DATA_REDIS_PORT: {{ .Values.config.redisPort | quote }}
+  {{- if .Values.dependencies.rabbitmq.enabled }}
+  SPRING_RABBITMQ_HOST: {{ printf "%s-rabbitmq" (include "agentbench.fullname" .) | quote }}
+  SPRING_RABBITMQ_USERNAME: {{ .Values.dependencies.rabbitmq.auth.username | quote }}
+  {{- else }}
+  SPRING_RABBITMQ_HOST: {{ .Values.config.rabbitmqHost | quote }}
+  SPRING_RABBITMQ_USERNAME: {{ .Values.config.rabbitmqUsername | quote }}
+  {{- end }}
+  SPRING_RABBITMQ_PORT: {{ .Values.config.rabbitmqPort | quote }}
+  AGENTBENCH_ARTIFACTS_ROOT: {{ .Values.config.artifactsRoot | quote }}
+  ARTIFACT_STORAGE: {{ .Values.config.artifactStorage | quote }}
+  AGENTBENCH_EXECUTION_MODE: {{ .Values.config.executionMode | quote }}
+  AGENTBENCH_DOCKER_ENABLED: {{ .Values.config.dockerEnabled | quote }}
+  AGENTBENCH_GVISOR_RUNTIME: {{ .Values.config.gvisorRuntime | quote }}
+  AGENTBENCH_RUNSC_BINARY: {{ .Values.config.runscBinary | quote }}
+  AGENTBENCH_GITHUB_VALIDATION_ENABLED: {{ .Values.config.githubValidationEnabled | quote }}
+  AGENTBENCH_OIDC_GOOGLE_ENABLED: {{ .Values.config.oidcGoogleEnabled | quote }}
+  AGENTBENCH_OIDC_GITHUB_ENABLED: {{ .Values.config.oidcGithubEnabled | quote }}
+  AGENTBENCH_OIDC_SUCCESS_REDIRECT_URL: {{ .Values.config.oidcSuccessRedirectUrl | quote }}
+  AGENTBENCH_SHUTDOWN_TIMEOUT: {{ .Values.config.shutdownTimeout | quote }}
+  LOGGING_STRUCTURED_FORMAT_CONSOLE: {{ .Values.config.structuredLogging | quote }}
+  MANAGEMENT_ENDPOINT_HEALTH_PROBES_ENABLED: {{ .Values.config.healthProbesEnabled | quote }}
+  {{- range $k, $v := .Values.config.extra }}
+  {{ $k }}: {{ $v | quote }}
+  {{- end }}

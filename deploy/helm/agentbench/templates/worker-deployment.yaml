@@ -1,0 +1,107 @@
+{{- if .Values.worker.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "agentbench.worker.fullname" . }}
+  namespace: {{ include "agentbench.namespace" . }}
+  labels:
+    {{- include "agentbench.labels" . | nindent 4 }}
+    app.kubernetes.io/component: worker
+spec:
+  replicas: {{ .Values.worker.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "agentbench.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: worker
+  template:
+    metadata:
+      labels:
+        {{- include "agentbench.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: worker
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      terminationGracePeriodSeconds: {{ .Values.worker.terminationGracePeriodSeconds }}
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: worker
+          image: "{{ .Values.worker.image.repository }}:{{ .Values.worker.image.tag }}"
+          imagePullPolicy: {{ .Values.worker.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 8081
+          envFrom:
+            - configMapRef:
+                name: {{ include "agentbench.configMapName" . }}
+            - secretRef:
+                name: {{ include "agentbench.secretName" . }}
+          env:
+            - name: SERVER_PORT
+              value: "8081"
+            - name: SPRING_PROFILES_ACTIVE
+              value: worker
+            - name: AGENTBENCH_EVAL_LISTENER_ENABLED
+              value: "true"
+            {{- with .Values.worker.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          readinessProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: http
+            initialDelaySeconds: 20
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: http
+            initialDelaySeconds: 40
+            periodSeconds: 20
+          resources:
+            {{- toYaml .Values.worker.resources | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: artifacts
+              mountPath: /var/agentbench/artifacts
+            {{- if .Values.worker.dockerSock.enabled }}
+            # DO NOT mount docker.sock into evaluation containers.
+            # Mount ONLY on the worker, on a trusted node pool.
+            - name: docker-sock
+              mountPath: /var/run/docker.sock
+            {{- end }}
+      volumes:
+        - name: artifacts
+          emptyDir: {}
+        {{- if .Values.worker.dockerSock.enabled }}
+        - name: docker-sock
+          hostPath:
+            path: {{ .Values.worker.dockerSock.hostPath }}
+            type: Socket
+        {{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "agentbench.worker.fullname" . }}
+  namespace: {{ include "agentbench.namespace" . }}
+  labels:
+    {{- include "agentbench.labels" . | nindent 4 }}
+    app.kubernetes.io/component: worker
+spec:
+  type: {{ .Values.worker.service.type }}
+  selector:
+    {{- include "agentbench.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: worker
+  ports:
+    - name: http
+      port: {{ .Values.worker.service.port }}
+      targetPort: http
+{{- end }}

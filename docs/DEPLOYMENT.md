@@ -84,7 +84,7 @@ Notes:
 
 Compose and Kubernetes templates probe readiness/liveness separately.
 
-## 3. Kubernetes (later-stage templates)
+## 3. Kubernetes (raw templates)
 
 Manifests live under `deploy/kubernetes/`:
 
@@ -103,7 +103,30 @@ Manifests live under `deploy/kubernetes/`:
 kubectl apply -k deploy/kubernetes/
 ```
 
-Out of scope for these templates: managed Postgres/Redis/Rabbit operators, Ingress/TLS, NetworkPolicies, HPA, PDB, cluster-wide gVisor RuntimeClass objects (workers can still set `AGENTBENCH_EXECUTION_MODE=gvisor` when nodes already expose the `runsc` Docker/containerd runtime).
+Out of scope for these templates: managed Postgres/Redis/Rabbit operators, NetworkPolicies, HPA, PDB, cluster-wide gVisor RuntimeClass objects (workers can still set `AGENTBENCH_EXECUTION_MODE=gvisor` when nodes already expose the `runsc` Docker/containerd runtime).
+
+## 3b. Helm chart (preferred K8s packaging)
+
+Chart path: `deploy/helm/agentbench/`. Wraps the same API / worker / frontend resources with values-driven images, replicas, resources, optional Ingress, and the same secret pattern. **Mac Docker Compose remains the primary local path.**
+
+```bash
+# Lint / template smoke (no cluster):
+./scripts/helm/smoke.sh
+
+# Install (replace tags + secrets first):
+helm upgrade --install agentbench deploy/helm/agentbench \
+  --namespace agentbench --create-namespace \
+  --set backend.image.tag=YOUR_TAG \
+  --set worker.image.tag=YOUR_TAG \
+  --set frontend.image.tag=YOUR_TAG
+
+helm upgrade agentbench deploy/helm/agentbench -n agentbench -f my-values.yaml
+helm uninstall agentbench -n agentbench
+```
+
+**Dependency strategy:** default is **external** Postgres / Redis / RabbitMQ (`config.*` hosts). Optional `dependencies.*.enabled` spins single-replica lab Deployments only — not HA, not operators. Prefer `secrets.existingSecret` in real clusters.
+
+**Honest limits:** not certified multi-tenant SaaS; no CRDs/operators; NetworkPolicies are a later PR. See `deploy/helm/agentbench/README.md`.
 
 ## 4. Graceful shutdown
 

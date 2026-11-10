@@ -1,0 +1,220 @@
+# AgentBench Helm values — see README.md in this chart and docs/DEPLOYMENT.md.
+# Mac Docker Compose remains the primary local path; this chart is the K8s story.
+
+nameOverride: ""
+fullnameOverride: ""
+
+# Create a Namespace resource in the chart. Prefer helm --create-namespace
+# for most installs; set true only when you want the release to own the ns.
+createNamespace: false
+
+imagePullSecrets: []
+
+# ---------------------------------------------------------------------------
+# Application images (replace registry + tag / digest for real deploys)
+# ---------------------------------------------------------------------------
+backend:
+  enabled: true
+  replicaCount: 2
+  image:
+    repository: ghcr.io/example/agentbench-backend
+    tag: REPLACE_TAG
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 80
+  resources:
+    requests:
+      cpu: 250m
+      memory: 512Mi
+    limits:
+      cpu: "2"
+      memory: 2Gi
+  terminationGracePeriodSeconds: 45
+  evalListenerEnabled: "false"
+  extraEnv: []
+
+worker:
+  enabled: true
+  replicaCount: 1
+  # Same image as backend; runs Spring profile=worker
+  image:
+    repository: ghcr.io/example/agentbench-backend
+    tag: REPLACE_TAG
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 8081
+  resources:
+    requests:
+      cpu: 500m
+      memory: 1Gi
+    limits:
+      cpu: "4"
+      memory: 4Gi
+  terminationGracePeriodSeconds: 60
+  # Mount host Docker socket only on a trusted node pool — never into sandboxes.
+  dockerSock:
+    enabled: false
+    hostPath: /var/run/docker.sock
+  extraEnv: []
+
+frontend:
+  enabled: true
+  replicaCount: 2
+  image:
+    repository: ghcr.io/example/agentbench-frontend
+    tag: REPLACE_TAG
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 80
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 500m
+      memory: 256Mi
+  terminationGracePeriodSeconds: 20
+  extraEnv: []
+
+# ---------------------------------------------------------------------------
+# Non-secret runtime config (ConfigMap)
+# Point hosts at external managed services, or at the optional in-cluster deps.
+# ---------------------------------------------------------------------------
+config:
+  serverPort: "8080"
+  datasourceUrl: "jdbc:postgresql://postgres:5432/agentbench"
+  datasourceUsername: "agentbench_app"
+  flywayUrl: "jdbc:postgresql://postgres:5432/agentbench"
+  flywayUser: "agentbench"
+  redisHost: "redis"
+  redisPort: "6379"
+  rabbitmqHost: "rabbitmq"
+  rabbitmqPort: "5672"
+  rabbitmqUsername: "agentbench"
+  artifactsRoot: "/var/agentbench/artifacts"
+  artifactStorage: "local"
+  # docker (default) | gvisor (requires runsc on nodes) | local (CI only)
+  executionMode: "docker"
+  dockerEnabled: "true"
+  gvisorRuntime: "runsc"
+  runscBinary: "runsc"
+  githubValidationEnabled: "false"
+  oidcGoogleEnabled: "false"
+  oidcGithubEnabled: "false"
+  oidcSuccessRedirectUrl: "http://localhost:3000/"
+  shutdownTimeout: "30s"
+  structuredLogging: "logstash"
+  healthProbesEnabled: "true"
+  # Extra key/value pairs merged into the ConfigMap
+  extra: {}
+
+# ---------------------------------------------------------------------------
+# Secrets — same pattern as deploy/kubernetes/secrets.yaml
+# Prefer existingSecret for real clusters (ExternalSecrets / SealedSecrets / SOPS).
+# When create=true, values below are rendered as stringData placeholders/overrides.
+# Never commit real JWT or AES keys.
+# ---------------------------------------------------------------------------
+secrets:
+  create: true
+  # If set, skip creating a Secret and reference this existing name instead.
+  existingSecret: ""
+  # Only used when create=true and existingSecret is empty.
+  datasourcePassword: "REPLACE_ME_APP_ROLE_PASSWORD"
+  flywayPassword: "REPLACE_ME_POSTGRES_PASSWORD"
+  rabbitmqPassword: "REPLACE_ME_RABBITMQ_PASSWORD"
+  jwtSecret: "REPLACE_ME_JWT_SECRET_AT_LEAST_32_CHARS_LONG"
+  secretsEncryptionKey: "REPLACE_ME_BASE64_32_BYTE_AES_KEY"
+  # Extra stringData keys when create=true
+  extra: {}
+
+# ---------------------------------------------------------------------------
+# Optional Ingress (off by default — same honesty as raw templates)
+# ---------------------------------------------------------------------------
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  hosts:
+    - host: agentbench.local
+      paths:
+        - path: /api
+          pathType: Prefix
+          service: backend
+        - path: /
+          pathType: Prefix
+          service: frontend
+  tls: []
+  # - secretName: agentbench-tls
+  #   hosts:
+  #     - agentbench.local
+
+# ---------------------------------------------------------------------------
+# Dependency strategy
+#
+# Default: EXTERNAL — provision Postgres 16, Redis 7, RabbitMQ 3.x yourself
+# (managed cloud, Compose on a bastion, or another Helm chart) and set
+# config.* hosts/URLs above.
+#
+# Optional in-cluster: flip dependencies.*.enabled for lab/demo Deployments
+# only. These are single-replica, non-HA, not operators, not production-grade.
+# Prefer Mac Docker Compose for day-to-day local work.
+# ---------------------------------------------------------------------------
+dependencies:
+  postgres:
+    enabled: false
+    image:
+      repository: postgres
+      tag: "16-alpine"
+      pullPolicy: IfNotPresent
+    auth:
+      database: agentbench
+      username: agentbench
+      # App role password should match secrets.datasourcePassword when using RLS role.
+      password: "REPLACE_ME_POSTGRES_PASSWORD"
+      appUsername: agentbench_app
+      appPassword: "REPLACE_ME_APP_ROLE_PASSWORD"
+    persistence:
+      enabled: false
+      size: 8Gi
+      storageClass: ""
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+      limits:
+        cpu: "1"
+        memory: 1Gi
+
+  redis:
+    enabled: false
+    image:
+      repository: redis
+      tag: "7-alpine"
+      pullPolicy: IfNotPresent
+    resources:
+      requests:
+        cpu: 50m
+        memory: 64Mi
+      limits:
+        cpu: 500m
+        memory: 256Mi
+
+  rabbitmq:
+    enabled: false
+    image:
+      repository: rabbitmq
+      tag: "3.13-management-alpine"
+      pullPolicy: IfNotPresent
+    auth:
+      username: agentbench
+      password: "REPLACE_ME_RABBITMQ_PASSWORD"
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+      limits:
+        cpu: "1"
+        memory: 1Gi

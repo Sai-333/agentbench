@@ -1,0 +1,22 @@
+AgentBench {{ .Chart.Version }} installed into namespace {{ include "agentbench.namespace" . }}.
+
+Components:
+  backend:  {{ include "agentbench.backend.fullname" . }} (enabled={{ .Values.backend.enabled }})
+  worker:   {{ include "agentbench.worker.fullname" . }} (enabled={{ .Values.worker.enabled }})
+  frontend: {{ include "agentbench.frontend.fullname" . }} (enabled={{ .Values.frontend.enabled }})
+
+Dependency strategy:
+  postgres  in-cluster={{ .Values.dependencies.postgres.enabled }}
+  redis     in-cluster={{ .Values.dependencies.redis.enabled }}
+  rabbitmq  in-cluster={{ .Values.dependencies.rabbitmq.enabled }}
+
+Default is EXTERNAL Postgres/Redis/Rabbit — set config.* hosts or enable
+dependencies.*.enabled for lab/demo only (non-HA, not operators).
+
+Honest limits: not certified multi-tenant SaaS; no CRDs/operators;
+NetworkPolicies are out of scope for this chart. Prefer Docker Compose on Mac
+for day-to-day local work.
+
+Upgrade:  helm upgrade {{ .Release.Name }} deploy/helm/agentbench -n {{ include "agentbench.namespace" . }}
+Uninstall: helm uninstall {{ .Release.Name }} -n {{ include "agentbench.namespace" . }}
+Smoke:     ./scripts/helm/smoke.sh
