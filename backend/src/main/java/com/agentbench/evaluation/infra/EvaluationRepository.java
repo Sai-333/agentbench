@@ -446,6 +446,21 @@ public class EvaluationRepository {
                         .addValue("finishedAt", Timestamp.from(finishedAt)));
     }
 
+    /**
+     * Records baseline confirmation gate outcome on a BASELINE test run.
+     * {@code null} means the gate was disabled for this evaluation.
+     */
+    public void markBaselineConfirmed(UUID testRunId, Boolean confirmed) {
+        jdbc.update("""
+                UPDATE evaluations.test_runs
+                SET baseline_confirmed = :confirmed
+                WHERE id = :id
+                """,
+                new MapSqlParameterSource()
+                        .addValue("id", testRunId)
+                        .addValue("confirmed", confirmed));
+    }
+
     public Optional<TestRun> findTestRun(UUID evaluationId, TestPhase phase) {
         var list = jdbc.query("""
                 SELECT id, evaluation_id, org_id, phase, suite_id, status, started_at, finished_at, container_meta::text AS container_meta

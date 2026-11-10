@@ -57,7 +57,23 @@ See **[POSTGRES_RLS.md](./POSTGRES_RLS.md)** for full caveats. Short version:
 
 ## Invalid baseline
 
-- If `requireTargetFailAtBaseline` (default true) and no target FAIL is observed, evaluation ends `FAILED` / `BASELINE_NOT_REPRODUCIBLE` (no agent retry).
+- If `requireTargetFailAtBaseline` (default true) and no **non-quarantined** target FAIL is observed, evaluation ends `FAILED` / `BASELINE_NOT_REPRODUCIBLE` (no agent retry).
+
+## Flake quarantine + baseline confirmation (R5)
+
+Addresses non-reproducible baseline / flaky tests that would otherwise falsely penalize agents. Detail: `docs/SCORING_METHODOLOGY.md`.
+
+| Knob | Default | Effect |
+|---|---|---|
+| `AGENTBENCH_EVAL_FLAKY_REPEAT_RUNS` | `1` | Repeat suite runs for flaky detection (1 = off) |
+| `AGENTBENCH_EVAL_BASELINE_CONFIRMATION_ENABLED` | `false` | Require stable baseline before `INVOKING_AGENT` |
+| `AGENTBENCH_EVAL_BASELINE_CONFIRMATION_RUNS` | `2` | Confirmation repeats when gate is on (clamped 2–10) |
+
+**Quarantine sources (union):** OWNER/ADMIN CRUD at `POST/GET/DELETE /api/v1/orgs/{orgId}/flake-quarantines` (Flyway V19 `evaluations.flake_quarantines`); task `evalConfig.quarantinedCaseKeys`; suite `quarantined: true`. Quarantined cases are recorded but excluded from F2P/P2P/P2F/F2F labels and scoring denominators. Hidden stays post-only (never F2P).
+
+**Confirmation gate:** when enabled (platform or `evalConfig.requireBaselineConfirmation`), baseline repeats until confirmation count; any unstable **non-quarantined** case fails with `BASELINE_UNCONFIRMED` and sets `test_runs.baseline_confirmed = false`. Pass sets `baseline_confirmed = true`.
+
+**Not claimed:** automatic historical ML flake discovery; per-suite adaptive thresholds; Oracle/Firecracker/Object Lock.
 
 ## Artifact retention / cleanup (TTL + GC)
 

@@ -5,6 +5,8 @@ package com.agentbench.evaluation.domain;
  */
 public enum FailureCode {
     BASELINE_NOT_REPRODUCIBLE(FailureClass.BASELINE),
+    /** Baseline confirmation gate failed (unstable non-quarantined outcomes across repeats). */
+    BASELINE_UNCONFIRMED(FailureClass.BASELINE),
     AGENT_TIMEOUT(FailureClass.AGENT),
     AGENT_ERROR(FailureClass.AGENT),
     PATCH_INVALID(FailureClass.AGENT),

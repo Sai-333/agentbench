@@ -41,6 +41,9 @@ data:
   AGENTBENCH_ARTIFACT_MAX_OBJECT_BYTES: {{ .Values.config.artifactMaxObjectBytes | quote }}
   AGENTBENCH_ARTIFACT_SECRET_SCAN_ENABLED: {{ .Values.config.artifactSecretScanEnabled | quote }}
   AGENTBENCH_ARTIFACT_SECRET_SCAN_MODE: {{ .Values.config.artifactSecretScanMode | quote }}
+  AGENTBENCH_EVAL_FLAKY_REPEAT_RUNS: {{ .Values.config.evalFlakyRepeatRuns | quote }}
+  AGENTBENCH_EVAL_BASELINE_CONFIRMATION_ENABLED: {{ .Values.config.evalBaselineConfirmationEnabled | quote }}
+  AGENTBENCH_EVAL_BASELINE_CONFIRMATION_RUNS: {{ .Values.config.evalBaselineConfirmationRuns | quote }}
   AGENTBENCH_EXECUTION_MODE: {{ .Values.config.executionMode | quote }}
   AGENTBENCH_DOCKER_ENABLED: {{ .Values.config.dockerEnabled | quote }}
   AGENTBENCH_GVISOR_RUNTIME: {{ .Values.config.gvisorRuntime | quote }}

@@ -43,6 +43,7 @@
 | Python (pytest) + Node (Jest) suite runners | `SuiteToolchainRunner` SPI; Maven/JUnit + pytest + Jest via `RuntimeIsolator`; JUnit XML ingest; `deploy/runners/`; `docs/RUNNERS.md`; F2P semantics unchanged; hidden post-only — **residual:** custom python/node images must be built/pulled; quality scanners remain Java-oriented |
 | Artifact TTL + GC (R9) | Configurable retention (`AGENTBENCH_ARTIFACT_RETENTION_*`); scheduled GC purges expired patch blobs + DB metadata (`purged_at`, Flyway V17) and aged invocation URIs; orphan sweep on local + S3 `ArtifactStorage`; workspace TTL; `platform.artifact_cleanup_runs.deleted_metadata`; size ceilings unchanged; `docs/OPERATIONS.md` — **residual:** not S3 bucket lifecycle / Object Lock; no per-org TTL |
 | Artifact secret scanning (R7) | `ArtifactSecretScanner` + `ScanningArtifactStorage` on persist; redact (default) or quarantine; built-in patterns (API/AWS/PEM/JWT/GitHub/Slack/env dumps) + optional extra regexes; audit `platform.artifact_secret_findings` (Flyway V18, no raw secrets); `docs/OPERATIONS.md` — **residual:** not full DLP; binary non-text skipped; no per-org scan policy |
+| Flake quarantine + baseline confirmation gates (R5) | Flyway V19 `flake_quarantines` + `baseline_confirmed`; OWNER/ADMIN CRUD; task/suite quarantine sources; scoring excludes quarantined; opt-in confirmation gate (`BASELINE_UNCONFIRMED`); `docs/SCORING_METHODOLOGY.md` — **residual:** not automatic ML flake discovery; gate default off |
 
 ## Deferred / not claimed
 

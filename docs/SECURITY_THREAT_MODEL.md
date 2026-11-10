@@ -73,7 +73,8 @@
 9. **Ephemeral containers** (`--rm`) + best-effort name cleanup after timeout/kill.
 10. **Artifact retention** — configurable TTL + scheduled GC (blobs via local/S3 `ArtifactStorage`, patch DB metadata `purged_at`, invocation URI clear) + max log/object bytes; cleanup audit table.
 10b. **Artifact secret scanning (R7)** — pattern scan at persist (`AGENTBENCH_ARTIFACT_SECRET_SCAN_*`); redact (default) or quarantine; audit without storing secret values.
-11. **Recovery:** listener retry → DLQ; stage infra retry budget; cancel between stages; duration watchdog; invalid baseline fails closed.
+10c. **Flake quarantine + baseline confirmation (R5)** — known-flake quarantine (DB/admin + task/suite config) excluded from unfair scoring; opt-in baseline confirmation gate fails closed (`BASELINE_UNCONFIRMED`) before agent comparison; see `docs/SCORING_METHODOLOGY.md`.
+11. **Recovery:** listener retry → DLQ; stage infra retry budget; cancel between stages; duration watchdog; invalid baseline / unconfirmed baseline fail closed.
 12. **Health:** liveness/readiness probes; graceful shutdown for rolling updates.
 
 ---
@@ -146,6 +147,7 @@ Shared-kernel breakout residual risk remains on the default path. Prefer **`agen
 | WORM residual (not Object Lock) | Append-only triggers + hash chain on audit tables; app role cannot UPDATE/DELETE; superuser can still disable triggers; AWS Object Lock not wired |
 | AES secret-key rotation not automated | Dual-key re-encrypt before rotating encryption keys |
 | Artifact secret scan is pattern-based only | Not full DLP; tune `additional-patterns` / use `QUARANTINE` for stricter demos; binary non-text skipped |
+| Flake quarantine is operator/config declared | Not an automatic ML flake classifier; confirmation gate default off for demo speed |
 | Public boards opt-in only | Google/GitHub OIDC + multi-IdP SAML SP (optional SP signing) available; public leaderboards require OWNER/ADMIN publish + sanitized payload; embeds need HMAC token + expiry |
 
 ---
@@ -161,3 +163,4 @@ Shared-kernel breakout residual risk remains on the default path. Prefer **`agen
 - RestAssured/MockMvc IDOR suites (org authorization regression).
 - Quality parsers + new-vs-pre-existing aggregation tests.
 - M9 recovery: invalid baseline, mid-flight cancel, timeout watchdog, retry policy, DLQ topology.
+- Flake quarantine resolve + scoring exclusion unit tests; baseline confirmation gate unit tests.

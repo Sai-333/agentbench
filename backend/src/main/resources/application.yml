@@ -212,6 +212,11 @@ agentbench:
     flaky:
       # Configurable repeated suite runs for flaky detection (1 = disabled).
       repeat-runs: ${AGENTBENCH_EVAL_FLAKY_REPEAT_RUNS:1}
+    baseline:
+      # When true, baseline must be stable across confirmation runs before INVOKING_AGENT (R5).
+      # Task evalConfig.requireBaselineConfirmation / baselineConfirmRuns may override per eval.
+      confirmation-enabled: ${AGENTBENCH_EVAL_BASELINE_CONFIRMATION_ENABLED:false}
+      confirmation-runs: ${AGENTBENCH_EVAL_BASELINE_CONFIRMATION_RUNS:2}
   quality:
     sonar:
       # Optional SonarQube/SonarCloud. Default off for local Compose / CI (no live server required).

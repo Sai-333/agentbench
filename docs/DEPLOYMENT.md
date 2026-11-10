@@ -65,7 +65,7 @@ docker compose --profile s3 ps minio   # should be healthy
 | `AGENTBENCH_ARTIFACT_MAX_OBJECT_BYTES` | hard ceiling rejected at `store()` |
 | `AGENTBENCH_ARTIFACT_MAX_LOG_BYTES` | truncate log/report payloads before persist |
 
-Retention GC: scheduled job purges expired patch blobs + DB metadata (`purged_at`), clears aged invocation URIs, then age-sweeps orphan objects via the active `ArtifactStorage` (filesystem walk or S3 list/delete) and always TTL-sweeps local `workspaces/` when using S3. Audit rows land in `platform.artifact_cleanup_runs`. Secret scan (R7) redacts or quarantines common secret patterns at persist; findings audit to `platform.artifact_secret_findings` without storing raw secrets. Ops detail: `docs/OPERATIONS.md`. Console: http://localhost:9001.
+Retention GC: scheduled job purges expired patch blobs + DB metadata (`purged_at`), clears aged invocation URIs, then age-sweeps orphan objects via the active `ArtifactStorage` (filesystem walk or S3 list/delete) and always TTL-sweeps local `workspaces/` when using S3. Audit rows land in `platform.artifact_cleanup_runs`. Secret scan (R7) redacts or quarantines common secret patterns at persist; findings audit to `platform.artifact_secret_findings` without storing raw secrets. Flake quarantine / baseline confirmation (R5): see `docs/SCORING_METHODOLOGY.md` / `docs/OPERATIONS.md`. Console: http://localhost:9001.
 
 ### Production-ish overlay
 

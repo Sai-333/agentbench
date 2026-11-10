@@ -261,6 +261,7 @@ export type EvaluationDetail = {
       message: string
       category?: string | null
       flaky?: boolean
+      quarantined?: boolean
       attemptCount?: number
     }>
   }>

@@ -115,6 +115,7 @@ public class ReportExportService {
                     row(sb, prefix, "durationMs", result.durationMs());
                     row(sb, prefix, "category", result.category());
                     row(sb, prefix, "flaky", result.flaky());
+                    row(sb, prefix, "quarantined", result.quarantined());
                 }
             }
         }
