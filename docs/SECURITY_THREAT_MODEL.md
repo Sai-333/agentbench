@@ -51,7 +51,7 @@
 
 | Threat | Example | Mitigation (v1 / M7–M9) | Later |
 |---|---|---|---|
-| **Spoofing** | Stolen JWT / agent callback token | Short-lived JWT; optional Google/GitHub OIDC; rotate agent secrets; TLS at edge | Enterprise SSO admin + mTLS to workers |
+| **Spoofing** | Stolen JWT / agent callback token | Short-lived JWT; optional Google/GitHub OIDC + SAML SP; rotate agent secrets; TLS at edge | Multi-IdP SAML admin UI + mTLS to workers |
 | **Tampering** | Mutate sealed patch mid-run | Content digest; seal flag; immutable storage | Signed artifacts |
 | **Repudiation** | Deny hidden-test access | Audit log for suite reads & state transitions | WORM storage |
 | **Info disclosure** | Hidden tests in agent prompt / logs | Separate stages; DTO filtering; `SecretRedactor`; RBAC | Dedicated hidden runner pool |
@@ -144,7 +144,7 @@ Shared-kernel breakout residual risk remains on the default path. Prefer **`agen
 | K8s NetworkPolicy residual / mTLS absent | NetworkPolicies ship (default-deny + allow-needed); still L3/L4 only — tighten CIDRs before hostile multi-tenant; mTLS deferred |
 | WORM audit absent | Audit events exist; not write-once / tamper-evident storage |
 | AES secret-key rotation not automated | Dual-key re-encrypt before rotating encryption keys |
-| Enterprise SAML absent; public boards opt-in only | Google/GitHub OIDC optional; public leaderboards require OWNER/ADMIN publish + sanitized payload; embeds need HMAC token + expiry |
+| Multi-IdP SAML admin UI absent; public boards opt-in only | Google/GitHub OIDC + config-driven SAML SP optional; public leaderboards require OWNER/ADMIN publish + sanitized payload; embeds need HMAC token + expiry |
 
 ---
 

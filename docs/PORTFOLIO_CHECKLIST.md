@@ -1,6 +1,6 @@
 # AgentBench — Portfolio checklist (honest)
 
-**As of post-M9 public leaderboards + signed embeds/Cache-Control + OIDC auth + S3-compatible artifact storage + Postgres RLS + measured local k6 smoke + opt-in gVisor + Helm chart + NetworkPolicies + PDF exports.** Marked items are evidenced in `main` / this repo. Deferred items are explicit non-claims.
+**As of post-M9 public leaderboards + signed embeds/Cache-Control + OIDC + SAML SP SSO + S3-compatible artifact storage + Postgres RLS + measured local k6 smoke + opt-in gVisor + Helm chart + NetworkPolicies + PDF exports.** Marked items are evidenced in `main` / this repo. Deferred items are explicit non-claims.
 
 ## Done (M0–M9 + deferred follow-ups landed)
 
@@ -10,6 +10,7 @@
 | Health / readiness / liveness | Actuator probes; Compose + K8s templates |
 | JWT local auth, orgs/RBAC, projects | M2 APIs + tests |
 | OIDC Google/GitHub beside local JWT | `AuthProvider` SPI; `docs/AUTH_OIDC.md`; WireMock IdP tests |
+| SAML 2.0 SP enterprise SSO (config-driven) | `docs/AUTH_SAML.md`; Spring Security SAML2/OpenSAML; WireMock metadata + signed assertion tests; default off |
 | Versioned benchmarks + hidden suites + RBAC | M3 |
 | Durable evaluation state machine + outbox | M4 |
 | Provider-independent agents (Fake / OpenAI-compat / HTTP / CODING_CLI) | M5 + isolator-backed CODING_CLI (`docs/AGENTS_CODING_CLI.md`) |
@@ -39,7 +40,7 @@
 | Item | Status |
 |---|---|
 | Firecracker microVM isolation | **Deferred** — gVisor opt-in landed; Firecracker not implemented |
-| Full enterprise SSO (SAML / multi-IdP admin UI) | **Deferred** — Google/GitHub OIDC authorization-code only (Q1 partial) |
+| Full multi-IdP SAML admin UI | **Residual** — SAML SP login landed (`docs/AUTH_SAML.md`); one IdP via env/props; no multi-IdP admin console; unsigned AuthnRequests |
 | Operators / CRDs / certified multi-cloud SaaS Helm | **Deferred** — app Helm chart landed; no operators/CRDs |
 | Certified hostile multi-tenant SaaS security | **Not claimed** — Docker residual risk; gVisor opt-in stronger but not a formal certification |
 | Measured **production** throughput / capacity numbers | **Not claimed** — only attached local Compose laptop smoke exists |

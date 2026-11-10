@@ -59,7 +59,7 @@ Single-host Ampere A1 runbook (VM shape, ports, Docker, secrets, health checks, 
 | Data | PostgreSQL 16, Flyway (single forward-only stream) |
 | Cache | Redis 7 |
 | Messaging | RabbitMQ 3.13 (evaluation commands + DLQ) |
-| Auth | Local email/password + JWT; optional Google/GitHub OIDC (`docs/AUTH_OIDC.md`) |
+| Auth | Local email/password + JWT; optional Google/GitHub OIDC (`docs/AUTH_OIDC.md`); optional SAML 2.0 SP (`docs/AUTH_SAML.md`) |
 | API docs | springdoc OpenAPI + Swagger UI |
 | Local runtime | Docker Compose (+ `docker-compose.prod.yml`) |
 | Artifacts | `ArtifactStorage`: local volume (default) or S3-compatible (`ARTIFACT_STORAGE=s3`, Compose `--profile s3` / MinIO) |
@@ -92,7 +92,7 @@ Roles (org-scoped): `OWNER`, `ADMIN`, `DEVELOPER`, `VIEWER`.
 | Ops | Backup / migrate / upgrade / DLQ snippets in `docs/OPERATIONS.md` |
 | Portfolio | Honest done vs deferred checklist |
 
-**Explicit non-claims:** no Firecracker; gVisor is **opt-in on Linux with runsc** (not Mac Compose default; not a certified hostile multi-tenant claim). No enterprise SAML/SSO admin UI. Postgres RLS is defense-in-depth beside app-layer org filters (`docs/POSTGRES_RLS.md`). Public leaderboards are **opt-in** (OWNER/ADMIN publish; org-private default) with optional HMAC-signed embeds + Cache-Control (`docs/PUBLIC_LEADERBOARDS.md`) — no managed CDN or anonymous writes claimed. Google/GitHub OIDC is optional beside local JWT (see `docs/AUTH_OIDC.md`). **CODING_CLI** is isolator-backed (`docs/AGENTS_CODING_CLI.md`) — not a certified hostile multi-tenant CLI sandbox. Optional Sonar is **not** the sole scoring authority (`docs/QUALITY_SONAR.md`).
+**Explicit non-claims:** no Firecracker; gVisor is **opt-in on Linux with runsc** (not Mac Compose default; not a certified hostile multi-tenant claim). SAML SP login is optional (`docs/AUTH_SAML.md`) — **no multi-IdP admin UI**. Postgres RLS is defense-in-depth beside app-layer org filters (`docs/POSTGRES_RLS.md`). Public leaderboards are **opt-in** (OWNER/ADMIN publish; org-private default) with optional HMAC-signed embeds + Cache-Control (`docs/PUBLIC_LEADERBOARDS.md`) — no managed CDN or anonymous writes claimed. Google/GitHub OIDC is optional beside local JWT (see `docs/AUTH_OIDC.md`). **CODING_CLI** is isolator-backed (`docs/AGENTS_CODING_CLI.md`) — not a certified hostile multi-tenant CLI sandbox. Optional Sonar is **not** the sole scoring authority (`docs/QUALITY_SONAR.md`).
 
 ### Optional MinIO artifact store
 

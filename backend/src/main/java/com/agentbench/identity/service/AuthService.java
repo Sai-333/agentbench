@@ -3,6 +3,7 @@ package com.agentbench.identity.service;
 import com.agentbench.identity.api.dto.AuthDtos;
 import com.agentbench.identity.auth.AuthCredentials;
 import com.agentbench.identity.auth.AuthProvider;
+import com.agentbench.identity.auth.SamlAuthProvider;
 import com.agentbench.identity.infra.OrganizationRepository;
 import com.agentbench.identity.infra.RefreshTokenRepository;
 import com.agentbench.identity.infra.UserRepository;
@@ -131,6 +132,15 @@ public class AuthService {
             if (!provider.enabled() || "local".equalsIgnoreCase(provider.id())) {
                 continue;
             }
+            if (provider instanceof SamlAuthProvider saml) {
+                providers.add(new AuthDtos.ProviderView(
+                        saml.id(),
+                        saml.properties().getDisplayName(),
+                        "saml",
+                        "/api/v1/auth/saml/login"
+                ));
+                continue;
+            }
             providers.add(new AuthDtos.ProviderView(
                     provider.id(),
                     displayName(provider.id()),
@@ -153,6 +163,7 @@ public class AuthService {
         return switch (providerId.toLowerCase(Locale.ROOT)) {
             case "google" -> "Google";
             case "github" -> "GitHub";
+            case "saml" -> "Enterprise SSO";
             default -> providerId;
         };
     }

@@ -354,7 +354,11 @@ function App() {
           false,
         )
         if (!cancelled) {
-          setOidcProviders(providers.providers.filter((p) => p.type === 'oidc' && p.authorizePath))
+          setOidcProviders(
+            providers.providers.filter(
+              (p) => (p.type === 'oidc' || p.type === 'saml') && p.authorizePath,
+            ),
+          )
         }
       } catch {
         if (!cancelled) {
