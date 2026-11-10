@@ -165,6 +165,9 @@ export function LeaderboardPanel({
   publicationBusy,
   onPublish,
   onUnpublish,
+  onMintEmbed,
+  embedSnippet,
+  embedStatus,
 }: {
   board: LeaderboardResponse | null
   state: LoadState
@@ -181,6 +184,9 @@ export function LeaderboardPanel({
   publicationBusy: boolean
   onPublish: (publicSlug: string, title: string) => void
   onUnpublish: () => void
+  onMintEmbed?: () => void
+  embedSnippet?: string | null
+  embedStatus?: string | null
 }) {
   const [slugDraft, setSlugDraft] = useState('')
   const [titleDraft, setTitleDraft] = useState('')
@@ -217,25 +223,44 @@ export function LeaderboardPanel({
               : 'This version has an active public leaderboard (read-only for your role).'}
           </p>
           {publication?.published ? (
-            <div className="toolbar">
-              <p className="muted small">
-                Live at{' '}
-                <a href={publication.publicPath || '#'} target="_blank" rel="noreferrer">
-                  {publication.publicPath}
-                </a>
-                {publication.publicSlug ? ` · slug ${publication.publicSlug}` : ''}
-              </p>
-              {canPublish && (
+            <div className="dash-stack">
+              <div className="toolbar">
+                <p className="muted small">
+                  Live at{' '}
+                  <a href={publication.publicPath || '#'} target="_blank" rel="noreferrer">
+                    {publication.publicPath}
+                  </a>
+                  {publication.publicSlug ? ` · slug ${publication.publicSlug}` : ''}
+                </p>
                 <div className="toolbar-actions">
-                  <button
-                    type="button"
-                    className="cta secondary"
-                    disabled={publicationBusy}
-                    onClick={() => onUnpublish()}
-                  >
-                    Unpublish
-                  </button>
+                  {canPublish && onMintEmbed && (
+                    <button
+                      type="button"
+                      className="cta secondary"
+                      disabled={publicationBusy}
+                      onClick={() => onMintEmbed()}
+                    >
+                      Copy embed snippet
+                    </button>
+                  )}
+                  {canPublish && (
+                    <button
+                      type="button"
+                      className="cta secondary"
+                      disabled={publicationBusy}
+                      onClick={() => onUnpublish()}
+                    >
+                      Unpublish
+                    </button>
+                  )}
                 </div>
+              </div>
+              {embedStatus && <p className="muted small">{embedStatus}</p>}
+              {embedSnippet && (
+                <label className="embed-snippet">
+                  Embed iframe (signed token; expires)
+                  <textarea readOnly rows={4} value={embedSnippet} />
+                </label>
               )}
             </div>
           ) : canPublish ? (

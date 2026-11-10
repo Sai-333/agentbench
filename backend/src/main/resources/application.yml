@@ -119,6 +119,14 @@ agentbench:
     secret: ${AGENTBENCH_JWT_SECRET:local-dev-only-change-me-agentbench-jwt-secret-key}
     access-ttl-seconds: ${AGENTBENCH_JWT_ACCESS_TTL_SECONDS:900}
     refresh-ttl-seconds: ${AGENTBENCH_JWT_REFRESH_TTL_SECONDS:604800}
+  public-leaderboards:
+    # HMAC secret for signed embeds. Blank → reuse agentbench.jwt.secret.
+    embed-secret: ${AGENTBENCH_PUBLIC_EMBED_SECRET:}
+    default-embed-ttl-seconds: ${AGENTBENCH_PUBLIC_EMBED_TTL_SECONDS:604800}
+    max-embed-ttl-seconds: ${AGENTBENCH_PUBLIC_EMBED_MAX_TTL_SECONDS:7776000}
+    # CDN-friendly Cache-Control for public + embed GETs (no CDN required).
+    cache-max-age-seconds: ${AGENTBENCH_PUBLIC_CACHE_MAX_AGE_SECONDS:60}
+    cache-stale-while-revalidate-seconds: ${AGENTBENCH_PUBLIC_CACHE_SWR_SECONDS:300}
   oidc:
     # Frontend URL that receives access/refresh tokens in the URL fragment after IdP callback.
     success-redirect-url: ${AGENTBENCH_OIDC_SUCCESS_REDIRECT_URL:http://localhost:3000/}

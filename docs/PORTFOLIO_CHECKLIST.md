@@ -1,6 +1,6 @@
 # AgentBench — Portfolio checklist (honest)
 
-**As of post-M9 public leaderboards + OIDC auth + S3-compatible artifact storage + Postgres RLS + measured local k6 smoke + opt-in gVisor + Helm chart + NetworkPolicies + PDF exports.** Marked items are evidenced in `main` / this repo. Deferred items are explicit non-claims.
+**As of post-M9 public leaderboards + signed embeds/Cache-Control + OIDC auth + S3-compatible artifact storage + Postgres RLS + measured local k6 smoke + opt-in gVisor + Helm chart + NetworkPolicies + PDF exports.** Marked items are evidenced in `main` / this repo. Deferred items are explicit non-claims.
 
 ## Done (M0–M9 + deferred follow-ups landed)
 
@@ -19,6 +19,7 @@
 | Org-private analytics / leaderboard / exports | M8 |
 | PDF evaluation / leaderboard report export | OpenPDF; `GET .../evaluations/{id}/export?format=pdf` + `.../leaderboard/export?format=pdf`; VIEWER RBAC; UI Export PDF; `ReportExportServiceTest` + `AnalyticsDashboardTest` |
 | Opt-in public leaderboards (OWNER/ADMIN publish; sanitized payload) | Flyway V11; `/api/v1/public/leaderboards/{slug}`; org-private remains default |
+| Signed embeds + Cache-Control for public boards | HMAC embed tokens (OWNER/ADMIN mint); `/embed?token=`; Cache-Control + ETag; UI copy snippet; `docs/PUBLIC_LEADERBOARDS.md` |
 | Recovery tests (baseline / cancel / timeout / retry policy / DLQ topology) | M9 tests |
 | Graceful shutdown + prod-ish Compose overlay | `application.yml`, `docker-compose.prod.yml` |
 | Kubernetes templates (deploy/svc/config/secrets) | `deploy/kubernetes/` |
@@ -47,8 +48,8 @@
 | Full hostile multi-tenant CODING_CLI / untrusted public CLI images | **Not claimed** — isolator-backed CODING_CLI landed; residual matches RuntimeIsolator; no Firecracker |
 | mTLS between services | **Deferred** — NetworkPolicies are L3/L4 only |
 | WORM audit storage | **Deferred** — audit log exists; not WORM |
-| Auto-updating public boards / signed embeds / CDN caching | **Not claimed** — live query of published slug only |
-| Anonymous write / vote / comment on public boards | **Not claimed** — read-only public GET |
+| Full CDN / edge network product | **Not claimed** — Cache-Control + ETag are CDN-friendly; no managed CDN required or asserted |
+| Anonymous write / vote / comment on public boards | **Not claimed** — read-only public GET / signed embed reads |
 
 ## Demo path
 

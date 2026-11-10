@@ -326,6 +326,18 @@ export type LeaderboardPublicationStatus = {
   publicPath: string | null
 }
 
+export type MintEmbedTokenResponse = {
+  token: string
+  publicSlug: string
+  issuedAt: string
+  expiresAt: string
+  ttlSeconds: number
+  embedJsonPath: string
+  embedHtmlPath: string
+  iframeSnippet: string
+  scriptSnippet: string
+}
+
 export type PublicLeaderboardEntry = {
   rank: number
   agentName: string

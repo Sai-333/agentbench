@@ -144,7 +144,7 @@ Shared-kernel breakout residual risk remains on the default path. Prefer **`agen
 | K8s NetworkPolicy residual / mTLS absent | NetworkPolicies ship (default-deny + allow-needed); still L3/L4 only — tighten CIDRs before hostile multi-tenant; mTLS deferred |
 | WORM audit absent | Audit events exist; not write-once / tamper-evident storage |
 | AES secret-key rotation not automated | Dual-key re-encrypt before rotating encryption keys |
-| Enterprise SAML absent; public boards opt-in only | Google/GitHub OIDC optional; public leaderboards require OWNER/ADMIN publish + sanitized payload |
+| Enterprise SAML absent; public boards opt-in only | Google/GitHub OIDC optional; public leaderboards require OWNER/ADMIN publish + sanitized payload; embeds need HMAC token + expiry |
 
 ---
 

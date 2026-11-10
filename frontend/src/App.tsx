@@ -19,6 +19,7 @@ import type {
   EvaluationSearchResponse,
   LeaderboardPublicationStatus,
   LeaderboardResponse,
+  MintEmbedTokenResponse,
   MeResponse,
   Org,
   OverviewResponse,
@@ -121,6 +122,8 @@ function App() {
   const [leaderboardError, setLeaderboardError] = useState<string | null>(null)
   const [publication, setPublication] = useState<LeaderboardPublicationStatus | null>(null)
   const [publicationBusy, setPublicationBusy] = useState(false)
+  const [embedSnippet, setEmbedSnippet] = useState<string | null>(null)
+  const [embedStatus, setEmbedStatus] = useState<string | null>(null)
   const [comparison, setComparison] = useState<ComparisonResponse | null>(null)
   const [comparisonState, setComparisonState] = useState<LoadState>('idle')
   const [comparisonError, setComparisonError] = useState<string | null>(null)
@@ -212,11 +215,15 @@ function App() {
     if (!versionId) {
       setLeaderboard(null)
       setPublication(null)
+      setEmbedSnippet(null)
+      setEmbedStatus(null)
       setLeaderboardState('empty')
       return
     }
     setLeaderboardState('loading')
     setLeaderboardError(null)
+    setEmbedSnippet(null)
+    setEmbedStatus(null)
     try {
       const [data, pub] = await Promise.all([
         api<LeaderboardResponse>(
@@ -594,8 +601,40 @@ function App() {
         { method: 'POST', body: '{}' },
       )
       setPublication(status)
+      setEmbedSnippet(null)
+      setEmbedStatus(null)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unpublish failed')
+    } finally {
+      setPublicationBusy(false)
+    }
+  }
+
+  async function handleMintEmbedSnippet() {
+    if (!selectedOrgId || !selectedVersionId) return
+    setPublicationBusy(true)
+    setError(null)
+    setEmbedStatus(null)
+    try {
+      const minted = await api<MintEmbedTokenResponse>(
+        `/api/v1/orgs/${selectedOrgId}/benchmark-versions/${selectedVersionId}/leaderboard/embed-token`,
+        { method: 'POST', body: JSON.stringify({ ttlSeconds: 604800 }) },
+      )
+      const origin = window.location.origin
+      const absolute = minted.iframeSnippet.replace(
+        /src="(\/api\/v1\/public\/leaderboards\/[^"]+)"/,
+        (_match, path: string) => `src="${origin}${path}"`,
+      )
+      setEmbedSnippet(absolute)
+      try {
+        await navigator.clipboard.writeText(absolute)
+        setEmbedStatus(`Copied iframe snippet · expires ${new Date(minted.expiresAt).toLocaleString()}`)
+      } catch {
+        setEmbedStatus(`Embed ready · expires ${new Date(minted.expiresAt).toLocaleString()} (copy from the box)`)
+      }
+    } catch (err) {
+      setEmbedSnippet(null)
+      setError(err instanceof Error ? err.message : 'Embed token mint failed')
     } finally {
       setPublicationBusy(false)
     }
@@ -1287,6 +1326,9 @@ function App() {
                     publicationBusy={publicationBusy}
                     onPublish={(slug, title) => void handlePublishLeaderboard(slug, title)}
                     onUnpublish={() => void handleUnpublishLeaderboard()}
+                    onMintEmbed={() => void handleMintEmbedSnippet()}
+                    embedSnippet={embedSnippet}
+                    embedStatus={embedStatus}
                   />
                 </>
               ) : (
