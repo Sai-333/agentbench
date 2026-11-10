@@ -56,7 +56,7 @@
 | **Repudiation** | Deny hidden-test access | Audit log for suite reads & state transitions | WORM storage |
 | **Info disclosure** | Hidden tests in agent prompt / logs | Separate stages; DTO filtering; `SecretRedactor`; RBAC | Dedicated hidden runner pool |
 | **DoS** | Fork bomb / disk fill in container | Docker CPU/mem/pids/ulimit; timeouts; org quotas; DLQ | cgroup v2 + fair share |
-| **Elevation** | Escape to host via Docker | No docker.sock in workload; non-root; dropped caps; read-only root FS | gVisor/Firecracker (ADR-004) |
+| **Elevation** | Escape to host via Docker | No docker.sock in workload; non-root; dropped caps; read-only root FS; optional `mode=gvisor` (`--runtime=runsc`) | Firecracker (deferred); certified multi-tenant bar |
 
 ---
 
@@ -80,7 +80,7 @@
 ## 6. Explicit non-claim (mandatory)
 
 **Docker-only isolation is NOT production-safe for arbitrary untrusted workloads.**  
-Shared-kernel breakout residual risk remains. Use only for early trusted demos / lab orgs until **gVisor** and/or **Firecracker** land behind `RuntimeIsolator` (ADR-004). M9 adds operational readiness — **not** stronger sandboxing.
+Shared-kernel breakout residual risk remains on the default path. Prefer **`agentbench.execution.mode=gvisor`** on Linux hosts with `runsc` for stronger user-space kernel isolation (ADR-004). gVisor is **opt-in and fail-fast** when unavailable; Mac Compose stays on Docker. **Firecracker is not implemented.** Neither Docker nor gVisor is claimed as certified hostile multi-tenant SaaS security.
 
 ---
 
@@ -135,7 +135,9 @@ Shared-kernel breakout residual risk remains. Use only for early trusted demos /
 
 | Risk | Acceptance |
 |---|---|
-| Docker breakout on shared kernel | Lab / trusted authors only until gVisor/Firecracker |
+| Docker breakout on shared kernel | Lab / trusted authors only; enable `mode=gvisor` on Linux+runsc when stronger isolation is required |
+| gVisor residual / misconfiguration | Fail-fast if `mode=gvisor` but runsc missing; still not a formal certification |
+| Firecracker absent | Deferred; gVisor preferred for this milestone |
 | LLM provider stores prompts | Prefer self-hosted or enterprise no-retention contracts |
 | Author malice within own org | Org trust boundary; cannot fully prevent |
 | Local isolator fallback | Used when Docker unavailable (CI); not a security boundary |
@@ -149,6 +151,7 @@ Shared-kernel breakout residual risk remains. Use only for early trusted demos /
 
 - Patch path traversal / `.git/hooks` / absolute path negative tests.
 - Docker command builder asserts: no privileged, no docker.sock, network none, non-root, limits.
+- gVisor command builder asserts `--runtime=runsc` plus the same hardening; fail-fast when mode=gvisor and probes miss.
 - Secret redaction unit tests.
 - RestAssured/MockMvc IDOR suites (org authorization regression).
 - Quality parsers + new-vs-pre-existing aggregation tests.

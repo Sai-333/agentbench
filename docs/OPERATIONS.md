@@ -75,6 +75,24 @@ See **[POSTGRES_RLS.md](./POSTGRES_RLS.md)** for full caveats. Short version:
 
 Manual trigger is the Spring bean `ArtifactRetentionService#sweep` (no public HTTP endpoint in v1).
 
+## Evaluation isolation mode
+
+| Mode | When to use | Behavior if unavailable |
+|---|---|---|
+| `docker` (default) | Mac Compose, trusted demos | Falls back to `local` process isolator |
+| `gvisor` | Linux Docker host with gVisor `runsc` registered | **Fail-fast** — clear error; set `AGENTBENCH_EXECUTION_MODE=docker` or `local` |
+| `local` | CI / unit tests without a daemon | Always available; **not** a security boundary |
+
+```bash
+# Linux worker with runsc installed and Docker runtime configured:
+export AGENTBENCH_EXECUTION_MODE=gvisor
+# Optional overrides:
+# export AGENTBENCH_GVISOR_RUNTIME=runsc
+# export AGENTBENCH_RUNSC_BINARY=runsc
+```
+
+See [ADR-004](./ARCHITECTURE_DECISIONS/ADR-004-docker-first-isolation.md). Do not change the Mac Compose default away from Docker.
+
 ## Secret rotation
 
 1. Generate new `AGENTBENCH_JWT_SECRET` / AES key.

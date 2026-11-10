@@ -98,10 +98,12 @@ agentbench:
       max-log-bytes: ${AGENTBENCH_ARTIFACT_MAX_LOG_BYTES:20971520}
       sweep-interval-ms: ${AGENTBENCH_ARTIFACT_SWEEP_MS:3600000}
   execution:
-    # docker (preferred when daemon reachable) | local (CI fallback — not production-safe)
+    # docker (default; Mac Compose) | gvisor (Linux + runsc; fail-fast if unavailable) | local (CI)
     mode: ${AGENTBENCH_EXECUTION_MODE:docker}
     docker-enabled: ${AGENTBENCH_DOCKER_ENABLED:true}
     docker-binary: ${AGENTBENCH_DOCKER_BINARY:docker}
+    gvisor-runtime: ${AGENTBENCH_GVISOR_RUNTIME:runsc}
+    runsc-binary: ${AGENTBENCH_RUNSC_BINARY:runsc}
     image: ${AGENTBENCH_RUNNER_IMAGE:eclipse-temurin:21-jre-alpine}
     image-digest: ${AGENTBENCH_RUNNER_IMAGE_DIGEST:}
     default-memory-mb: ${AGENTBENCH_EXEC_MEMORY_MB:512}

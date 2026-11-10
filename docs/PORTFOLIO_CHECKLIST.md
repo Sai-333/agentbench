@@ -1,6 +1,6 @@
 # AgentBench — Portfolio checklist (honest)
 
-**As of post-M9 public leaderboards + OIDC auth + S3-compatible artifact storage + Postgres RLS + measured local k6 smoke.** Marked items are evidenced in `main` / this repo. Deferred items are explicit non-claims.
+**As of post-M9 public leaderboards + OIDC auth + S3-compatible artifact storage + Postgres RLS + measured local k6 smoke + opt-in gVisor.** Marked items are evidenced in `main` / this repo. Deferred items are explicit non-claims.
 
 ## Done (M0–M9 + deferred follow-ups landed)
 
@@ -15,6 +15,7 @@
 | Provider-independent agents (Fake / OpenAI-compat / HTTP / CLI stub) | M5 |
 | Scoring + visible F2P/P2P/P2F/F2F; hidden post-only pass rate | M6 |
 | Hardened Docker `RuntimeIsolator` + quality tools | M7 |
+| Opt-in gVisor (`runsc`) behind `RuntimeIsolator` | `mode=gvisor` → `docker --runtime=runsc`; fail-fast without runsc; ADR-004; Mac stays Docker |
 | Org-private analytics / leaderboard / exports | M8 |
 | Opt-in public leaderboards (OWNER/ADMIN publish; sanitized payload) | Flyway V11; `/api/v1/public/leaderboards/{slug}`; org-private remains default |
 | Recovery tests (baseline / cancel / timeout / retry policy / DLQ topology) | M9 tests |
@@ -31,10 +32,10 @@
 
 | Item | Status |
 |---|---|
-| gVisor / Firecracker isolation | **Deferred** — interface ready (`RuntimeIsolator`); Docker residual risk remains |
+| Firecracker microVM isolation | **Deferred** — gVisor opt-in landed; Firecracker not implemented |
 | Full enterprise SSO (SAML / multi-IdP admin UI) | **Deferred** — Google/GitHub OIDC authorization-code only (Q1 partial) |
 | Managed cloud Helm chart / operators | **Deferred** — raw manifests only |
-| Certified hostile multi-tenant SaaS security | **Not claimed** |
+| Certified hostile multi-tenant SaaS security | **Not claimed** — Docker residual risk; gVisor opt-in stronger but not a formal certification |
 | Measured **production** throughput / capacity numbers | **Not claimed** — only attached local Compose laptop smoke exists |
 | Live public hosted demo on Oracle Always Free | **Guide-ready** (`docs/DEPLOYMENT_ORACLE_ALWAYS_FREE.md`) — **not actually hosted** until Sai’s VM + SSH apply the runbook |
 | Sonar as scoring authority | **Not claimed** — stub only |
