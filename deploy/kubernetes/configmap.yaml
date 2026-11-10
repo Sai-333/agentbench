@@ -8,7 +8,10 @@ metadata:
 data:
   SERVER_PORT: "8080"
   SPRING_DATASOURCE_URL: "jdbc:postgresql://postgres:5432/agentbench"
-  SPRING_DATASOURCE_USERNAME: "agentbench"
+  # Non-superuser app role (Flyway V12 / init script) so FORCE RLS applies.
+  SPRING_DATASOURCE_USERNAME: "agentbench_app"
+  SPRING_FLYWAY_URL: "jdbc:postgresql://postgres:5432/agentbench"
+  SPRING_FLYWAY_USER: "agentbench"
   SPRING_DATA_REDIS_HOST: "redis"
   SPRING_DATA_REDIS_PORT: "6379"
   SPRING_RABBITMQ_HOST: "rabbitmq"

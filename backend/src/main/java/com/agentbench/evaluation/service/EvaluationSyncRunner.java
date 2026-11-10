@@ -2,6 +2,7 @@ package com.agentbench.evaluation.service;
 
 import com.agentbench.evaluation.infra.EvaluationRepository;
 import com.agentbench.evaluation.worker.EvaluationOutboxPublisher;
+import com.agentbench.platform.rls.RlsContext;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -30,18 +31,20 @@ public class EvaluationSyncRunner {
     public int drainAndProcess(int maxCycles) {
         int total = 0;
         for (int cycle = 0; cycle < maxCycles; cycle++) {
-            var rows = evaluationRepository.listUnpublished(20);
+            var rows = RlsContext.callWithBypass(() -> evaluationRepository.listUnpublished(20));
             if (rows.isEmpty()) {
                 break;
             }
             for (EvaluationRepository.OutboxRow row : rows) {
                 try {
                     EvaluationCommand command = objectMapper.readValue(row.payload(), EvaluationCommand.class);
-                    evaluationRepository.markPublished(row.id());
-                    stageProcessor.process(command);
+                    RlsContext.runWithOrg(command.orgId(), () -> {
+                        evaluationRepository.markPublished(row.id());
+                        stageProcessor.process(command);
+                    });
                     total++;
                 } catch (Exception ex) {
-                    evaluationRepository.incrementPublishAttempts(row.id());
+                    RlsContext.runWithBypass(() -> evaluationRepository.incrementPublishAttempts(row.id()));
                     throw new IllegalStateException("Sync stage processing failed: " + ex.getMessage(), ex);
                 }
             }

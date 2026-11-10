@@ -92,7 +92,7 @@ Roles (org-scoped): `OWNER`, `ADMIN`, `DEVELOPER`, `VIEWER`.
 | Ops | Backup / migrate / upgrade / DLQ snippets in `docs/OPERATIONS.md` |
 | Portfolio | Honest done vs deferred checklist |
 
-**Explicit non-claims:** no gVisor/Firecracker yet; no enterprise SAML/SSO admin UI; no Postgres RLS; not certified hostile multi-tenant SaaS. Public leaderboards are **opt-in** (OWNER/ADMIN publish; org-private default). Google/GitHub OIDC is optional beside local JWT (see `docs/AUTH_OIDC.md`).
+**Explicit non-claims:** no gVisor/Firecracker yet; no enterprise SAML/SSO admin UI; not certified hostile multi-tenant SaaS. Postgres RLS is defense-in-depth beside app-layer org filters (`docs/POSTGRES_RLS.md`). Public leaderboards are **opt-in** (OWNER/ADMIN publish; org-private default). Google/GitHub OIDC is optional beside local JWT (see `docs/AUTH_OIDC.md`).
 
 ### Optional MinIO artifact store
 
@@ -160,6 +160,7 @@ Never edit applied migrations; forward-only only.
 | [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) | Compose + K8s + health/shutdown |
 | [docs/DEPLOYMENT_ORACLE_ALWAYS_FREE.md](docs/DEPLOYMENT_ORACLE_ALWAYS_FREE.md) | Oracle Cloud Always Free VM path |
 | [docs/OPERATIONS.md](docs/OPERATIONS.md) | Backup / migrate / DLQ |
+| [docs/POSTGRES_RLS.md](docs/POSTGRES_RLS.md) | RLS defense-in-depth ops caveats |
 | [docs/PERFORMANCE.md](docs/PERFORMANCE.md) | Load-test plan + k6 |
 | [docs/SECURITY_THREAT_MODEL.md](docs/SECURITY_THREAT_MODEL.md) | Threat model |
 | [docs/PORTFOLIO_CHECKLIST.md](docs/PORTFOLIO_CHECKLIST.md) | Done vs deferred |
@@ -181,7 +182,7 @@ echo '{"min-api-version":"1.24"}' | sudo tee /etc/docker/daemon.json
 
 - Never returns plaintext secrets, ciphertext, or raw tokens in API responses.
 - Hidden suite fixtures are RBAC-gated; agent-facing projections never include them.
-- Org isolation is enforced in the application/repository layer (Postgres RLS deferred).
+- Org isolation is enforced in the application/repository layer, with Postgres RLS as defense-in-depth (`docs/POSTGRES_RLS.md`).
 - Evaluation containers never receive `docker.sock` or `--privileged`.
 - Docker-only is lab/demo grade until gVisor/Firecracker (see threat model).
 

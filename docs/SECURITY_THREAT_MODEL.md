@@ -118,7 +118,7 @@ Shared-kernel breakout residual risk remains. Use only for early trusted demos /
 
 - Membership check on every controller.
 - Integration tests with two orgs.
-- Optional Postgres RLS (deferred).
+- Postgres FORCE RLS on tenant tables (`app.current_org_id` / controlled bypass); see `docs/POSTGRES_RLS.md`.
 
 ---
 

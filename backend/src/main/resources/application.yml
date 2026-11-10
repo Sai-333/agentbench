@@ -3,12 +3,18 @@ spring:
     name: agentbench
   datasource:
     url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/agentbench}
-    username: ${SPRING_DATASOURCE_USERNAME:agentbench}
+    # Non-superuser app role so FORCE RLS applies (superusers bypass RLS).
+    username: ${SPRING_DATASOURCE_USERNAME:agentbench_app}
     password: ${SPRING_DATASOURCE_PASSWORD:agentbench}
   flyway:
     enabled: true
     locations: classpath:db/migration
     baseline-on-migrate: true
+    # Bootstrap / migration role (superuser in Compose). Must differ from app role.
+    # url required when user/password override the primary DataSource.
+    url: ${SPRING_FLYWAY_URL:${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/agentbench}}
+    user: ${SPRING_FLYWAY_USER:${POSTGRES_USER:agentbench}}
+    password: ${SPRING_FLYWAY_PASSWORD:${POSTGRES_PASSWORD:agentbench}}
   data:
     redis:
       host: ${SPRING_DATA_REDIS_HOST:localhost}

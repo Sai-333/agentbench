@@ -16,6 +16,8 @@ import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
+import com.agentbench.platform.rls.RlsContext;
+import com.agentbench.support.PostgresTestSupport;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
@@ -102,30 +104,12 @@ class EvaluationRecoveryScenariosTest {
             """;
 
     @Container
-    static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:16-alpine")
-            .withDatabaseName("agentbench")
-            .withUsername("agentbench")
-            .withPassword("agentbench");
+    static PostgreSQLContainer<?> postgres = PostgresTestSupport.postgres();
 
     @DynamicPropertySource
     static void datasourceProps(DynamicPropertyRegistry registry) {
-        registry.add("spring.datasource.url", postgres::getJdbcUrl);
-        registry.add("spring.datasource.username", postgres::getUsername);
-        registry.add("spring.datasource.password", postgres::getPassword);
-        registry.add("spring.flyway.enabled", () -> "true");
-        registry.add("spring.autoconfigure.exclude", () -> String.join(",",
-                "org.springframework.boot.autoconfigure.data.redis.RedisAutoConfiguration",
-                "org.springframework.boot.autoconfigure.data.redis.RedisRepositoriesAutoConfiguration",
-                "org.springframework.boot.autoconfigure.amqp.RabbitAutoConfiguration"));
-        registry.add("management.health.redis.enabled", () -> "false");
-        registry.add("management.health.rabbit.enabled", () -> "false");
-        registry.add("spring.rabbitmq.listener.simple.auto-startup", () -> "false");
+        PostgresTestSupport.registerRlsAwareDatasource(registry, postgres);
         registry.add("agentbench.evaluation.listener-enabled", () -> "false");
-        registry.add("agentbench.jwt.secret", () -> "test-only-jwt-secret-key-32chars-min!!");
-        registry.add("agentbench.secrets.encryption-key", () -> "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=");
-        registry.add("agentbench.github.validation-enabled", () -> "false");
-        registry.add("agentbench.artifacts.root", () -> System.getProperty("java.io.tmpdir") + "/agentbench-m9-recovery-it");
-        registry.add("logging.structured.format.console", () -> "");
     }
 
     @Autowired
@@ -229,20 +213,22 @@ class EvaluationRecoveryScenariosTest {
 
         syncRunner.drainAndProcess(1);
 
-        jdbc.update("""
-                INSERT INTO evaluations.org_limits
-                    (org_id, max_concurrent_evaluations, max_queued_evaluations, max_concurrent_agent_calls,
-                     max_duration_sec, max_patch_bytes, max_log_artifact_bytes)
-                VALUES
-                    (:orgId, 2, 20, 2, 1, 5242880, 20971520)
-                ON CONFLICT (org_id) DO UPDATE SET max_duration_sec = EXCLUDED.max_duration_sec
-                """, new MapSqlParameterSource("orgId", orgId));
+        RlsContext.runWithOrg(orgId, () -> {
+            jdbc.update("""
+                    INSERT INTO evaluations.org_limits
+                        (org_id, max_concurrent_evaluations, max_queued_evaluations, max_concurrent_agent_calls,
+                         max_duration_sec, max_patch_bytes, max_log_artifact_bytes)
+                    VALUES
+                        (:orgId, 2, 20, 2, 1, 5242880, 20971520)
+                    ON CONFLICT (org_id) DO UPDATE SET max_duration_sec = EXCLUDED.max_duration_sec
+                    """, new MapSqlParameterSource("orgId", orgId));
 
-        jdbc.update("""
-                UPDATE evaluations.evaluations
-                SET started_at = now() - interval '30 seconds'
-                WHERE id = :id
-                """, new MapSqlParameterSource("id", evaluationId));
+            jdbc.update("""
+                    UPDATE evaluations.evaluations
+                    SET started_at = now() - interval '30 seconds'
+                    WHERE id = :id
+                    """, new MapSqlParameterSource("id", evaluationId));
+        });
 
         timeoutWatchdog.sweep();
 

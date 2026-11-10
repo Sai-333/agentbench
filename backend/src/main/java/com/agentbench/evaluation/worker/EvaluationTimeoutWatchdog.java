@@ -6,6 +6,7 @@ import com.agentbench.evaluation.domain.FailureClass;
 import com.agentbench.evaluation.domain.FailureCode;
 import com.agentbench.evaluation.infra.EvaluationRepository;
 import com.agentbench.evaluation.service.EvaluationService;
+import com.agentbench.platform.rls.RlsContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
@@ -41,6 +42,11 @@ public class EvaluationTimeoutWatchdog {
     @Scheduled(fixedDelayString = "${agentbench.evaluation.timeout-poll-ms:30000}")
     @Transactional
     public void sweep() {
+        // Cross-tenant timeout scan requires controlled RLS bypass.
+        RlsContext.runWithBypass(this::sweepUnderBypass);
+    }
+
+    private void sweepUnderBypass() {
         List<UUID> ids = jdbc.query("""
                 SELECT e.id
                 FROM evaluations.evaluations e

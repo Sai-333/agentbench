@@ -3,6 +3,7 @@ package com.agentbench.evaluation.worker;
 import com.agentbench.evaluation.infra.EvaluationRepository;
 import com.agentbench.evaluation.service.EvaluationCommand;
 import com.agentbench.platform.config.RabbitConfig;
+import com.agentbench.platform.rls.RlsContext;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -49,6 +50,11 @@ public class EvaluationOutboxPublisher {
      */
     @Transactional
     public int drain(int limit, boolean publishToBroker) {
+        // Cross-tenant outbox scan requires controlled RLS bypass.
+        return RlsContext.callWithBypass(() -> drainUnderBypass(limit, publishToBroker));
+    }
+
+    private int drainUnderBypass(int limit, boolean publishToBroker) {
         RabbitTemplate rabbitTemplate = rabbitTemplateProvider.getIfAvailable();
         var rows = evaluationRepository.listUnpublished(limit);
         int processed = 0;
@@ -84,7 +90,7 @@ public class EvaluationOutboxPublisher {
 
     @Transactional(readOnly = true)
     public java.util.List<EvaluationCommand> peekUnpublished(int limit) {
-        return evaluationRepository.listUnpublished(limit).stream()
+        return RlsContext.callWithBypass(() -> evaluationRepository.listUnpublished(limit).stream()
                 .map(row -> {
                     try {
                         return objectMapper.readValue(row.payload(), EvaluationCommand.class);
@@ -92,6 +98,6 @@ public class EvaluationOutboxPublisher {
                         throw new IllegalStateException(ex);
                     }
                 })
-                .toList();
+                .toList());
     }
 }

@@ -3,6 +3,7 @@ package com.agentbench.evaluation.worker;
 import com.agentbench.evaluation.service.EvaluationCommand;
 import com.agentbench.evaluation.service.EvaluationStageProcessor;
 import com.agentbench.platform.config.RabbitConfig;
+import com.agentbench.platform.rls.RlsContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
@@ -28,6 +29,6 @@ public class EvaluationCommandListener {
     public void onCommand(EvaluationCommand command) {
         log.info("Received evaluation command {} → {} attempt={}",
                 command.evaluationId(), command.targetState(), command.attempt());
-        stageProcessor.process(command);
+        RlsContext.runWithOrg(command.orgId(), () -> stageProcessor.process(command));
     }
 }
