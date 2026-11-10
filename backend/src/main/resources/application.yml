@@ -29,10 +29,13 @@ spring:
     # When enabled, set SPRING_RABBITMQ_PORT=5671 and either:
     #   A) SPRING_RABBITMQ_SSL_BUNDLE=rabbitmq + spring.ssl.bundle.pem.rabbitmq.* PEMs, or
     #   B) SPRING_RABBITMQ_SSL_TRUST_STORE (+ optional KEY_STORE) PKCS12/JKS paths.
+    # Do NOT default spring.rabbitmq.ssl.bundle to "" — Boot 3.4 treats any non-null
+    # bundle (including empty) as SSL-on via Ssl.determineEnabled(), then fails with
+    # "SSL bundle name '' cannot be found". Omit the key; set SPRING_RABBITMQ_SSL_BUNDLE
+    # via env (Compose AMQPS overlay / Helm) when needed.
     # See docs/DEPLOYMENT.md §3f. Not a service mesh (no Istio/Linkerd).
     ssl:
       enabled: ${SPRING_RABBITMQ_SSL_ENABLED:false}
-      bundle: ${SPRING_RABBITMQ_SSL_BUNDLE:}
       key-store: ${SPRING_RABBITMQ_SSL_KEY_STORE:}
       key-store-type: ${SPRING_RABBITMQ_SSL_KEY_STORE_TYPE:PKCS12}
       key-store-password: ${SPRING_RABBITMQ_SSL_KEY_STORE_PASSWORD:}
