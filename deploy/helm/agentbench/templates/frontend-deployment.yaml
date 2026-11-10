@@ -57,6 +57,32 @@ spec:
             allowPrivilegeEscalation: false
             capabilities:
               drop: ["ALL"]
+          {{- if .Values.mtls.enabled }}
+          volumeMounts:
+            - name: nginx-config
+              mountPath: /etc/nginx/conf.d/default.conf
+              subPath: default.conf
+              readOnly: true
+            - name: mtls
+              mountPath: {{ include "agentbench.mtls.mountPath" . }}
+              readOnly: true
+          {{- end }}
+      {{- if .Values.mtls.enabled }}
+      volumes:
+        - name: nginx-config
+          configMap:
+            name: {{ include "agentbench.frontend.fullname" . }}-nginx
+        - name: mtls
+          secret:
+            secretName: {{ include "agentbench.mtls.frontendSecretName" . }}
+            items:
+              - key: tls.crt
+                path: tls.crt
+              - key: tls.key
+                path: tls.key
+              - key: ca.crt
+                path: ca.crt
+      {{- end }}
 ---
 apiVersion: v1
 kind: Service

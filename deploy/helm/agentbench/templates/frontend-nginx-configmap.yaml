@@ -1,0 +1,90 @@
+{{- if and .Values.mtls.enabled .Values.frontend.enabled }}
+{{- /*
+  When mTLS is on, override the image-baked nginx.conf so /api proxies to the
+  backend Service over HTTPS with a client certificate.
+  Browser → frontend remains HTTP (or terminate TLS at Ingress). Edge TLS ≠ east-west mTLS.
+*/ -}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "agentbench.frontend.fullname" . }}-nginx
+  namespace: {{ include "agentbench.namespace" . }}
+  labels:
+    {{- include "agentbench.labels" . | nindent 4 }}
+    app.kubernetes.io/component: frontend
+data:
+  default.conf: |
+    server {
+        listen 8080;
+        server_name _;
+        root /usr/share/nginx/html;
+        index index.html;
+
+        location / {
+            try_files $uri $uri/ /index.html;
+        }
+
+        location /api/ {
+            proxy_pass https://{{ include "agentbench.backend.fullname" . }}:{{ .Values.backend.service.port }}/api/;
+            proxy_http_version 1.1;
+            proxy_ssl_certificate     {{ include "agentbench.mtls.mountPath" . }}/tls.crt;
+            proxy_ssl_certificate_key {{ include "agentbench.mtls.mountPath" . }}/tls.key;
+            proxy_ssl_trusted_certificate {{ include "agentbench.mtls.mountPath" . }}/ca.crt;
+            proxy_ssl_verify on;
+            proxy_ssl_name {{ include "agentbench.backend.fullname" . }};
+            proxy_ssl_server_name on;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+        }
+
+        location /actuator/ {
+            proxy_pass https://{{ include "agentbench.backend.fullname" . }}:{{ .Values.backend.service.port }}/actuator/;
+            proxy_http_version 1.1;
+            proxy_ssl_certificate     {{ include "agentbench.mtls.mountPath" . }}/tls.crt;
+            proxy_ssl_certificate_key {{ include "agentbench.mtls.mountPath" . }}/tls.key;
+            proxy_ssl_trusted_certificate {{ include "agentbench.mtls.mountPath" . }}/ca.crt;
+            proxy_ssl_verify on;
+            proxy_ssl_name {{ include "agentbench.backend.fullname" . }};
+            proxy_ssl_server_name on;
+            proxy_set_header Host $host;
+        }
+
+        location /swagger-ui/ {
+            proxy_pass https://{{ include "agentbench.backend.fullname" . }}:{{ .Values.backend.service.port }}/swagger-ui/;
+            proxy_http_version 1.1;
+            proxy_ssl_certificate     {{ include "agentbench.mtls.mountPath" . }}/tls.crt;
+            proxy_ssl_certificate_key {{ include "agentbench.mtls.mountPath" . }}/tls.key;
+            proxy_ssl_trusted_certificate {{ include "agentbench.mtls.mountPath" . }}/ca.crt;
+            proxy_ssl_verify on;
+            proxy_ssl_name {{ include "agentbench.backend.fullname" . }};
+            proxy_ssl_server_name on;
+            proxy_set_header Host $host;
+        }
+
+        location /swagger-ui.html {
+            proxy_pass https://{{ include "agentbench.backend.fullname" . }}:{{ .Values.backend.service.port }}/swagger-ui.html;
+            proxy_http_version 1.1;
+            proxy_ssl_certificate     {{ include "agentbench.mtls.mountPath" . }}/tls.crt;
+            proxy_ssl_certificate_key {{ include "agentbench.mtls.mountPath" . }}/tls.key;
+            proxy_ssl_trusted_certificate {{ include "agentbench.mtls.mountPath" . }}/ca.crt;
+            proxy_ssl_verify on;
+            proxy_ssl_name {{ include "agentbench.backend.fullname" . }};
+            proxy_ssl_server_name on;
+            proxy_set_header Host $host;
+        }
+
+        location /v3/api-docs {
+            proxy_pass https://{{ include "agentbench.backend.fullname" . }}:{{ .Values.backend.service.port }}/v3/api-docs;
+            proxy_http_version 1.1;
+            proxy_ssl_certificate     {{ include "agentbench.mtls.mountPath" . }}/tls.crt;
+            proxy_ssl_certificate_key {{ include "agentbench.mtls.mountPath" . }}/tls.key;
+            proxy_ssl_trusted_certificate {{ include "agentbench.mtls.mountPath" . }}/ca.crt;
+            proxy_ssl_verify on;
+            proxy_ssl_name {{ include "agentbench.backend.fullname" . }};
+            proxy_ssl_server_name on;
+            proxy_set_header Host $host;
+        }
+    }
+{{- end }}

@@ -28,3 +28,6 @@ frontend/.vite/
 # Test / coverage
 coverage/
 **/jacoco.exec
+
+# Local mTLS openssl output (scripts/helm/generate-mtls-certs.sh)
+.mtls-certs/

@@ -1,6 +1,6 @@
 # AgentBench — Portfolio checklist (honest)
 
-**As of post-M9 public leaderboards + signed embeds/Cache-Control + OIDC + SAML SP SSO + S3-compatible artifact storage + Postgres RLS + WORM/append-only audit storage + measured local k6 smoke + opt-in gVisor + Helm chart + NetworkPolicies + PDF exports.** Marked items are evidenced in `main` / this repo. Deferred items are explicit non-claims.
+**As of post-M9 public leaderboards + signed embeds/Cache-Control + OIDC + SAML SP SSO + S3-compatible artifact storage + Postgres RLS + WORM/append-only audit storage + measured local k6 smoke + opt-in gVisor + Helm chart + NetworkPolicies + optional Helm mTLS + PDF exports.** Marked items are evidenced in `main` / this repo. Deferred items are explicit non-claims.
 
 ## Done (M0–M9 + deferred follow-ups landed)
 
@@ -35,6 +35,7 @@
 | CODING_CLI via RuntimeIsolator | `CodingCliAgentProvider`; config/image/argv; isolator invoke; timeouts; patch capture; `docs/AGENTS_CODING_CLI.md`; residual = Docker/gVisor (not hostile multi-tenant SaaS) |
 | Optional SonarQube/SonarCloud quality path | Default off; report import + Web API client; WireMock/fixture tests; `docs/QUALITY_SONAR.md`; Checkstyle/SpotBugs/PMD remain primary |
 | WORM / append-only audit storage | Flyway V15; deny UPDATE/DELETE triggers + `agentbench_app` INSERT/SELECT-only on `evaluation_state_transitions` + `platform.worm_audit_events`; per-org SHA-256 hash chain; dual-write from transitions; `WormAuditImmutabilityTest`; `docs/AUDIT_WORM.md` — **residual:** not AWS Object Lock / Compliance mode; superuser can disable triggers |
+| Optional mTLS between services (Helm/K8s) | Helm `mtls.*` (default off); cert-manager Certificates **or** `scripts/helm/generate-mtls-certs.sh`; Spring Boot PEM SSL on API/worker; frontend nginx HTTPS proxy overlay; `docs/DEPLOYMENT.md` §3d — **residual:** not a service mesh; not AMQPS; Mac Compose stays non-mTLS; not certified SaaS |
 
 ## Deferred / not claimed
 
@@ -48,7 +49,7 @@
 | Live public hosted demo on Oracle Always Free | **Guide-ready** (`docs/DEPLOYMENT_ORACLE_ALWAYS_FREE.md`) — **not actually hosted** until Sai’s VM + SSH apply the runbook |
 | Sonar as sole scoring authority | **Not claimed** — optional Sonar integration landed; primary tools remain Checkstyle/SpotBugs/PMD |
 | Full hostile multi-tenant CODING_CLI / untrusted public CLI images | **Not claimed** — isolator-backed CODING_CLI landed; residual matches RuntimeIsolator; no Firecracker |
-| mTLS between services | **Deferred** — NetworkPolicies are L3/L4 only |
+| Full service-mesh mTLS product (Istio/Linkerd) / AMQPS for RabbitMQ | **Not claimed** — optional app-level Helm mTLS landed for HTTP surfaces; queue and mesh remain out of scope |
 | AWS S3 Object Lock / Compliance-mode WORM | **Not claimed** — Postgres append-only + hash chain landed; Object Lock can be layered later (`docs/AUDIT_WORM.md`) |
 | Full CDN / edge network product | **Not claimed** — Cache-Control + ETag are CDN-friendly; no managed CDN required or asserted |
 | Anonymous write / vote / comment on public boards | **Not claimed** — read-only public GET / signed embed reads |

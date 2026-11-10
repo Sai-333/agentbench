@@ -47,6 +47,9 @@ spec:
               value: worker
             - name: AGENTBENCH_EVAL_LISTENER_ENABLED
               value: "true"
+            {{- if .Values.mtls.enabled }}
+            {{- include "agentbench.mtls.springSslEnv" . | nindent 12 }}
+            {{- end }}
             {{- with .Values.worker.extraEnv }}
             {{- toYaml . | nindent 12 }}
             {{- end }}
@@ -54,12 +57,18 @@ spec:
             httpGet:
               path: /actuator/health/readiness
               port: http
+              {{- if .Values.mtls.enabled }}
+              scheme: HTTPS
+              {{- end }}
             initialDelaySeconds: 20
             periodSeconds: 10
           livenessProbe:
             httpGet:
               path: /actuator/health/liveness
               port: http
+              {{- if .Values.mtls.enabled }}
+              scheme: HTTPS
+              {{- end }}
             initialDelaySeconds: 40
             periodSeconds: 20
           resources:
@@ -71,6 +80,11 @@ spec:
           volumeMounts:
             - name: artifacts
               mountPath: /var/agentbench/artifacts
+            {{- if .Values.mtls.enabled }}
+            - name: mtls
+              mountPath: {{ include "agentbench.mtls.mountPath" . }}
+              readOnly: true
+            {{- end }}
             {{- if .Values.worker.dockerSock.enabled }}
             # DO NOT mount docker.sock into evaluation containers.
             # Mount ONLY on the worker, on a trusted node pool.
@@ -80,6 +94,18 @@ spec:
       volumes:
         - name: artifacts
           emptyDir: {}
+        {{- if .Values.mtls.enabled }}
+        - name: mtls
+          secret:
+            secretName: {{ include "agentbench.mtls.workerSecretName" . }}
+            items:
+              - key: tls.crt
+                path: tls.crt
+              - key: tls.key
+                path: tls.key
+              - key: ca.crt
+                path: ca.crt
+        {{- end }}
         {{- if .Values.worker.dockerSock.enabled }}
         - name: docker-sock
           hostPath:

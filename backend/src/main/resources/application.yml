@@ -47,6 +47,14 @@ server:
   port: ${SERVER_PORT:8080}
   # Finish in-flight HTTP requests on SIGTERM (Compose/K8s rolling updates).
   shutdown: graceful
+  # Optional PEM TLS for Helm east-west mTLS (default off — Mac Compose stays plaintext).
+  # Chart sets SERVER_SSL_* when mtls.enabled=true. See docs/DEPLOYMENT.md §3d.
+  ssl:
+    enabled: ${SERVER_SSL_ENABLED:false}
+    certificate: ${SERVER_SSL_CERTIFICATE:}
+    certificate-private-key: ${SERVER_SSL_CERTIFICATE_PRIVATE_KEY:}
+    trust-certificate: ${SERVER_SSL_TRUST_CERTIFICATE:}
+    client-auth: ${SERVER_SSL_CLIENT_AUTH:none}
 
 management:
   endpoints:

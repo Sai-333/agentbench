@@ -155,8 +155,34 @@ ingress:
   #     - agentbench.local
 
 # ---------------------------------------------------------------------------
+# Optional east-west mTLS (API / worker / frontend proxy) — OFF by default.
+# Mac Docker Compose stays plaintext. Not a service mesh product.
+# See docs/DEPLOYMENT.md §3d and chart README.
+# ---------------------------------------------------------------------------
+mtls:
+  enabled: false
+  # Spring Boot server.ssl.client-auth: want (default) keeps kubelet httpsGet
+  # probes working without a client cert. Use need only with careful probe changes.
+  clientAuth: want
+  mountPath: /var/agentbench/tls
+  # When true, render cert-manager Issuer + Certificate resources (cluster must
+  # have cert-manager). CI/smoke only templates; no live cluster required.
+  certManager:
+    enabled: false
+    # Duration strings passed through to Certificate.spec
+    duration: 2160h    # 90d
+    renewBefore: 360h  # 15d
+  # Override Secret names (defaults: <release>-mtls-{ca,backend,worker,frontend}).
+  # openssl path: ./scripts/helm/generate-mtls-certs.sh --namespace … --apply
+  secrets:
+    ca: ""
+    backend: ""
+    worker: ""
+    frontend: ""
+
+# ---------------------------------------------------------------------------
 # NetworkPolicies (default-deny + allow-needed)
-# Requires a NetworkPolicy-enforcing CNI. Not mTLS / not WORM.
+# Requires a NetworkPolicy-enforcing CNI. L3/L4 only — pair with mtls.* for TLS.
 # Disable with --set networkPolicy.enabled=false
 # ---------------------------------------------------------------------------
 networkPolicy:

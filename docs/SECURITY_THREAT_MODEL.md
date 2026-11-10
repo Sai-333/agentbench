@@ -51,7 +51,7 @@
 
 | Threat | Example | Mitigation (v1 / M7–M9) | Later |
 |---|---|---|---|
-| **Spoofing** | Stolen JWT / agent callback token | Short-lived JWT; optional Google/GitHub OIDC + SAML SP; rotate agent secrets; TLS at edge | Multi-IdP SAML admin UI + mTLS to workers |
+| **Spoofing** | Stolen JWT / agent callback token | Short-lived JWT; optional Google/GitHub OIDC + SAML SP; rotate agent secrets; TLS at edge; optional Helm east-west mTLS (`mtls.enabled`) | Multi-IdP SAML admin UI; mesh / AMQPS |
 | **Tampering** | Mutate sealed patch mid-run | Content digest; seal flag; immutable storage | Signed artifacts |
 | **Repudiation** | Deny hidden-test access | Audit log for suite reads & state transitions; Postgres WORM triggers + hash chain (`docs/AUDIT_WORM.md`) | S3 Object Lock export |
 | **Info disclosure** | Hidden tests in agent prompt / logs | Separate stages; DTO filtering; `SecretRedactor`; RBAC | Dedicated hidden runner pool |
@@ -141,7 +141,7 @@ Shared-kernel breakout residual risk remains on the default path. Prefer **`agen
 | LLM provider stores prompts | Prefer self-hosted or enterprise no-retention contracts |
 | Author malice within own org | Org trust boundary; cannot fully prevent |
 | Local isolator fallback | Used when Docker unavailable (CI); not a security boundary |
-| K8s NetworkPolicy residual / mTLS absent | NetworkPolicies ship (default-deny + allow-needed); still L3/L4 only — tighten CIDRs before hostile multi-tenant; mTLS deferred |
+| K8s NetworkPolicy / mTLS residual | NetworkPolicies ship (L3/L4); optional Helm mTLS for HTTP (API/worker/frontend proxy) — not a mesh, not AMQPS; default `clientAuth=want`; Mac Compose plaintext |
 | WORM residual (not Object Lock) | Append-only triggers + hash chain on audit tables; app role cannot UPDATE/DELETE; superuser can still disable triggers; AWS Object Lock not wired |
 | AES secret-key rotation not automated | Dual-key re-encrypt before rotating encryption keys |
 | Multi-IdP SAML admin UI absent; public boards opt-in only | Google/GitHub OIDC + config-driven SAML SP optional; public leaderboards require OWNER/ADMIN publish + sanitized payload; embeds need HMAC token + expiry |

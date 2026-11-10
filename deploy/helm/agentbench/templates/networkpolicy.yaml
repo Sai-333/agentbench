@@ -2,7 +2,7 @@
 {{- /*
   Default-deny for all release pods, then component allow-lists.
   Requires a CNI that enforces NetworkPolicy (Calico, Cilium, etc.).
-  Not mTLS and not a WORM audit trail — see docs/DEPLOYMENT.md §3c.
+  L3/L4 only. Optional app-level mTLS is separate (mtls.enabled) — see docs/DEPLOYMENT.md §3d.
 */ -}}
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
@@ -247,7 +247,21 @@ spec:
       from:
         {{- toYaml . | nindent 8 }}
       {{- end }}
+  {{- if .Values.mtls.enabled }}
+  # When mTLS is on, allow nginx in-cluster proxy to the backend Service.
+  # Prefer Ingress path-splitting (/api → backend) when possible.
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              {{- include "agentbench.selectorLabels" . | nindent 14 }}
+              app.kubernetes.io/component: backend
+      ports:
+        - protocol: TCP
+          port: 8080
+  {{- else }}
   # Static UI: DNS only (handled by allow-dns). No data-plane egress.
+  {{- end }}
 ---
 {{- end }}
 {{- if .Values.dependencies.postgres.enabled }}

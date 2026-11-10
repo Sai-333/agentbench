@@ -103,3 +103,42 @@ Postgres service host when in-cluster deps enabled
 {{- /* host embedded in config.datasourceUrl by operator */ -}}
 {{- end }}
 {{- end }}
+
+{{/*
+mTLS secret names (cert-manager or openssl script)
+*/}}
+{{- define "agentbench.mtls.caSecretName" -}}
+{{- default (printf "%s-mtls-ca" (include "agentbench.fullname" .)) .Values.mtls.secrets.ca }}
+{{- end }}
+
+{{- define "agentbench.mtls.backendSecretName" -}}
+{{- default (printf "%s-mtls-backend" (include "agentbench.fullname" .)) .Values.mtls.secrets.backend }}
+{{- end }}
+
+{{- define "agentbench.mtls.workerSecretName" -}}
+{{- default (printf "%s-mtls-worker" (include "agentbench.fullname" .)) .Values.mtls.secrets.worker }}
+{{- end }}
+
+{{- define "agentbench.mtls.frontendSecretName" -}}
+{{- default (printf "%s-mtls-frontend" (include "agentbench.fullname" .)) .Values.mtls.secrets.frontend }}
+{{- end }}
+
+{{- define "agentbench.mtls.mountPath" -}}
+{{- default "/var/agentbench/tls" .Values.mtls.mountPath }}
+{{- end }}
+
+{{/*
+Spring Boot PEM SSL env block for API/worker when mtls.enabled
+*/}}
+{{- define "agentbench.mtls.springSslEnv" -}}
+- name: SERVER_SSL_ENABLED
+  value: "true"
+- name: SERVER_SSL_CERTIFICATE
+  value: {{ printf "file:%s/tls.crt" (include "agentbench.mtls.mountPath" .) | quote }}
+- name: SERVER_SSL_CERTIFICATE_PRIVATE_KEY
+  value: {{ printf "file:%s/tls.key" (include "agentbench.mtls.mountPath" .) | quote }}
+- name: SERVER_SSL_TRUST_CERTIFICATE
+  value: {{ printf "file:%s/ca.crt" (include "agentbench.mtls.mountPath" .) | quote }}
+- name: SERVER_SSL_CLIENT_AUTH
+  value: {{ .Values.mtls.clientAuth | quote }}
+{{- end }}
