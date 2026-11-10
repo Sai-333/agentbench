@@ -11,6 +11,7 @@ import com.agentbench.execution.domain.IsolationSpec;
 import com.agentbench.execution.domain.RuntimeIsolator;
 import com.agentbench.execution.service.DockerRuntimeIsolator;
 import com.agentbench.execution.service.ExecutionIsolatorService;
+import com.agentbench.execution.service.FirecrackerRuntimeIsolator;
 import com.agentbench.execution.service.GvisorRuntimeIsolator;
 import com.agentbench.execution.service.LocalRuntimeIsolator;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -52,6 +53,8 @@ class CodingCliAgentProviderTest {
         provider = new CodingCliAgentProvider(objectMapper, new ExecutionIsolatorService(
                 new DockerRuntimeIsolator(props),
                 new GvisorRuntimeIsolator(props, new DockerRuntimeIsolator(props),
+                        (c, t) -> com.agentbench.execution.service.HostCommandExecutor.Result.failedToStart("n/a")),
+                new FirecrackerRuntimeIsolator(props,
                         (c, t) -> com.agentbench.execution.service.HostCommandExecutor.Result.failedToStart("n/a")),
                 new LocalRuntimeIsolator(),
                 props
@@ -240,6 +243,8 @@ class CodingCliAgentProviderTest {
                 new DockerRuntimeIsolator(props),
                 new GvisorRuntimeIsolator(props, new DockerRuntimeIsolator(props),
                         (c, t) -> com.agentbench.execution.service.HostCommandExecutor.Result.failedToStart("n/a")),
+                new FirecrackerRuntimeIsolator(props,
+                        (c, t) -> com.agentbench.execution.service.HostCommandExecutor.Result.failedToStart("n/a")),
                 new LocalRuntimeIsolator(),
                 props
         );
@@ -276,6 +281,8 @@ class CodingCliAgentProviderTest {
         ExecutionIsolatorService service = new ExecutionIsolatorService(
                 docker,
                 new GvisorRuntimeIsolator(props, docker,
+                        (c, t) -> com.agentbench.execution.service.HostCommandExecutor.Result.failedToStart("n/a")),
+                new FirecrackerRuntimeIsolator(props,
                         (c, t) -> com.agentbench.execution.service.HostCommandExecutor.Result.failedToStart("n/a")),
                 new LocalRuntimeIsolator(),
                 props

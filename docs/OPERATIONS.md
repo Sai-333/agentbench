@@ -81,6 +81,7 @@ Manual trigger is the Spring bean `ArtifactRetentionService#sweep` (no public HT
 |---|---|---|
 | `docker` (default) | Mac Compose, trusted demos | Falls back to `local` process isolator |
 | `gvisor` | Linux Docker host with gVisor `runsc` registered | **Fail-fast** — clear error; set `AGENTBENCH_EXECUTION_MODE=docker` or `local` |
+| `firecracker` | Linux host with KVM + Firecracker (+ documented wrapper) | **Fail-fast** — clear error; never claim a live microVM without detection |
 | `local` | CI / unit tests without a daemon | Always available; **not** a security boundary |
 
 ```bash
@@ -89,9 +90,16 @@ export AGENTBENCH_EXECUTION_MODE=gvisor
 # Optional overrides:
 # export AGENTBENCH_GVISOR_RUNTIME=runsc
 # export AGENTBENCH_RUNSC_BINARY=runsc
+
+# Linux+KVM worker with Firecracker (see scripts/firecracker/agentbench-fc-run.sh):
+# ln -s "$(pwd)/scripts/firecracker/agentbench-fc-run.sh" /usr/local/bin/agentbench-fc-run
+# export AGENTBENCH_FC_KERNEL=/path/to/vmlinux
+# export AGENTBENCH_FC_ROOTFS=/path/to/rootfs.ext4
+export AGENTBENCH_EXECUTION_MODE=firecracker
+# Optional: AGENTBENCH_FIRECRACKER_USE_JAILER=true, AGENTBENCH_JAILER_BINARY=jailer
 ```
 
-See [ADR-004](./ARCHITECTURE_DECISIONS/ADR-004-docker-first-isolation.md). Do not change the Mac Compose default away from Docker.
+See [ADR-004](./ARCHITECTURE_DECISIONS/ADR-004-docker-first-isolation.md). Do not change the Mac Compose default away from Docker. Residual: Firecracker opt-in is not a certified multi-tenant SaaS claim.
 
 ## Secret rotation
 

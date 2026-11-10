@@ -4,8 +4,9 @@ import java.time.Duration;
 import java.util.List;
 
 /**
- * Thin wrapper around host process execution so isolators can probe {@code docker}/{@code runsc}
- * and run containers without binding tests to a real daemon.
+ * Thin wrapper around host process execution so isolators can probe
+ * {@code docker}/{@code runsc}/{@code firecracker}/KVM and run workloads without binding
+ * tests to a real daemon or microVM.
  */
 public interface HostCommandExecutor {
 

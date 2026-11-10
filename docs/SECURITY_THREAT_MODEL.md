@@ -56,7 +56,7 @@
 | **Repudiation** | Deny hidden-test access | Audit log for suite reads & state transitions; Postgres WORM triggers + hash chain (`docs/AUDIT_WORM.md`) | S3 Object Lock export |
 | **Info disclosure** | Hidden tests in agent prompt / logs | Separate stages; DTO filtering; `SecretRedactor`; RBAC | Dedicated hidden runner pool |
 | **DoS** | Fork bomb / disk fill in container | Docker CPU/mem/pids/ulimit; timeouts; org quotas; DLQ | cgroup v2 + fair share |
-| **Elevation** | Escape to host via Docker | No docker.sock in workload; non-root; dropped caps; read-only root FS; optional `mode=gvisor` (`--runtime=runsc`) | Firecracker (deferred); certified multi-tenant bar |
+| **Elevation** | Escape to host via Docker | No docker.sock in workload; non-root; dropped caps; read-only root FS; optional `mode=gvisor` (`--runtime=runsc`) or `mode=firecracker` (Linux+KVM) | Certified multi-tenant SaaS bar |
 
 ---
 
@@ -80,7 +80,7 @@
 ## 6. Explicit non-claim (mandatory)
 
 **Docker-only isolation is NOT production-safe for arbitrary untrusted workloads.**  
-Shared-kernel breakout residual risk remains on the default path. Prefer **`agentbench.execution.mode=gvisor`** on Linux hosts with `runsc` for stronger user-space kernel isolation (ADR-004). gVisor is **opt-in and fail-fast** when unavailable; Mac Compose stays on Docker. **Firecracker is not implemented.** Neither Docker nor gVisor is claimed as certified hostile multi-tenant SaaS security. **CODING_CLI** runs inside the same isolator (not host shell); residual risk matches the active runtime — do not treat CLI agents as a stronger boundary than Docker/gVisor.
+Shared-kernel breakout residual risk remains on the default path. Prefer **`agentbench.execution.mode=gvisor`** on Linux hosts with `runsc`, or **`mode=firecracker`** on Linux+KVM hosts, for stronger isolation (ADR-004). Both are **opt-in and fail-fast** when tooling is unavailable; Mac Compose stays on Docker. Firecracker opt-in is landed behind `RuntimeIsolator` but **still requires a KVM host** and is **not** a certified multi-tenant SaaS claim. **CODING_CLI** runs inside the same isolator (not host shell); residual risk matches the active runtime.
 
 ---
 
@@ -135,9 +135,9 @@ Shared-kernel breakout residual risk remains on the default path. Prefer **`agen
 
 | Risk | Acceptance |
 |---|---|
-| Docker breakout on shared kernel | Lab / trusted authors only; enable `mode=gvisor` on Linux+runsc when stronger isolation is required |
+| Docker breakout on shared kernel | Lab / trusted authors only; enable `mode=gvisor` (Linux+runsc) or `mode=firecracker` (Linux+KVM) when stronger isolation is required |
 | gVisor residual / misconfiguration | Fail-fast if `mode=gvisor` but runsc missing; still not a formal certification |
-| Firecracker absent | Deferred; gVisor preferred for this milestone |
+| Firecracker residual / needs KVM host | Opt-in landed; fail-fast without firecracker/KVM/wrapper; guest kernel+rootfs operator-supplied; not certified multi-tenant SaaS |
 | LLM provider stores prompts | Prefer self-hosted or enterprise no-retention contracts |
 | Author malice within own org | Org trust boundary; cannot fully prevent |
 | Local isolator fallback | Used when Docker unavailable (CI); not a security boundary |
@@ -153,6 +153,7 @@ Shared-kernel breakout residual risk remains on the default path. Prefer **`agen
 - Patch path traversal / `.git/hooks` / absolute path negative tests.
 - Docker command builder asserts: no privileged, no docker.sock, network none, non-root, limits.
 - gVisor command builder asserts `--runtime=runsc` plus the same hardening; fail-fast when mode=gvisor and probes miss.
+- Firecracker wrapper command builder asserts documented `agentbench-fc-run` contract; fail-fast when mode=firecracker and firecracker/KVM/wrapper probes miss; live smoke `@EnabledIf` only.
 - Secret redaction unit tests.
 - RestAssured/MockMvc IDOR suites (org authorization regression).
 - Quality parsers + new-vs-pre-existing aggregation tests.

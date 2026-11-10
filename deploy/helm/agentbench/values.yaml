@@ -96,11 +96,16 @@ config:
   rabbitmqUsername: "agentbench"
   artifactsRoot: "/var/agentbench/artifacts"
   artifactStorage: "local"
-  # docker (default) | gvisor (requires runsc on nodes) | local (CI only)
+  # docker (default) | gvisor (requires runsc) | firecracker (requires KVM+wrapper) | local (CI only)
   executionMode: "docker"
   dockerEnabled: "true"
   gvisorRuntime: "runsc"
   runscBinary: "runsc"
+  firecrackerWrapper: "agentbench-fc-run"
+  firecrackerBinary: "firecracker"
+  jailerBinary: "jailer"
+  firecrackerUseJailer: "false"
+  kvmDevice: "/dev/kvm"
   githubValidationEnabled: "false"
   oidcGoogleEnabled: "false"
   oidcGithubEnabled: "false"

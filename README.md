@@ -3,7 +3,7 @@
 Multi-tenant platform for evaluating coding agents against versioned benchmarks with visible and hidden tests.
 
 **Current milestone:** M9 — Production readiness (final planned milestone).  
-**Honesty:** Default Docker isolation remains lab/demo grade for untrusted workloads; optional Linux gVisor (`runsc`) is available behind `RuntimeIsolator` — see [docs/PORTFOLIO_CHECKLIST.md](docs/PORTFOLIO_CHECKLIST.md) and ADR-004.
+**Honesty:** Default Docker isolation remains lab/demo grade for untrusted workloads; optional Linux gVisor (`runsc`) and Firecracker (Linux+KVM) are available behind `RuntimeIsolator` — see [docs/PORTFOLIO_CHECKLIST.md](docs/PORTFOLIO_CHECKLIST.md) and ADR-004.
 
 ## Clone → Compose → demo
 
@@ -63,7 +63,7 @@ Single-host Ampere A1 runbook (VM shape, ports, Docker, secrets, health checks, 
 | API docs | springdoc OpenAPI + Swagger UI |
 | Local runtime | Docker Compose (+ `docker-compose.prod.yml`) |
 | Artifacts | `ArtifactStorage`: local volume (default) or S3-compatible (`ARTIFACT_STORAGE=s3`, Compose `--profile s3` / MinIO) |
-| Eval isolation | Hardened Docker via `RuntimeIsolator` (default); optional `mode=gvisor` (`docker --runtime=runsc`); local CI fallback |
+| Eval isolation | Hardened Docker via `RuntimeIsolator` (default); optional `mode=gvisor` (`docker --runtime=runsc`) or `mode=firecracker` (Linux+KVM); local CI fallback |
 | K8s | Templates under `deploy/kubernetes/` (incl. NetworkPolicies); Helm chart `deploy/helm/agentbench/` (optional `mtls.*`; no real secrets; not operators; not a service mesh) |
 
 ## Architecture
@@ -92,7 +92,7 @@ Roles (org-scoped): `OWNER`, `ADMIN`, `DEVELOPER`, `VIEWER`.
 | Ops | Backup / migrate / upgrade / DLQ snippets in `docs/OPERATIONS.md` |
 | Portfolio | Honest done vs deferred checklist |
 
-**Explicit non-claims:** no Firecracker; gVisor is **opt-in on Linux with runsc** (not Mac Compose default; not a certified hostile multi-tenant claim). SAML SP login is optional (`docs/AUTH_SAML.md`) — **no multi-IdP admin UI**. Postgres RLS is defense-in-depth beside app-layer org filters (`docs/POSTGRES_RLS.md`). Public leaderboards are **opt-in** (OWNER/ADMIN publish; org-private default) with optional HMAC-signed embeds + Cache-Control (`docs/PUBLIC_LEADERBOARDS.md`) — no managed CDN or anonymous writes claimed. Google/GitHub OIDC is optional beside local JWT (see `docs/AUTH_OIDC.md`). **CODING_CLI** is isolator-backed (`docs/AGENTS_CODING_CLI.md`) — not a certified hostile multi-tenant CLI sandbox. Optional Sonar is **not** the sole scoring authority (`docs/QUALITY_SONAR.md`).
+**Explicit non-claims:** gVisor and Firecracker are **opt-in** (Linux+runsc / Linux+KVM; not Mac Compose default; not a certified hostile multi-tenant claim). Firecracker still needs a KVM host + guest assets (`scripts/firecracker/`). SAML SP login is optional (`docs/AUTH_SAML.md`) — **no multi-IdP admin UI**. Postgres RLS is defense-in-depth beside app-layer org filters (`docs/POSTGRES_RLS.md`). Public leaderboards are **opt-in** (OWNER/ADMIN publish; org-private default) with optional HMAC-signed embeds + Cache-Control (`docs/PUBLIC_LEADERBOARDS.md`) — no managed CDN or anonymous writes claimed. Google/GitHub OIDC is optional beside local JWT (see `docs/AUTH_OIDC.md`). **CODING_CLI** is isolator-backed (`docs/AGENTS_CODING_CLI.md`) — not a certified hostile multi-tenant CLI sandbox. Optional Sonar is **not** the sole scoring authority (`docs/QUALITY_SONAR.md`).
 
 ### Optional MinIO artifact store
 
@@ -136,7 +136,7 @@ Notable variables:
 
 - `AGENTBENCH_JWT_SECRET` (≥ 32 chars)
 - `AGENTBENCH_SECRETS_ENCRYPTION_KEY` (base64 32-byte AES key)
-- `AGENTBENCH_EXECUTION_MODE` (`docker` \| `gvisor` \| `local`) — default `docker`; `gvisor` fail-fast without runsc
+- `AGENTBENCH_EXECUTION_MODE` (`docker` \| `gvisor` \| `firecracker` \| `local`) — default `docker`; `gvisor`/`firecracker` fail-fast without tooling/KVM
 - `AGENTBENCH_GVISOR_RUNTIME` / `AGENTBENCH_RUNSC_BINARY` (Linux gVisor; defaults `runsc`)
 - `AGENTBENCH_RUNNER_IMAGE` / `AGENTBENCH_RUNNER_IMAGE_DIGEST`
 - `AGENTBENCH_EXEC_MEMORY_MB` / `AGENTBENCH_EXEC_CPU` / `AGENTBENCH_EXEC_PIDS` / `AGENTBENCH_EXEC_TIMEOUT_SEC`
@@ -189,7 +189,7 @@ echo '{"min-api-version":"1.24"}' | sudo tee /etc/docker/daemon.json
 - Hidden suite fixtures are RBAC-gated; agent-facing projections never include them.
 - Org isolation is enforced in the application/repository layer, with Postgres RLS as defense-in-depth (`docs/POSTGRES_RLS.md`).
 - Evaluation containers never receive `docker.sock` or `--privileged`.
-- Docker-only is lab/demo grade until gVisor/Firecracker (see threat model).
+- Docker-only is lab/demo grade; prefer opt-in gVisor or Firecracker on suitable Linux hosts (see threat model / ADR-004).
 
 ## License
 

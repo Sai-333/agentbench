@@ -6,8 +6,9 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * Hardened execution defaults for evaluation workers (Milestone 7+).
  *
  * <p><strong>Docker-only isolation is not production-safe for arbitrary untrusted workloads.</strong>
- * Prefer {@code mode=gvisor} on Linux hosts with runsc when stronger sandboxing is required
- * (ADR-004). Firecracker is not implemented in this codebase.
+ * Prefer {@code mode=gvisor} on Linux hosts with runsc, or {@code mode=firecracker} on Linux+KVM
+ * hosts when stronger sandboxing is required (ADR-004). Firecracker is opt-in and fail-fast;
+ * Mac Compose stays on Docker. Not a certified multi-tenant SaaS claim.
  */
 @ConfigurationProperties(prefix = "agentbench.execution")
 public class ExecutionProperties {
@@ -17,6 +18,8 @@ public class ExecutionProperties {
      * <ul>
      *   <li>{@code docker} — hardened Docker Engine (default; Mac Compose / trusted demos)</li>
      *   <li>{@code gvisor} — Docker {@code --runtime=runsc}; fail-fast if runsc unavailable</li>
+     *   <li>{@code firecracker} — microVM via documented wrapper + firecracker/jailer;
+     *       fail-fast without binary/KVM</li>
      *   <li>{@code local} — host-process fallback (CI only; not a security boundary)</li>
      * </ul>
      */
@@ -52,6 +55,24 @@ public class ExecutionProperties {
 
     /** Host binary used to probe gVisor availability ({@code runsc --version}). */
     private String runscBinary = "runsc";
+
+    /**
+     * Documented wrapper invoked for Firecracker runs (default {@code agentbench-fc-run}).
+     * See {@code scripts/firecracker/agentbench-fc-run.sh}.
+     */
+    private String firecrackerWrapper = "agentbench-fc-run";
+
+    /** Host Firecracker binary probed via {@code firecracker --version}. */
+    private String firecrackerBinary = "firecracker";
+
+    /** Optional jailer binary when {@link #firecrackerUseJailer} is true. */
+    private String jailerBinary = "jailer";
+
+    /** When true, availability also requires jailer and the wrapper is passed {@code --use-jailer}. */
+    private boolean firecrackerUseJailer = false;
+
+    /** Character device probed for KVM (typically {@code /dev/kvm}). */
+    private String kvmDevice = "/dev/kvm";
 
     public String getMode() {
         return mode;
@@ -173,8 +194,52 @@ public class ExecutionProperties {
         this.runscBinary = runscBinary;
     }
 
+    public String getFirecrackerWrapper() {
+        return firecrackerWrapper;
+    }
+
+    public void setFirecrackerWrapper(String firecrackerWrapper) {
+        this.firecrackerWrapper = firecrackerWrapper;
+    }
+
+    public String getFirecrackerBinary() {
+        return firecrackerBinary;
+    }
+
+    public void setFirecrackerBinary(String firecrackerBinary) {
+        this.firecrackerBinary = firecrackerBinary;
+    }
+
+    public String getJailerBinary() {
+        return jailerBinary;
+    }
+
+    public void setJailerBinary(String jailerBinary) {
+        this.jailerBinary = jailerBinary;
+    }
+
+    public boolean isFirecrackerUseJailer() {
+        return firecrackerUseJailer;
+    }
+
+    public void setFirecrackerUseJailer(boolean firecrackerUseJailer) {
+        this.firecrackerUseJailer = firecrackerUseJailer;
+    }
+
+    public String getKvmDevice() {
+        return kvmDevice;
+    }
+
+    public void setKvmDevice(String kvmDevice) {
+        this.kvmDevice = kvmDevice;
+    }
+
     public boolean isGvisorMode() {
         return "gvisor".equalsIgnoreCase(mode);
+    }
+
+    public boolean isFirecrackerMode() {
+        return "firecracker".equalsIgnoreCase(mode);
     }
 
     public boolean isLocalMode() {
