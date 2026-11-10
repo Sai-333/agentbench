@@ -20,16 +20,23 @@ import java.util.Set;
 
 /**
  * Runs Checkstyle + SpotBugs + PMD analysis (XML when present, else builtin heuristics),
- * separates pre-existing vs newly introduced findings, and computes an honest normalized score.
- * Sonar remains an optional stub and does not contribute to the score.
+ * optionally merges Sonar findings when configured, separates pre-existing vs newly introduced
+ * findings, and computes an honest normalized score.
+ *
+ * <p>Checkstyle / SpotBugs / PMD remain the primary local tools. Sonar is optional and never
+ * claimed as the sole scoring authority.
  */
 @Service
 public class QualityAnalysisService {
 
     private final ObjectMapper objectMapper;
+    private final SonarQualityAnalyzer sonarQualityAnalyzer;
 
-    public QualityAnalysisService(ObjectMapper objectMapper) {
+    public QualityAnalysisService(ObjectMapper objectMapper, SonarQualityAnalyzer sonarQualityAnalyzer) {
         this.objectMapper = objectMapper;
+        this.sonarQualityAnalyzer = sonarQualityAnalyzer == null
+                ? SonarQualityAnalyzer.disabled()
+                : sonarQualityAnalyzer;
     }
 
     public AggregatedQuality analyze(Path baselineWorkspace, Path patchedWorkspace) {
@@ -41,10 +48,17 @@ public class QualityAnalysisService {
         Map<String, List<QualityFinding>> preExistingByTool = new LinkedHashMap<>();
         Map<String, List<QualityFinding>> allPostByTool = new LinkedHashMap<>();
 
+        QualityToolReport sonarPost = null;
         boolean anyReal = false;
+        boolean sonarReal = false;
         for (QualityToolReport report : postReports) {
-            if ("sonar".equals(report.tool())) {
-                continue; // never scores
+            if (SonarIssuesParser.TOOL.equals(report.tool())) {
+                sonarPost = report;
+                if (report.stub()) {
+                    // Disabled / unconfigured Sonar stays out of scoring aggregates.
+                    continue;
+                }
+                sonarReal = true;
             }
             if (!report.stub()) {
                 anyReal = true;
@@ -64,11 +78,15 @@ public class QualityAnalysisService {
             allPostByTool.put(report.tool(), report.findings());
         }
 
+        if (sonarPost == null) {
+            sonarPost = QualityToolReport.stub(SonarIssuesParser.TOOL, "sonar_missing");
+        }
+
         int newCount = newByTool.values().stream().mapToInt(List::size).sum();
         int preCount = preExistingByTool.values().stream().mapToInt(List::size).sum();
         int postCount = allPostByTool.values().stream().mapToInt(List::size).sum();
         int baselineCount = baselineReports.stream()
-                .filter(r -> !"sonar".equals(r.tool()))
+                .filter(r -> !SonarIssuesParser.TOOL.equals(r.tool()) || !r.stub())
                 .mapToInt(r -> r.findings().size())
                 .sum();
 
@@ -91,6 +109,8 @@ public class QualityAnalysisService {
         metrics.put("preExistingFindingCount", preCount);
         metrics.put("postFindingCount", postCount);
         metrics.put("baselineFindingCount", baselineCount);
+        metrics.put("sonarEnabled", sonarQualityAnalyzer.isEnabled());
+        metrics.put("sonarContributed", sonarReal);
         if (normalized != null) {
             metrics.put("normalizedScore", normalized);
         } else {
@@ -98,10 +118,17 @@ public class QualityAnalysisService {
             metrics.put("reason", "no_real_tool_results");
         }
         metrics.set("tools", toToolArray(postReports, newByTool, preExistingByTool));
-        metrics.set("sonar", toolNode(SonarQualityAnalyzerStub.analyzePlaceholder(), List.of(), List.of()));
+        metrics.set("sonar", toolNode(
+                sonarPost,
+                newByTool.getOrDefault(SonarIssuesParser.TOOL, List.of()),
+                preExistingByTool.getOrDefault(SonarIssuesParser.TOOL, List.of())));
+
+        String toolLabel = sonarReal
+                ? "checkstyle+spotbugs+pmd+sonar"
+                : "checkstyle+spotbugs+pmd";
 
         return new AggregatedQuality(
-                "checkstyle+spotbugs+pmd",
+                toolLabel,
                 write(metrics),
                 normalized,
                 anyReal,
@@ -112,6 +139,7 @@ public class QualityAnalysisService {
 
     /**
      * Prefer XML reports under conventional paths; otherwise run builtin heuristics.
+     * Sonar is optional (report import or API) and disabled by default.
      */
     public List<QualityToolReport> collectReports(Path workspace) {
         List<QualityToolReport> reports = new ArrayList<>();
@@ -119,7 +147,7 @@ public class QualityAnalysisService {
             reports.add(QualityToolReport.stub("checkstyle", "workspace_missing"));
             reports.add(QualityToolReport.stub("pmd", "workspace_missing"));
             reports.add(QualityToolReport.stub("spotbugs", "workspace_missing"));
-            reports.add(SonarQualityAnalyzerStub.analyzePlaceholder());
+            reports.add(sonarQualityAnalyzer.analyze(workspace));
             return reports;
         }
 
@@ -163,7 +191,7 @@ public class QualityAnalysisService {
                 reports.add(QualityToolReport.stub("spotbugs", "xml_missing"));
             }
         }
-        reports.add(SonarQualityAnalyzerStub.analyzePlaceholder());
+        reports.add(sonarQualityAnalyzer.analyze(workspace));
         return reports;
     }
 
@@ -173,7 +201,7 @@ public class QualityAnalysisService {
             Map<String, List<QualityFinding>> preExistingByTool) {
         ArrayNode array = objectMapper.createArrayNode();
         for (QualityToolReport report : postReports) {
-            if ("sonar".equals(report.tool())) {
+            if (SonarIssuesParser.TOOL.equals(report.tool())) {
                 continue;
             }
             array.add(toolNode(

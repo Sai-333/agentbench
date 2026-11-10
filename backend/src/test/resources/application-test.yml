@@ -46,6 +46,12 @@ agentbench:
   github:
     token:
     validation-enabled: false
+  quality:
+    sonar:
+      enabled: false
+      base-url:
+      token:
+      project-key:
 
 logging:
   level:

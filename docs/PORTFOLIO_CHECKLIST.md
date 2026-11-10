@@ -31,6 +31,7 @@
 | Postgres RLS defense-in-depth | Flyway V12; `agentbench_app` + session GUC; `PostgresRlsIsolationTest`; `docs/POSTGRES_RLS.md` |
 | Demo screenshots + short walkthrough recording | Project store `media/demo/` (login, org/projects, benchmarks, evaluation detail, analytics, public leaderboard) |
 | CODING_CLI via RuntimeIsolator | `CodingCliAgentProvider`; config/image/argv; isolator invoke; timeouts; patch capture; `docs/AGENTS_CODING_CLI.md`; residual = Docker/gVisor (not hostile multi-tenant SaaS) |
+| Optional SonarQube/SonarCloud quality path | Default off; report import + Web API client; WireMock/fixture tests; `docs/QUALITY_SONAR.md`; Checkstyle/SpotBugs/PMD remain primary |
 
 ## Deferred / not claimed
 
@@ -42,7 +43,7 @@
 | Certified hostile multi-tenant SaaS security | **Not claimed** — Docker residual risk; gVisor opt-in stronger but not a formal certification |
 | Measured **production** throughput / capacity numbers | **Not claimed** — only attached local Compose laptop smoke exists |
 | Live public hosted demo on Oracle Always Free | **Guide-ready** (`docs/DEPLOYMENT_ORACLE_ALWAYS_FREE.md`) — **not actually hosted** until Sai’s VM + SSH apply the runbook |
-| Sonar as scoring authority | **Not claimed** — stub only |
+| Sonar as sole scoring authority | **Not claimed** — optional Sonar integration landed; primary tools remain Checkstyle/SpotBugs/PMD |
 | Full hostile multi-tenant CODING_CLI / untrusted public CLI images | **Not claimed** — isolator-backed CODING_CLI landed; residual matches RuntimeIsolator; no Firecracker |
 | mTLS between services | **Deferred** — NetworkPolicies are L3/L4 only |
 | WORM audit storage | **Deferred** — audit log exists; not WORM |

@@ -159,6 +159,19 @@ agentbench:
     flaky:
       # Configurable repeated suite runs for flaky detection (1 = disabled).
       repeat-runs: ${AGENTBENCH_EVAL_FLAKY_REPEAT_RUNS:1}
+  quality:
+    sonar:
+      # Optional SonarQube/SonarCloud. Default off for local Compose / CI (no live server required).
+      # Prefer workspace JSON import for baseline↔post; API fetch when configured. See docs/QUALITY_SONAR.md.
+      enabled: ${AGENTBENCH_SONAR_ENABLED:false}
+      base-url: ${AGENTBENCH_SONAR_BASE_URL:}
+      token: ${AGENTBENCH_SONAR_TOKEN:}
+      project-key: ${AGENTBENCH_SONAR_PROJECT_KEY:}
+      organization: ${AGENTBENCH_SONAR_ORGANIZATION:}
+      branch: ${AGENTBENCH_SONAR_BRANCH:}
+      pull-request: ${AGENTBENCH_SONAR_PULL_REQUEST:}
+      timeout-sec: ${AGENTBENCH_SONAR_TIMEOUT_SEC:20}
+      max-issues: ${AGENTBENCH_SONAR_MAX_ISSUES:500}
   agents:
     default-max-retries: ${AGENTBENCH_AGENTS_MAX_RETRIES:2}
     default-timeout-sec: ${AGENTBENCH_AGENTS_TIMEOUT_SEC:60}

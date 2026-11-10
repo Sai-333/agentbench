@@ -493,8 +493,8 @@ public class EvaluationStageProcessor {
     }
 
     /**
-     * Checkstyle + SpotBugs + PMD (XML or builtin heuristics). Separates new vs pre-existing.
-     * Sonar remains an optional stub and does not invent scores.
+     * Checkstyle + SpotBugs + PMD (XML or builtin heuristics), plus optional Sonar when enabled.
+     * Separates new vs pre-existing; never invents quality scores.
      */
     private void analyzeQuality(Evaluation evaluation, JsonNode task) {
         if (!evaluationRepository.findQualityReports(evaluation.id()).isEmpty()) {
