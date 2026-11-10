@@ -1,6 +1,6 @@
 # AgentBench — Portfolio checklist (honest)
 
-**As of post-M9 public leaderboards + signed embeds/Cache-Control + OIDC + SAML SP SSO + S3-compatible artifact storage + Postgres RLS + WORM/append-only audit storage + measured local k6 smoke + opt-in gVisor + opt-in Firecracker + Helm chart + NetworkPolicies + optional Helm mTLS + PDF exports.** Marked items are evidenced in `main` / this repo. Deferred items are explicit non-claims.
+**As of post-M9 public leaderboards + signed embeds/Cache-Control + OIDC + SAML SP SSO + S3-compatible artifact storage + Postgres RLS + WORM/append-only audit storage + measured local k6 smoke + opt-in gVisor + opt-in Firecracker + Helm chart + Operator/CRD packaging + NetworkPolicies + optional Helm mTLS + PDF exports.** Marked items are evidenced in `main` / this repo. Deferred items are explicit non-claims.
 
 ## Done (M0–M9 + deferred follow-ups landed)
 
@@ -25,7 +25,8 @@
 | Recovery tests (baseline / cancel / timeout / retry policy / DLQ topology) | M9 tests |
 | Graceful shutdown + prod-ish Compose overlay | `application.yml`, `docker-compose.prod.yml` |
 | Kubernetes templates (deploy/svc/config/secrets) | `deploy/kubernetes/` |
-| Helm chart (API/worker/frontend; not operators/CRDs) | `deploy/helm/agentbench/`; `scripts/helm/smoke.sh`; CI `helm` job; `docs/DEPLOYMENT.md` §3b |
+| Helm chart (API/worker/frontend) | `deploy/helm/agentbench/`; `scripts/helm/smoke.sh`; CI `helm` job; `docs/DEPLOYMENT.md` §3b |
+| Operators / CRDs (Helm-operator packaging) | `deploy/operator/` — `AgentBenchInstance` CRD + helm-operator watches/Dockerfile + operator Helm chart; `scripts/operator/smoke.sh`; `docs/DEPLOYMENT.md` §3e — **not** certified multi-cloud SaaS |
 | Kubernetes NetworkPolicies (default-deny + allow-needed) | `deploy/kubernetes/networkpolicy.yaml`; Helm `networkPolicy.*` (default on); `docs/DEPLOYMENT.md` §3c; smoke asserts render/disable |
 | Ops runbook snippets + load-test **plan** + k6 smoke script | `docs/OPERATIONS.md`, `docs/PERFORMANCE.md` |
 | Measured **local Compose** k6 smoke (laptop; not production) | `docs/PERFORMANCE.md` dated 2026-11-10 section; `deploy/loadtest/results/measured-2026-11-10-*` |
@@ -44,7 +45,7 @@
 |---|---|
 | Firecracker on non-KVM / Mac Compose | **Residual** — Firecracker opt-in landed; live microVM needs Linux+KVM; Mac Compose stays Docker |
 | Full multi-IdP SAML admin UI | **Residual** — SAML SP login landed (`docs/AUTH_SAML.md`); one IdP via env/props; no multi-IdP admin console; unsigned AuthnRequests |
-| Operators / CRDs / certified multi-cloud SaaS Helm | **Deferred** — app Helm chart landed; no operators/CRDs |
+| Certified multi-cloud / multi-tenant SaaS Helm | **Not claimed** — Operators/CRDs packaging landed (`deploy/operator/`); no certification / multi-cloud SaaS claim |
 | Certified hostile multi-tenant SaaS security | **Not claimed** — Docker residual risk; gVisor/Firecracker opt-in stronger but not a formal certification |
 | Measured **production** throughput / capacity numbers | **Not claimed** — only attached local Compose laptop smoke exists |
 | Live public hosted demo on Oracle Always Free | **Guide-ready** (`docs/DEPLOYMENT_ORACLE_ALWAYS_FREE.md`) — **not actually hosted** until Sai’s VM + SSH apply the runbook |

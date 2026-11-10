@@ -64,7 +64,7 @@ Single-host Ampere A1 runbook (VM shape, ports, Docker, secrets, health checks, 
 | Local runtime | Docker Compose (+ `docker-compose.prod.yml`) |
 | Artifacts | `ArtifactStorage`: local volume (default) or S3-compatible (`ARTIFACT_STORAGE=s3`, Compose `--profile s3` / MinIO) |
 | Eval isolation | Hardened Docker via `RuntimeIsolator` (default); optional `mode=gvisor` (`docker --runtime=runsc`) or `mode=firecracker` (Linux+KVM); local CI fallback |
-| K8s | Templates under `deploy/kubernetes/` (incl. NetworkPolicies); Helm chart `deploy/helm/agentbench/` (optional `mtls.*`; no real secrets; not operators; not a service mesh) |
+| K8s | Templates under `deploy/kubernetes/` (incl. NetworkPolicies); Helm chart `deploy/helm/agentbench/` (optional `mtls.*`); optional Operator/CRD `deploy/operator/` (`AgentBenchInstance`); not certified multi-cloud SaaS; not a service mesh |
 
 ## Architecture
 
@@ -86,7 +86,7 @@ Roles (org-scoped): `OWNER`, `ADMIN`, `DEVELOPER`, `VIEWER`.
 |---|---|
 | Recovery | DLQ topology + listener retry; infra stage retry budget; cancel mid-flight; timeout watchdog; invalid baseline fails closed |
 | Shutdown | `server.shutdown=graceful` + documented probes |
-| Deploy | Compose prod overlay; Kubernetes templates + Helm chart (`deploy/helm/agentbench/`) |
+| Deploy | Compose prod overlay; Kubernetes templates + Helm chart (`deploy/helm/agentbench/`) + optional operator (`deploy/operator/`) |
 | Perf | k6 smoke script + load-test **plan** (no unverified throughput claims) |
 | Security review | Isolator constraints, hidden confidentiality, secret redaction; threat model residual risks updated |
 | Ops | Backup / migrate / upgrade / DLQ snippets in `docs/OPERATIONS.md` |
@@ -169,12 +169,14 @@ Never edit applied migrations; forward-only only.
 | [docs/QUALITY_SONAR.md](docs/QUALITY_SONAR.md) | Optional SonarQube/SonarCloud quality path |
 | [deploy/kubernetes/](deploy/kubernetes/) | K8s templates |
 | [deploy/helm/agentbench/](deploy/helm/agentbench/) | Helm chart (install/upgrade/uninstall) |
-| [scripts/helm/smoke.sh](scripts/helm/smoke.sh) | `helm lint` + `helm template` smoke |
+| [deploy/operator/](deploy/operator/) | AgentBenchInstance CRD + helm-operator packaging |
+| [scripts/helm/smoke.sh](scripts/helm/smoke.sh) | `helm lint` + `helm template` + operator smoke |
+| [scripts/operator/smoke.sh](scripts/operator/smoke.sh) | CRD / watches / operator chart lint |
 | [deploy/loadtest/k6-smoke.js](deploy/loadtest/k6-smoke.js) | Smoke script |
 
 ## CI
 
-GitHub Actions builds backend (`mvn verify`, including Testcontainers when Docker is available), frontend (`npm ci && npm run build`), and Helm (`./scripts/helm/smoke.sh`). WireMock covers OpenAI-compatible HTTP without paid APIs.
+GitHub Actions builds backend (`mvn verify`, including Testcontainers when Docker is available), frontend (`npm ci && npm run build`), and Helm/operator packaging (`./scripts/helm/smoke.sh`, including `./scripts/operator/smoke.sh`). WireMock covers OpenAI-compatible HTTP without paid APIs.
 
 **Docker 29 note:** Engine 29 defaults to a minimum API of 1.44 while Testcontainers 1.21.x still negotiates an older client API. Local/daemon workaround:
 

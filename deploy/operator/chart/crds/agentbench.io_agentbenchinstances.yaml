@@ -1,0 +1,52 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: agentbenchinstances.agentbench.io
+  labels:
+    app.kubernetes.io/name: agentbench-operator
+    app.kubernetes.io/part-of: agentbench
+spec:
+  group: agentbench.io
+  scope: Namespaced
+  names:
+    kind: AgentBenchInstance
+    listKind: AgentBenchInstanceList
+    plural: agentbenchinstances
+    singular: agentbenchinstance
+    shortNames:
+      - abi
+  versions:
+    - name: v1alpha1
+      served: true
+      storage: true
+      subresources:
+        status: {}
+      additionalPrinterColumns:
+        - name: Age
+          type: date
+          jsonPath: .metadata.creationTimestamp
+      schema:
+        openAPIV3Schema:
+          type: object
+          description: >
+            AgentBenchInstance installs and reconciles one AgentBench Helm
+            release (deploy/helm/agentbench) via the helm-operator. Spec fields
+            are passed through as Helm values. Not certified multi-cloud SaaS.
+          properties:
+            apiVersion:
+              type: string
+            kind:
+              type: string
+            metadata:
+              type: object
+            spec:
+              type: object
+              description: >
+                Helm values for the AgentBench application chart
+                (backend/worker/frontend images, config, secrets refs,
+                networkPolicy, mtls, optional lab dependencies, etc.).
+              x-kubernetes-preserve-unknown-fields: true
+            status:
+              type: object
+              description: helm-operator release status (conditions, deployedRevision, …)
+              x-kubernetes-preserve-unknown-fields: true

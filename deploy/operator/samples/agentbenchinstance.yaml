@@ -1,0 +1,38 @@
+# Example AgentBenchInstance — applied AFTER the operator is running.
+# Spec mirrors deploy/helm/agentbench values (pass-through).
+apiVersion: agentbench.io/v1alpha1
+kind: AgentBenchInstance
+metadata:
+  name: demo
+  namespace: agentbench
+  labels:
+    app.kubernetes.io/name: agentbench
+    app.kubernetes.io/instance: demo
+spec:
+  # Replace image tags before applying in a real cluster.
+  backend:
+    image:
+      repository: ghcr.io/example/agentbench-backend
+      tag: REPLACE_TAG
+  worker:
+    image:
+      repository: ghcr.io/example/agentbench-backend
+      tag: REPLACE_TAG
+  frontend:
+    image:
+      repository: ghcr.io/example/agentbench-frontend
+      tag: REPLACE_TAG
+  # Prefer an existing Secret in real clusters:
+  # secrets:
+  #   create: false
+  #   existingSecret: my-agentbench-secrets
+  networkPolicy:
+    enabled: true
+  # Lab-only in-cluster deps (not HA):
+  # dependencies:
+  #   postgres:
+  #     enabled: true
+  #   redis:
+  #     enabled: true
+  #   rabbitmq:
+  #     enabled: true

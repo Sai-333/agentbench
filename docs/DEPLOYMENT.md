@@ -131,7 +131,7 @@ helm uninstall agentbench -n agentbench
 
 **Dependency strategy:** default is **external** Postgres / Redis / RabbitMQ (`config.*` hosts). Optional `dependencies.*.enabled` spins single-replica lab Deployments only — not HA, not operators. Prefer `secrets.existingSecret` in real clusters.
 
-**Honest limits:** not certified multi-tenant SaaS; no CRDs/operators; NetworkPolicies are included (opt-out); optional east-west mTLS is opt-in (§3d). Postgres WORM/append-only audit landed (`docs/AUDIT_WORM.md`) — not AWS Object Lock. See `deploy/helm/agentbench/README.md` and §3c–§3d.
+**Honest limits:** not certified multi-tenant SaaS; NetworkPolicies are included (opt-out); optional east-west mTLS is opt-in (§3d); optional Operator/CRD packaging is separate (§3e). Postgres WORM/append-only audit landed (`docs/AUDIT_WORM.md`) — not AWS Object Lock. See `deploy/helm/agentbench/README.md` and §3c–§3e.
 
 ## 3c. NetworkPolicies
 
@@ -200,6 +200,31 @@ helm upgrade --install agentbench deploy/helm/agentbench -n agentbench \
 **Frontend notes:** With Ingress, route `/api` to the backend Service and `/` to the frontend (edge TLS ≠ pod mTLS). The nginx overlay matters when the UI proxies `/api` in-cluster. Browser→frontend remains HTTP unless you terminate TLS at Ingress.
 
 **Residual (honest):** This is **not** a service mesh product (no Istio/Linkerd, no automatic sidecar identity). API↔worker **evaluation traffic** is still primarily RabbitMQ (AMQP), not HTTPS — AMQPS / mesh mTLS for the broker is out of scope. Not certified multi-tenant SaaS. Chart CI only `helm lint` / `helm template` (+ openssl script dry-run); it does not spin a live cluster.
+
+## 3e. Operator + CRD (optional)
+
+Path: `deploy/operator/`. Lean **Helm-operator** packaging: `AgentBenchInstance` CRD (`agentbench.io/v1alpha1`) + controller Deployment that installs/reconciles the app chart from §3b when you apply a CR. Spec fields pass through as Helm values. Direct Helm install remains supported.
+
+```bash
+# Cluster-free validation (also run from ./scripts/helm/smoke.sh):
+./scripts/operator/smoke.sh
+
+# Build operator image (embeds watches.yaml + deploy/helm/agentbench):
+docker build -f deploy/operator/Dockerfile -t agentbench-operator:dev .
+
+# Install CRD + controller:
+helm upgrade --install agentbench-operator deploy/operator/chart \
+  --namespace agentbench-system --create-namespace \
+  --set image.repository=agentbench-operator \
+  --set image.tag=dev \
+  --set image.pullPolicy=IfNotPresent
+
+# Apply an instance (edit image tags in the sample first):
+kubectl create namespace agentbench --dry-run=client -o yaml | kubectl apply -f -
+kubectl apply -f deploy/operator/samples/agentbenchinstance.yaml
+```
+
+**Honest limits:** operators/CRDs landed for portfolio packaging; **not** certified multi-cloud / multi-tenant SaaS; not a full custom Go Kubebuilder manager — helm-operator + `watches.yaml` only. See `deploy/operator/README.md`.
 
 ## 4. Graceful shutdown
 

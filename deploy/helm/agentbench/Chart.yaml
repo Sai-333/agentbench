@@ -2,9 +2,10 @@ apiVersion: v2
 name: agentbench
 description: >
   AgentBench Kubernetes packaging for API, worker, and frontend.
-  Wraps the raw manifests under deploy/kubernetes/. Not an operator;
-  not a certified multi-tenant SaaS chart. Postgres/Redis/RabbitMQ are
-  external by default (or optional in-cluster demo Deployments).
+  Wraps the raw manifests under deploy/kubernetes/. Optional CRD-driven
+  install lives under deploy/operator/ (helm-operator). Not a certified
+  multi-tenant SaaS chart. Postgres/Redis/RabbitMQ are external by
+  default (or optional in-cluster demo Deployments).
 type: application
 version: 0.3.0
 appVersion: "0.9.0"

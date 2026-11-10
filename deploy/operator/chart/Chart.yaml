@@ -1,0 +1,19 @@
+apiVersion: v2
+name: agentbench-operator
+description: >
+  Lean Helm-operator packaging for AgentBench. Installs the
+  AgentBenchInstance CRD and a controller Deployment that reconciles
+  the existing deploy/helm/agentbench chart. Not certified multi-cloud SaaS.
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+keywords:
+  - agentbench
+  - operator
+  - crd
+home: https://github.com/Sai-333/agentbench
+sources:
+  - https://github.com/Sai-333/agentbench
+maintainers:
+  - name: Sai-333
+    url: https://github.com/Sai-333/agentbench
