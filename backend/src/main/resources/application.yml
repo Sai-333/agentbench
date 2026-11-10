@@ -105,6 +105,13 @@ agentbench:
       days: ${AGENTBENCH_ARTIFACT_RETENTION_DAYS:14}
       max-log-bytes: ${AGENTBENCH_ARTIFACT_MAX_LOG_BYTES:20971520}
       sweep-interval-ms: ${AGENTBENCH_ARTIFACT_SWEEP_MS:3600000}
+    # Pattern-based secret scan at artifact persist (R7). Not a full DLP product.
+    secret-scan:
+      enabled: ${AGENTBENCH_ARTIFACT_SECRET_SCAN_ENABLED:true}
+      # REDACT (default) stores redacted bytes; QUARANTINE refuses persist on findings.
+      mode: ${AGENTBENCH_ARTIFACT_SECRET_SCAN_MODE:REDACT}
+      # Optional extra Java regexes (YAML list / AGENTBENCH_ARTIFACT_SECRET_SCAN_ADDITIONAL_PATTERNS not wired — use config file).
+      additional-patterns: []
   execution:
     # docker (default; Mac Compose) | gvisor (Linux + runsc) | firecracker (Linux + KVM) | local (CI)
     # gvisor/firecracker are fail-fast when tooling is missing — never silent fallback.

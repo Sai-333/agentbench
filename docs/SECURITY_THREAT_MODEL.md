@@ -65,13 +65,14 @@
 1. **Never mount Docker socket** into evaluation containers (`RuntimeIsolator` rejects sock/privileged fragments).
 2. **Network:** default deny egress from eval containers (`--network none`); allowlist only if task requires.
 3. **Hidden tests:** loaded only in `RUNNING_HIDDEN_TESTS`; staged under a separate root; cleaned after the stage; not present during `INVOKING_AGENT`.
-4. **Secrets:** encrypt at rest; never in API responses; `SecretRedactor` on logs/errors/reports/artifacts/DLQ logs.
+4. **Secrets:** encrypt at rest; never in API responses; `SecretRedactor` on logs/errors/reports/DLQ logs; `ArtifactSecretScanner` on artifact persist (patches/fixtures/invocation outputs) with redact or quarantine + audit (`platform.artifact_secret_findings`) — pattern-based, not full DLP.
 5. **Org isolation:** every query constrained by `org_id`; automated IDOR tests.
 6. **Resource limits** mandatory on every hardened `docker run` (CPU/mem/pids/time/ulimit).
 7. **Image allowlist** — configurable runner image; optional digest pin (`image@sha256:…`).
 8. **Patch size limits** and reject suspicious paths (`../`, absolute paths, `.git/hooks`, encoded traversal).
 9. **Ephemeral containers** (`--rm`) + best-effort name cleanup after timeout/kill.
 10. **Artifact retention** — configurable TTL + scheduled GC (blobs via local/S3 `ArtifactStorage`, patch DB metadata `purged_at`, invocation URI clear) + max log/object bytes; cleanup audit table.
+10b. **Artifact secret scanning (R7)** — pattern scan at persist (`AGENTBENCH_ARTIFACT_SECRET_SCAN_*`); redact (default) or quarantine; audit without storing secret values.
 11. **Recovery:** listener retry → DLQ; stage infra retry budget; cancel between stages; duration watchdog; invalid baseline fails closed.
 12. **Health:** liveness/readiness probes; graceful shutdown for rolling updates.
 
@@ -144,6 +145,7 @@ Shared-kernel breakout residual risk remains on the default path. Prefer **`agen
 | K8s NetworkPolicy / mTLS residual | NetworkPolicies ship (L3/L4); optional Helm mTLS for HTTP (API/worker/frontend proxy) — not a mesh, not AMQPS; default `clientAuth=want`; Mac Compose plaintext |
 | WORM residual (not Object Lock) | Append-only triggers + hash chain on audit tables; app role cannot UPDATE/DELETE; superuser can still disable triggers; AWS Object Lock not wired |
 | AES secret-key rotation not automated | Dual-key re-encrypt before rotating encryption keys |
+| Artifact secret scan is pattern-based only | Not full DLP; tune `additional-patterns` / use `QUARANTINE` for stricter demos; binary non-text skipped |
 | Public boards opt-in only | Google/GitHub OIDC + multi-IdP SAML SP (optional SP signing) available; public leaderboards require OWNER/ADMIN publish + sanitized payload; embeds need HMAC token + expiry |
 
 ---
@@ -155,6 +157,7 @@ Shared-kernel breakout residual risk remains on the default path. Prefer **`agen
 - gVisor command builder asserts `--runtime=runsc` plus the same hardening; fail-fast when mode=gvisor and probes miss.
 - Firecracker wrapper command builder asserts documented `agentbench-fc-run` contract; fail-fast when mode=firecracker and firecracker/KVM/wrapper probes miss; live smoke `@EnabledIf` only.
 - Secret redaction unit tests.
+- Artifact secret scanner unit tests (fixtures must not retain raw secrets; quarantine messages omit values).
 - RestAssured/MockMvc IDOR suites (org authorization regression).
 - Quality parsers + new-vs-pre-existing aggregation tests.
 - M9 recovery: invalid baseline, mid-flight cancel, timeout watchdog, retry policy, DLQ topology.

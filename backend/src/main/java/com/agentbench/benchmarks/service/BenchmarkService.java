@@ -14,6 +14,7 @@ import com.agentbench.identity.domain.OrgRole;
 import com.agentbench.identity.security.OrgAccessService;
 import com.agentbench.identity.security.UserPrincipal;
 import com.agentbench.platform.error.ApiException;
+import com.agentbench.platform.infra.storage.ArtifactSecretScanner;
 import com.agentbench.platform.infra.storage.ArtifactStorage;
 import com.agentbench.projects.infra.ProjectRepository;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -48,6 +49,7 @@ public class BenchmarkService {
     private final ProjectRepository projectRepository;
     private final OrgAccessService orgAccessService;
     private final ArtifactStorage artifactStorage;
+    private final ArtifactSecretScanner artifactSecretScanner;
     private final ObjectMapper objectMapper;
 
     public BenchmarkService(
@@ -55,11 +57,13 @@ public class BenchmarkService {
             ProjectRepository projectRepository,
             OrgAccessService orgAccessService,
             ArtifactStorage artifactStorage,
+            ArtifactSecretScanner artifactSecretScanner,
             ObjectMapper objectMapper) {
         this.benchmarkRepository = benchmarkRepository;
         this.projectRepository = projectRepository;
         this.orgAccessService = orgAccessService;
         this.artifactStorage = artifactStorage;
+        this.artifactSecretScanner = artifactSecretScanner;
         this.objectMapper = objectMapper;
     }
 
@@ -384,6 +388,9 @@ public class BenchmarkService {
         String storageUri = blankToEmpty(request.storageUri());
         String contentDigest = blankToEmpty(request.contentDigest());
         if (!fixtureContent.isEmpty()) {
+            String keyHint = "orgs/%s/tasks/%s/suites/%s".formatted(
+                    orgId, taskId, visibility.name().toLowerCase());
+            fixtureContent = artifactSecretScanner.prepareText(keyHint, fixtureContent, "text/plain").content();
             byte[] bytes = fixtureContent.getBytes(StandardCharsets.UTF_8);
             if (contentDigest.isEmpty()) {
                 contentDigest = sha256Hex(bytes);

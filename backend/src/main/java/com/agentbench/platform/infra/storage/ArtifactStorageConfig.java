@@ -2,10 +2,12 @@ package com.agentbench.platform.infra.storage;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Primary;
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
 import software.amazon.awssdk.regions.Region;
@@ -19,10 +21,28 @@ import software.amazon.awssdk.services.s3.model.S3Exception;
 import java.net.URI;
 
 @Configuration
-@EnableConfigurationProperties(ArtifactStorageProperties.class)
+@EnableConfigurationProperties({ArtifactStorageProperties.class, ArtifactSecretScanProperties.class})
 public class ArtifactStorageConfig {
 
     private static final Logger log = LoggerFactory.getLogger(ArtifactStorageConfig.class);
+
+    /**
+     * Primary {@link ArtifactStorage}: wraps local or S3 with secret scanning at persist.
+     * TTL/GC and open/delete delegate unchanged.
+     */
+    @Bean
+    @Primary
+    ArtifactStorage artifactStorage(
+            ObjectProvider<LocalFilesystemArtifactStorage> local,
+            ObjectProvider<S3CompatibleArtifactStorage> s3,
+            ArtifactSecretScanner scanner) {
+        ArtifactStorage delegate = s3.getIfAvailable();
+        if (delegate == null) {
+            delegate = local.getObject();
+        }
+        log.info("Artifact storage scanning wrapper enabled over {}", delegate.getClass().getSimpleName());
+        return new ScanningArtifactStorage(delegate, scanner);
+    }
 
     @Bean(destroyMethod = "close")
     @ConditionalOnProperty(name = "agentbench.artifacts.storage", havingValue = "s3")

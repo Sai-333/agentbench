@@ -70,6 +70,8 @@ Addresses disk exhaustion risk from large patches/logs (threat-model R9) alongsi
 | `AGENTBENCH_ARTIFACT_MAX_LOG_BYTES` | `20 MiB` | Truncate log/report payloads before persist |
 | `AGENTBENCH_ARTIFACT_MAX_OBJECT_BYTES` | `20 MiB` | `ArtifactStorage.store` rejects larger `contentLength` |
 | `AGENTBENCH_ARTIFACT_SWEEP_MS` | `3600000` | Scheduled GC interval (`fixedDelay`) |
+| `AGENTBENCH_ARTIFACT_SECRET_SCAN_ENABLED` | `true` | Pattern scan on artifact persist (patches, fixtures, invocation outputs) |
+| `AGENTBENCH_ARTIFACT_SECRET_SCAN_MODE` | `REDACT` | `REDACT` stores redacted bytes; `QUARANTINE` refuses persist on findings |
 
 Each GC sweep (Spring `@Scheduled` on API + worker):
 
@@ -78,9 +80,19 @@ Each GC sweep (Spring `@Scheduled` on API + worker):
 3. **Workspaces:** when `ARTIFACT_STORAGE=s3`, also TTL-sweeps local `workspaces/` under the artifacts root.
 4. Audit row in `platform.artifact_cleanup_runs` (`deleted_files`, `freed_bytes`, `deleted_metadata`, `status`, `message`).
 
-**Not claimed:** lifecycle policies on the bucket itself (S3 Object Lock / bucket expiry rules); secret scanning of artifact contents; per-org TTL overrides.
+### Artifact secret scanning (R7)
 
-Manual trigger is the Spring bean `ArtifactRetentionService#sweep` (no public HTTP endpoint in v1).
+Addresses secret exfiltration via patches / env dumps / logs persisted as artifacts. `ArtifactSecretScanner` runs before digest + store (and again inside the `ScanningArtifactStorage` wrapper on every `ArtifactStorage.store`):
+
+- Built-in detectors: Bearer / `x-api-key` headers, OpenAI-style `sk-…`, JSON secret fields, AWS access keys, AWS secret assignments, PEM private keys, JWTs, GitHub / Slack tokens, env-style `password=` / `api_key=` dumps.
+- Optional extra regexes via `agentbench.artifacts.secret-scan.additional-patterns` (config file / Helm values — not a full DLP rule engine).
+- **REDACT** (default): persist redacted bytes; content digest matches stored content.
+- **QUARANTINE**: refuse persist; throw `ArtifactSecretQuarantinedException` (message has pattern ids + counts only — never the secret).
+- Audit rows in `platform.artifact_secret_findings` (Flyway V18): `storage_key`, `pattern_ids`, `finding_count`, `action` — **no matched substrings**.
+
+**Not claimed:** full DLP / ML classifiers; scanning of binary non-text blobs; S3 Object Lock / bucket lifecycle; per-org TTL or per-org scan policy overrides.
+
+Manual GC trigger is the Spring bean `ArtifactRetentionService#sweep` (no public HTTP endpoint in v1).
 
 ## Evaluation isolation mode
 

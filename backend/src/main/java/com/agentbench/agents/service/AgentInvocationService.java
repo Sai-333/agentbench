@@ -11,6 +11,8 @@ import com.agentbench.agents.infra.AgentProviderRegistry;
 import com.agentbench.agents.infra.SecretRedactor;
 import com.agentbench.identity.service.SecretService;
 import com.agentbench.platform.error.ApiException;
+import com.agentbench.platform.infra.storage.ArtifactSecretQuarantinedException;
+import com.agentbench.platform.infra.storage.ArtifactSecretScanner;
 import com.agentbench.platform.infra.storage.ArtifactStorage;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -42,6 +44,7 @@ public class AgentInvocationService {
     private final AgentInvocationRepository invocationRepository;
     private final SecretService secretService;
     private final ArtifactStorage artifactStorage;
+    private final ArtifactSecretScanner artifactSecretScanner;
     private final ObjectMapper objectMapper;
     private final int defaultMaxRetries;
     private final int defaultTimeoutSec;
@@ -52,6 +55,7 @@ public class AgentInvocationService {
             AgentInvocationRepository invocationRepository,
             SecretService secretService,
             ArtifactStorage artifactStorage,
+            ArtifactSecretScanner artifactSecretScanner,
             ObjectMapper objectMapper,
             @Value("${agentbench.agents.default-max-retries:2}") int defaultMaxRetries,
             @Value("${agentbench.agents.default-timeout-sec:60}") int defaultTimeoutSec,
@@ -60,6 +64,7 @@ public class AgentInvocationService {
         this.invocationRepository = invocationRepository;
         this.secretService = secretService;
         this.artifactStorage = artifactStorage;
+        this.artifactSecretScanner = artifactSecretScanner;
         this.objectMapper = objectMapper;
         this.defaultMaxRetries = Math.max(0, defaultMaxRetries);
         this.defaultTimeoutSec = Math.max(5, defaultTimeoutSec);
@@ -222,12 +227,15 @@ public class AgentInvocationService {
         Integer patchBytes = null;
         String patchUri = null;
         if (result.patchContent() != null && !result.patchContent().isBlank()) {
-            byte[] bytes = result.patchContent().getBytes(StandardCharsets.UTF_8);
-            patchBytes = bytes.length;
-            patchDigest = sha256(bytes);
+            String key = "orgs/%s/agent-invocations/%s/patch.diff".formatted(orgId, invocationId);
             try {
-                String key = "orgs/%s/agent-invocations/%s/patch.diff".formatted(orgId, invocationId);
+                String safeText = artifactSecretScanner.prepareText(key, result.patchContent(), "text/x-diff").content();
+                byte[] bytes = safeText.getBytes(StandardCharsets.UTF_8);
+                patchBytes = bytes.length;
+                patchDigest = sha256(bytes);
                 patchUri = artifactStorage.store(key, new ByteArrayInputStream(bytes), bytes.length, "text/x-diff");
+            } catch (ArtifactSecretQuarantinedException ex) {
+                log.warn("Invocation patch quarantined by secret scan: {}", SecretRedactor.sanitizeError(ex.getMessage()));
             } catch (Exception ex) {
                 log.warn("Could not store invocation patch artifact: {}", SecretRedactor.sanitizeError(ex.getMessage()));
             }

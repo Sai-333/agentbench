@@ -89,7 +89,7 @@ Roles (org-scoped): `OWNER`, `ADMIN`, `DEVELOPER`, `VIEWER`.
 | Shutdown | `server.shutdown=graceful` + documented probes |
 | Deploy | Compose prod overlay; Kubernetes templates + Helm chart (`deploy/helm/agentbench/`) + optional operator (`deploy/operator/`) |
 | Perf | k6 smoke script + load-test **plan** (no unverified throughput claims) |
-| Security review | Isolator constraints, hidden confidentiality, secret redaction; threat model residual risks updated |
+| Security review | Isolator constraints, hidden confidentiality, secret redaction + artifact secret scan (R7); threat model residual risks updated |
 | Ops | Backup / migrate / upgrade / DLQ snippets in `docs/OPERATIONS.md` |
 | Portfolio | Honest done vs deferred checklist |
 
@@ -143,6 +143,7 @@ Notable variables:
 - `AGENTBENCH_EXEC_MEMORY_MB` / `AGENTBENCH_EXEC_CPU` / `AGENTBENCH_EXEC_PIDS` / `AGENTBENCH_EXEC_TIMEOUT_SEC`
 - `ARTIFACT_STORAGE` (`local` \| `s3`) + `AGENTBENCH_S3_*` when using MinIO/S3
 - `AGENTBENCH_ARTIFACT_RETENTION_ENABLED` / `AGENTBENCH_ARTIFACT_RETENTION_DAYS` / `AGENTBENCH_ARTIFACT_SWEEP_MS` / `AGENTBENCH_ARTIFACT_MAX_LOG_BYTES` / `AGENTBENCH_ARTIFACT_MAX_OBJECT_BYTES` (TTL + GC; see `docs/OPERATIONS.md`)
+- `AGENTBENCH_ARTIFACT_SECRET_SCAN_ENABLED` / `AGENTBENCH_ARTIFACT_SECRET_SCAN_MODE` (`REDACT`\|`QUARANTINE`) — pattern scan on artifact persist (not full DLP; see `docs/OPERATIONS.md`)
 - `AGENTBENCH_EVAL_FLAKY_REPEAT_RUNS`
 - `AGENTBENCH_SHUTDOWN_TIMEOUT` / `AGENTBENCH_RABBIT_LISTENER_MAX_ATTEMPTS`
 
@@ -153,6 +154,7 @@ Single migration stream under `backend/src/main/resources/db/migration`.
 - `V1`–`V8` — platform through analytics indexes
 - `V9__production_readiness.sql` — recovery indexes + M9 marker
 - `V17__artifact_ttl_gc.sql` — patch `purged_at` + cleanup `deleted_metadata` for TTL/GC
+- `V18__artifact_secret_scan.sql` — `platform.artifact_secret_findings` audit (pattern ids/counts only)
 
 Never edit applied migrations; forward-only only.
 
