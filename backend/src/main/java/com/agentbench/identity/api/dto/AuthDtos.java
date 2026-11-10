@@ -52,4 +52,21 @@ public final class AuthDtos {
             List<MembershipView> memberships
     ) {
     }
+
+    public record ProviderView(
+            String id,
+            String displayName,
+            String type,
+            String authorizePath
+    ) {
+    }
+
+    public record ProvidersResponse(List<ProviderView> providers) {
+    }
+
+    public record OidcTokenRequest(
+            @NotBlank String code,
+            @NotBlank String state
+    ) {
+    }
 }

@@ -9,6 +9,7 @@ import {
 } from './api'
 import type {
   Agent,
+  AuthProviderInfo,
   Benchmark,
   BenchmarkVersion,
   ComparisonResponse,
@@ -61,6 +62,31 @@ function slugify(name: string): string {
     .slice(0, 63)
 }
 
+/** Read OIDC callback tokens from the URL fragment, then clear the fragment. */
+function consumeOidcHashTokens(): TokenResponse | null {
+  const raw = window.location.hash.startsWith('#')
+    ? window.location.hash.slice(1)
+    : window.location.hash
+  if (!raw) {
+    return null
+  }
+  const params = new URLSearchParams(raw)
+  const accessToken = params.get('access_token')
+  const refreshToken = params.get('refresh_token')
+  if (!accessToken || !refreshToken) {
+    return null
+  }
+  const expiresIn = Number(params.get('expires_in') || '900')
+  const tokenType = params.get('token_type') || 'Bearer'
+  window.history.replaceState({}, document.title, window.location.pathname + window.location.search)
+  return {
+    accessToken,
+    refreshToken,
+    tokenType,
+    expiresInSeconds: Number.isFinite(expiresIn) ? expiresIn : 900,
+  }
+}
+
 function App() {
   const [me, setMe] = useState<MeResponse | null>(null)
   const [orgs, setOrgs] = useState<Org[]>([])
@@ -106,6 +132,7 @@ function App() {
   const [evalStateFilter, setEvalStateFilter] = useState('')
   const [evalPage, setEvalPage] = useState(0)
   const [evalSearchResult, setEvalSearchResult] = useState<EvaluationSearchResponse | null>(null)
+  const [oidcProviders, setOidcProviders] = useState<AuthProviderInfo[]>([])
 
   const loadBenchmarks = useCallback(async (orgId: string) => {
     const list = await api<Benchmark[]>(`/api/v1/orgs/${orgId}/benchmarks`)
@@ -302,6 +329,26 @@ function App() {
   useEffect(() => {
     let cancelled = false
     ;(async () => {
+      try {
+        const providers = await api<{ providers: AuthProviderInfo[] }>(
+          '/api/v1/auth/providers',
+          undefined,
+          false,
+        )
+        if (!cancelled) {
+          setOidcProviders(providers.providers.filter((p) => p.type === 'oidc' && p.authorizePath))
+        }
+      } catch {
+        if (!cancelled) {
+          setOidcProviders([])
+        }
+      }
+
+      const oidcTokens = consumeOidcHashTokens()
+      if (oidcTokens) {
+        storeTokens(oidcTokens)
+      }
+
       if (!getAccessToken()) {
         setBootstrapping(false)
         return
@@ -991,6 +1038,22 @@ function App() {
           <button className="cta" type="submit" disabled={busy}>
             {busy ? 'Working…' : mode === 'register' ? 'Create account' : 'Log in'}
           </button>
+          {oidcProviders.length > 0 && (
+            <div className="oidc-block">
+              <p className="oidc-divider muted">or continue with</p>
+              <div className="oidc-actions">
+                {oidcProviders.map((provider) => (
+                  <a
+                    key={provider.id}
+                    className="cta secondary oidc-btn"
+                    href={provider.authorizePath || '#'}
+                  >
+                    Continue with {provider.displayName}
+                  </a>
+                ))}
+              </div>
+            </div>
+          )}
         </form>
         <p className="muted footer-links">
           <a href="/swagger-ui.html">Swagger UI</a>

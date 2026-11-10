@@ -17,7 +17,7 @@ import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 
 /**
- * Milestone 2 security: JWT bearer auth; public health/OpenAPI/info/auth endpoints.
+ * JWT bearer auth; public health/OpenAPI/info/auth/OIDC endpoints.
  * Org membership/role checks are enforced in services via OrgAccessService.
  */
 @Configuration
@@ -47,11 +47,17 @@ public class SecurityConfig {
                                 "/swagger-ui/**",
                                 "/api/v1/info"
                         ).permitAll()
+                        .requestMatchers(HttpMethod.GET,
+                                "/api/v1/auth/providers",
+                                "/api/v1/auth/oidc/*/authorize",
+                                "/api/v1/auth/oidc/*/callback"
+                        ).permitAll()
                         .requestMatchers(HttpMethod.POST,
                                 "/api/v1/auth/register",
                                 "/api/v1/auth/login",
                                 "/api/v1/auth/refresh",
-                                "/api/v1/auth/logout"
+                                "/api/v1/auth/logout",
+                                "/api/v1/auth/oidc/*/token"
                         ).permitAll()
                         .anyRequest().authenticated()
                 )

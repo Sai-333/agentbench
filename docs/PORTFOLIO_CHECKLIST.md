@@ -1,14 +1,15 @@
 # AgentBench — Portfolio checklist (honest)
 
-**As of post-M9 S3-compatible artifact storage.** Marked items are evidenced in `main` / this repo. Deferred items are explicit non-claims.
+**As of post-M9 OIDC auth + S3-compatible artifact storage.** Marked items are evidenced in `main` / this repo. Deferred items are explicit non-claims.
 
-## Done (M0–M9)
+## Done (M0–M9 + deferred follow-ups landed)
 
 | Item | Evidence |
 |---|---|
 | Modular monolith (Java 21 / Boot 3.4) + Compose | README, `docker-compose.yml` |
 | Health / readiness / liveness | Actuator probes; Compose + K8s templates |
 | JWT local auth, orgs/RBAC, projects | M2 APIs + tests |
+| OIDC Google/GitHub beside local JWT | `AuthProvider` SPI; `docs/AUTH_OIDC.md`; WireMock IdP tests |
 | Versioned benchmarks + hidden suites + RBAC | M3 |
 | Durable evaluation state machine + outbox | M4 |
 | Provider-independent agents (Fake / OpenAI-compat / HTTP / CLI stub) | M5 |
@@ -28,7 +29,7 @@
 |---|---|
 | gVisor / Firecracker isolation | **Deferred** — interface ready (`RuntimeIsolator`); Docker residual risk remains |
 | Public leaderboards | **Deferred** — org-private only (Q9) |
-| OIDC / SSO | **Deferred** — local JWT only (Q1) |
+| Full enterprise SSO (SAML / multi-IdP admin UI) | **Deferred** — Google/GitHub OIDC authorization-code only (Q1 partial) |
 | Postgres RLS | **Deferred** — app-layer org isolation (Q12) |
 | Managed cloud Helm chart / operators | **Deferred** — raw manifests only |
 | Certified hostile multi-tenant SaaS security | **Not claimed** |

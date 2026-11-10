@@ -8,6 +8,17 @@ export type TokenResponse = {
   expiresInSeconds: number
 }
 
+export type AuthProviderInfo = {
+  id: string
+  displayName: string
+  type: string
+  authorizePath: string | null
+}
+
+export type AuthProvidersResponse = {
+  providers: AuthProviderInfo[]
+}
+
 export type MeResponse = {
   id: string
   email: string
