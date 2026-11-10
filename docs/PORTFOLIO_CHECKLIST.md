@@ -1,6 +1,6 @@
 # AgentBench — Portfolio checklist (honest)
 
-**As of post-M9 public leaderboards + OIDC auth + S3-compatible artifact storage + Postgres RLS.** Marked items are evidenced in `main` / this repo. Deferred items are explicit non-claims.
+**As of post-M9 public leaderboards + OIDC auth + S3-compatible artifact storage + Postgres RLS + measured local k6 smoke.** Marked items are evidenced in `main` / this repo. Deferred items are explicit non-claims.
 
 ## Done (M0–M9 + deferred follow-ups landed)
 
@@ -21,9 +21,11 @@
 | Graceful shutdown + prod-ish Compose overlay | `application.yml`, `docker-compose.prod.yml` |
 | Kubernetes templates (deploy/svc/config/secrets) | `deploy/kubernetes/` |
 | Ops runbook snippets + load-test **plan** + k6 smoke script | `docs/OPERATIONS.md`, `docs/PERFORMANCE.md` |
+| Measured **local Compose** k6 smoke (laptop; not production) | `docs/PERFORMANCE.md` dated 2026-11-10 section; `deploy/loadtest/results/measured-2026-11-10-*` |
 | Threat model + portfolio honesty | this file + threat model |
 | S3-compatible artifact store (MinIO / AWS SDK v2) | `ArtifactStorage` + Compose `--profile s3`; `ARTIFACT_STORAGE=s3\|local` |
 | Postgres RLS defense-in-depth | Flyway V12; `agentbench_app` + session GUC; `PostgresRlsIsolationTest`; `docs/POSTGRES_RLS.md` |
+| Demo screenshots + short walkthrough recording | Project store `media/demo/` (login, org/projects, benchmarks, evaluation detail, analytics, public leaderboard) |
 
 ## Deferred / not claimed
 
@@ -33,7 +35,7 @@
 | Full enterprise SSO (SAML / multi-IdP admin UI) | **Deferred** — Google/GitHub OIDC authorization-code only (Q1 partial) |
 | Managed cloud Helm chart / operators | **Deferred** — raw manifests only |
 | Certified hostile multi-tenant SaaS security | **Not claimed** |
-| Measured production throughput / capacity numbers | **Not claimed** without attached runs |
+| Measured **production** throughput / capacity numbers | **Not claimed** — only attached local Compose laptop smoke exists |
 | Live public hosted demo on Oracle Always Free | **Guide-ready** (`docs/DEPLOYMENT_ORACLE_ALWAYS_FREE.md`) — **not actually hosted** until Sai’s VM + SSH apply the runbook |
 | Sonar as scoring authority | **Not claimed** — stub only |
 | Full CODING_CLI production isolation | Skeleton only |
