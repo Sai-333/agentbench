@@ -67,4 +67,14 @@ class LocalFilesystemArtifactStorageTest {
         assertEquals(1, result.deletedObjects());
         assertTrue(storage.open(uri).isEmpty());
     }
+
+    @Test
+    void sweepRetainsNonExpiredFiles() throws Exception {
+        byte[] payload = "keep".getBytes(StandardCharsets.UTF_8);
+        String uri = storage.store("orgs/demo/keep.txt", new ByteArrayInputStream(payload), payload.length, "text/plain");
+
+        ArtifactStorage.SweepResult result = storage.sweepOlderThan(Instant.now().minusSeconds(3600));
+        assertEquals(0, result.deletedObjects());
+        assertTrue(storage.open(uri).isPresent());
+    }
 }

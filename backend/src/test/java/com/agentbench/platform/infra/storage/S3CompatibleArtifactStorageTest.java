@@ -115,7 +115,7 @@ class S3CompatibleArtifactStorageTest {
     }
 
     @Test
-    void sweepDeletesExpiredObjects() {
+    void sweepDeletesExpiredObjectsAndRetainsFresh() {
         S3Object expired = S3Object.builder()
                 .key("demo/old.txt")
                 .size(11L)
@@ -138,6 +138,10 @@ class S3CompatibleArtifactStorageTest {
         verify(s3Client).deleteObject(DeleteObjectRequest.builder()
                 .bucket("agentbench-artifacts")
                 .key("demo/old.txt")
+                .build());
+        verify(s3Client, org.mockito.Mockito.never()).deleteObject(DeleteObjectRequest.builder()
+                .bucket("agentbench-artifacts")
+                .key("demo/new.txt")
                 .build());
     }
 }

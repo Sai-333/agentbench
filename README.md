@@ -142,7 +142,7 @@ Notable variables:
 - `AGENTBENCH_RUNNER_IMAGE` / `AGENTBENCH_RUNNER_IMAGE_DIGEST`
 - `AGENTBENCH_EXEC_MEMORY_MB` / `AGENTBENCH_EXEC_CPU` / `AGENTBENCH_EXEC_PIDS` / `AGENTBENCH_EXEC_TIMEOUT_SEC`
 - `ARTIFACT_STORAGE` (`local` \| `s3`) + `AGENTBENCH_S3_*` when using MinIO/S3
-- `AGENTBENCH_ARTIFACT_RETENTION_DAYS` / `AGENTBENCH_ARTIFACT_MAX_LOG_BYTES` / `AGENTBENCH_ARTIFACT_MAX_OBJECT_BYTES`
+- `AGENTBENCH_ARTIFACT_RETENTION_ENABLED` / `AGENTBENCH_ARTIFACT_RETENTION_DAYS` / `AGENTBENCH_ARTIFACT_SWEEP_MS` / `AGENTBENCH_ARTIFACT_MAX_LOG_BYTES` / `AGENTBENCH_ARTIFACT_MAX_OBJECT_BYTES` (TTL + GC; see `docs/OPERATIONS.md`)
 - `AGENTBENCH_EVAL_FLAKY_REPEAT_RUNS`
 - `AGENTBENCH_SHUTDOWN_TIMEOUT` / `AGENTBENCH_RABBIT_LISTENER_MAX_ATTEMPTS`
 
@@ -152,6 +152,7 @@ Single migration stream under `backend/src/main/resources/db/migration`.
 
 - `V1`–`V8` — platform through analytics indexes
 - `V9__production_readiness.sql` — recovery indexes + M9 marker
+- `V17__artifact_ttl_gc.sql` — patch `purged_at` + cleanup `deleted_metadata` for TTL/GC
 
 Never edit applied migrations; forward-only only.
 

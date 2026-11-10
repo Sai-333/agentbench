@@ -71,7 +71,7 @@
 7. **Image allowlist** — configurable runner image; optional digest pin (`image@sha256:…`).
 8. **Patch size limits** and reject suspicious paths (`../`, absolute paths, `.git/hooks`, encoded traversal).
 9. **Ephemeral containers** (`--rm`) + best-effort name cleanup after timeout/kill.
-10. **Artifact retention** — configurable TTL sweep + max log bytes; cleanup audit table.
+10. **Artifact retention** — configurable TTL + scheduled GC (blobs via local/S3 `ArtifactStorage`, patch DB metadata `purged_at`, invocation URI clear) + max log/object bytes; cleanup audit table.
 11. **Recovery:** listener retry → DLQ; stage infra retry budget; cancel between stages; duration watchdog; invalid baseline fails closed.
 12. **Health:** liveness/readiness probes; graceful shutdown for rolling updates.
 

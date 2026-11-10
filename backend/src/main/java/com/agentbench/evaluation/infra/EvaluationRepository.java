@@ -371,9 +371,9 @@ public class EvaluationRepository {
     public PatchArtifact insertPatch(PatchArtifact patch) {
         jdbc.update("""
                 INSERT INTO evaluations.patch_artifacts
-                    (id, evaluation_id, org_id, content_digest, storage_uri, format, byte_size, collected_at, sealed)
+                    (id, evaluation_id, org_id, content_digest, storage_uri, format, byte_size, collected_at, sealed, purged_at)
                 VALUES
-                    (:id, :evaluationId, :orgId, :contentDigest, :storageUri, :format, :byteSize, :collectedAt, :sealed)
+                    (:id, :evaluationId, :orgId, :contentDigest, :storageUri, :format, :byteSize, :collectedAt, :sealed, :purgedAt)
                 """,
                 new MapSqlParameterSource()
                         .addValue("id", patch.id())
@@ -384,28 +384,33 @@ public class EvaluationRepository {
                         .addValue("format", patch.format())
                         .addValue("byteSize", patch.byteSize())
                         .addValue("collectedAt", Timestamp.from(patch.collectedAt()))
-                        .addValue("sealed", patch.sealed()));
+                        .addValue("sealed", patch.sealed())
+                        .addValue("purgedAt", patch.purgedAt() == null ? null : Timestamp.from(patch.purgedAt())));
         return patch;
     }
 
     public Optional<PatchArtifact> findPatch(UUID evaluationId) {
         var list = jdbc.query("""
-                SELECT id, evaluation_id, org_id, content_digest, storage_uri, format, byte_size, collected_at, sealed
+                SELECT id, evaluation_id, org_id, content_digest, storage_uri, format, byte_size, collected_at, sealed, purged_at
                 FROM evaluations.patch_artifacts
                 WHERE evaluation_id = :evaluationId
                 """,
                 new MapSqlParameterSource("evaluationId", evaluationId),
-                (rs, rowNum) -> new PatchArtifact(
-                        rs.getObject("id", UUID.class),
-                        rs.getObject("evaluation_id", UUID.class),
-                        rs.getObject("org_id", UUID.class),
-                        rs.getString("content_digest"),
-                        rs.getString("storage_uri"),
-                        rs.getString("format"),
-                        rs.getInt("byte_size"),
-                        rs.getTimestamp("collected_at").toInstant(),
-                        rs.getBoolean("sealed")
-                ));
+                (rs, rowNum) -> {
+                    Timestamp purged = rs.getTimestamp("purged_at");
+                    return new PatchArtifact(
+                            rs.getObject("id", UUID.class),
+                            rs.getObject("evaluation_id", UUID.class),
+                            rs.getObject("org_id", UUID.class),
+                            rs.getString("content_digest"),
+                            rs.getString("storage_uri"),
+                            rs.getString("format"),
+                            rs.getInt("byte_size"),
+                            rs.getTimestamp("collected_at").toInstant(),
+                            rs.getBoolean("sealed"),
+                            purged == null ? null : purged.toInstant()
+                    );
+                });
         return list.stream().findFirst();
     }
 

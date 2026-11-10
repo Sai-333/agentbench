@@ -96,6 +96,12 @@ config:
   rabbitmqUsername: "agentbench"
   artifactsRoot: "/var/agentbench/artifacts"
   artifactStorage: "local"
+  # Artifact TTL / GC (R9). See docs/OPERATIONS.md.
+  artifactRetentionEnabled: "true"
+  artifactRetentionDays: "14"
+  artifactSweepMs: "3600000"
+  artifactMaxLogBytes: "20971520"
+  artifactMaxObjectBytes: "20971520"
   # docker (default) | gvisor (requires runsc) | firecracker (requires KVM+wrapper) | local (CI only)
   executionMode: "docker"
   dockerEnabled: "true"

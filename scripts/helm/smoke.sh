@@ -21,6 +21,10 @@ echo "${DEFAULT_OUT}" | grep -q 'AGENTBENCH_NODE_RUNNER_IMAGE' \
   || { echo "expected AGENTBENCH_NODE_RUNNER_IMAGE in ConfigMap" >&2; exit 1; }
 echo "${DEFAULT_OUT}" | grep -q 'AGENTBENCH_JAVA_RUNNER_IMAGE' \
   || { echo "expected AGENTBENCH_JAVA_RUNNER_IMAGE in ConfigMap" >&2; exit 1; }
+echo "${DEFAULT_OUT}" | grep -q 'AGENTBENCH_ARTIFACT_RETENTION_DAYS' \
+  || { echo "expected AGENTBENCH_ARTIFACT_RETENTION_DAYS in ConfigMap" >&2; exit 1; }
+echo "${DEFAULT_OUT}" | grep -q 'AGENTBENCH_ARTIFACT_SWEEP_MS' \
+  || { echo "expected AGENTBENCH_ARTIFACT_SWEEP_MS in ConfigMap" >&2; exit 1; }
 echo "${DEFAULT_OUT}" | grep -q 'kind: NetworkPolicy' \
   || { echo "expected NetworkPolicy resources when networkPolicy.enabled=true" >&2; exit 1; }
 echo "${DEFAULT_OUT}" | grep -q 'agentbench-default-deny\|-default-deny' \

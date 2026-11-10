@@ -579,6 +579,12 @@ public class EvaluationStageProcessor {
     }
 
     private String readPatch(PatchArtifact patch) throws Exception {
+        if (patch.isPurged() || patch.storageUri() == null || patch.storageUri().isBlank()) {
+            throw new ApiException(
+                    org.springframework.http.HttpStatus.GONE,
+                    FailureCode.RUNNER_ERROR.name(),
+                    "Patch artifact purged by retention TTL");
+        }
         try (var in = artifactStorage.open(patch.storageUri())
                 .orElseThrow(() -> new ApiException(
                         org.springframework.http.HttpStatus.INTERNAL_SERVER_ERROR,
