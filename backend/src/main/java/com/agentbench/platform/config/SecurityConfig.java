@@ -54,6 +54,7 @@ public class SecurityConfig {
                                 "/api/v1/auth/oidc/*/authorize",
                                 "/api/v1/auth/oidc/*/callback",
                                 "/api/v1/auth/saml/login",
+                                "/api/v1/auth/saml/login/*",
                                 "/api/v1/auth/saml/metadata",
                                 "/api/v1/public/leaderboards/**"
                         ).permitAll()

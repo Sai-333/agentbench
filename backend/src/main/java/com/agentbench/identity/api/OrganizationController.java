@@ -1,8 +1,10 @@
 package com.agentbench.identity.api;
 
 import com.agentbench.identity.api.dto.OrgDtos;
+import com.agentbench.identity.api.dto.SamlIdpDtos;
 import com.agentbench.identity.security.OrgAccessService;
 import com.agentbench.identity.service.OrganizationService;
+import com.agentbench.identity.service.SamlIdpAdminService;
 import com.agentbench.identity.service.SecretService;
 import com.agentbench.platform.api.ApiPaths;
 import io.swagger.v3.oas.annotations.Operation;
@@ -27,19 +29,22 @@ import java.util.UUID;
 @RestController
 @RequestMapping(ApiPaths.API_V1)
 @SecurityRequirement(name = "bearerAuth")
-@Tag(name = "Organizations", description = "Orgs, memberships, and encrypted secret refs")
+@Tag(name = "Organizations", description = "Orgs, memberships, encrypted secret refs, and SAML IdPs")
 public class OrganizationController {
 
     private final OrganizationService organizationService;
     private final SecretService secretService;
+    private final SamlIdpAdminService samlIdpAdminService;
     private final OrgAccessService orgAccessService;
 
     public OrganizationController(
             OrganizationService organizationService,
             SecretService secretService,
+            SamlIdpAdminService samlIdpAdminService,
             OrgAccessService orgAccessService) {
         this.organizationService = organizationService;
         this.secretService = secretService;
+        this.samlIdpAdminService = samlIdpAdminService;
         this.orgAccessService = orgAccessService;
     }
 
@@ -122,5 +127,42 @@ public class OrganizationController {
     @Operation(summary = "Delete secret")
     public void deleteSecret(@PathVariable UUID orgId, @PathVariable UUID secretId) {
         secretService.delete(orgId, secretId);
+    }
+
+    @GetMapping(value = "/orgs/{orgId}/saml/idps", produces = MediaType.APPLICATION_JSON_VALUE)
+    @Operation(summary = "List org SAML IdP configs (OWNER/ADMIN)")
+    public List<SamlIdpDtos.IdpResponse> listSamlIdps(@PathVariable UUID orgId) {
+        return samlIdpAdminService.list(orgId);
+    }
+
+    @PostMapping(
+            value = "/orgs/{orgId}/saml/idps",
+            consumes = MediaType.APPLICATION_JSON_VALUE,
+            produces = MediaType.APPLICATION_JSON_VALUE)
+    @ResponseStatus(HttpStatus.CREATED)
+    @Operation(summary = "Add a SAML IdP (OWNER/ADMIN)")
+    public SamlIdpDtos.IdpResponse createSamlIdp(
+            @PathVariable UUID orgId,
+            @Valid @RequestBody SamlIdpDtos.CreateRequest request) {
+        return samlIdpAdminService.create(orgId, request);
+    }
+
+    @PutMapping(
+            value = "/orgs/{orgId}/saml/idps/{idpId}",
+            consumes = MediaType.APPLICATION_JSON_VALUE,
+            produces = MediaType.APPLICATION_JSON_VALUE)
+    @Operation(summary = "Update a SAML IdP (OWNER/ADMIN)")
+    public SamlIdpDtos.IdpResponse updateSamlIdp(
+            @PathVariable UUID orgId,
+            @PathVariable UUID idpId,
+            @Valid @RequestBody SamlIdpDtos.UpdateRequest request) {
+        return samlIdpAdminService.update(orgId, idpId, request);
+    }
+
+    @DeleteMapping("/orgs/{orgId}/saml/idps/{idpId}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    @Operation(summary = "Delete a SAML IdP (OWNER/ADMIN)")
+    public void deleteSamlIdp(@PathVariable UUID orgId, @PathVariable UUID idpId) {
+        samlIdpAdminService.delete(orgId, idpId);
     }
 }

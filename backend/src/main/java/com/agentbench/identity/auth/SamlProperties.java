@@ -4,7 +4,8 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 
 /**
  * SAML 2.0 Service Provider settings. Disabled by default; configure via env / application props.
- * Multi-IdP admin UI is intentionally out of scope — one IdP via metadata URL or inline XML.
+ * Org-scoped multi-IdP rows in {@code identity.saml_identity_providers} supplement this;
+ * the env/props IdP is the fallback when no enabled DB IdPs exist.
  */
 @ConfigurationProperties(prefix = "agentbench.saml")
 public class SamlProperties {
@@ -24,13 +25,26 @@ public class SamlProperties {
     private String successRedirectUrl = "http://localhost:3000/";
     private AttributeMapping attributeMapping = new AttributeMapping();
 
-    public boolean isConfigured() {
-        boolean hasMetadata = (metadataUrl != null && !metadataUrl.isBlank())
-                || (metadataXml != null && !metadataXml.isBlank());
+    /** SP is ready to accept IdP configs (env or DB) when enabled with entity + ACS. */
+    public boolean isSpReady() {
         return enabled
                 && entityId != null && !entityId.isBlank()
-                && acsUrl != null && !acsUrl.isBlank()
-                && hasMetadata;
+                && acsUrl != null && !acsUrl.isBlank();
+    }
+
+    /** Env/props single IdP is fully configured (used as fallback when DB has no enabled IdPs). */
+    public boolean isEnvIdpConfigured() {
+        return isSpReady() && hasEnvMetadata();
+    }
+
+    /** @deprecated Prefer {@link #isEnvIdpConfigured()} or {@link #isSpReady()}. */
+    public boolean isConfigured() {
+        return isEnvIdpConfigured();
+    }
+
+    public boolean hasEnvMetadata() {
+        return (metadataUrl != null && !metadataUrl.isBlank())
+                || (metadataXml != null && !metadataXml.isBlank());
     }
 
     public boolean isEnabled() {

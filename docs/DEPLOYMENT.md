@@ -35,7 +35,7 @@ Never commit real client secrets. Endpoint overrides exist for CI mocks (`AGENTB
 
 ### Optional SAML 2.0 (enterprise SSO)
 
-Disabled by default. Config-driven single IdP (metadata URL or XML) — see **[docs/AUTH_SAML.md](AUTH_SAML.md)**. Set `AGENTBENCH_SAML_ENABLED=true` plus entity ID, ACS URL, and IdP metadata; multi-IdP admin UI is not included.
+Disabled by default. SP entity ID / ACS via env; org-scoped multi-IdP admin UI when enabled — see **[docs/AUTH_SAML.md](AUTH_SAML.md)**. Set `AGENTBENCH_SAML_ENABLED=true` plus entity ID and ACS URL; optional env IdP metadata remains the fallback when no DB IdPs are enabled.
 
 ### S3-compatible artifacts (MinIO profile)
 

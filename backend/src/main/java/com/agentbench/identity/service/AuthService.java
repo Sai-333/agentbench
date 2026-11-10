@@ -32,6 +32,7 @@ public class AuthService {
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
     private final List<AuthProvider> authProviders;
+    private final SamlIdpAdminService samlIdpAdminService;
 
     public AuthService(
             UserRepository userRepository,
@@ -39,13 +40,15 @@ public class AuthService {
             RefreshTokenRepository refreshTokenRepository,
             PasswordEncoder passwordEncoder,
             JwtService jwtService,
-            List<AuthProvider> authProviders) {
+            List<AuthProvider> authProviders,
+            SamlIdpAdminService samlIdpAdminService) {
         this.userRepository = userRepository;
         this.organizationRepository = organizationRepository;
         this.refreshTokenRepository = refreshTokenRepository;
         this.passwordEncoder = passwordEncoder;
         this.jwtService = jwtService;
         this.authProviders = authProviders;
+        this.samlIdpAdminService = samlIdpAdminService;
     }
 
     @Transactional
@@ -132,13 +135,8 @@ public class AuthService {
             if (!provider.enabled() || "local".equalsIgnoreCase(provider.id())) {
                 continue;
             }
-            if (provider instanceof SamlAuthProvider saml) {
-                providers.add(new AuthDtos.ProviderView(
-                        saml.id(),
-                        saml.properties().getDisplayName(),
-                        "saml",
-                        "/api/v1/auth/saml/login"
-                ));
+            if (provider instanceof SamlAuthProvider) {
+                // Env SAML is listed below after DB IdPs (DB wins when present).
                 continue;
             }
             providers.add(new AuthDtos.ProviderView(
@@ -147,6 +145,28 @@ public class AuthService {
                     "oidc",
                     "/api/v1/auth/oidc/" + provider.id() + "/authorize"
             ));
+        }
+        var dbIdps = samlIdpAdminService.listEnabledForLogin();
+        if (!dbIdps.isEmpty()) {
+            for (var idp : dbIdps) {
+                providers.add(new AuthDtos.ProviderView(
+                        idp.registrationId(),
+                        idp.displayName(),
+                        "saml",
+                        "/api/v1/auth/saml/login/" + idp.registrationId()
+                ));
+            }
+        } else {
+            for (AuthProvider provider : authProviders) {
+                if (provider instanceof SamlAuthProvider saml && saml.enabled()) {
+                    providers.add(new AuthDtos.ProviderView(
+                            saml.id(),
+                            saml.properties().getDisplayName(),
+                            "saml",
+                            "/api/v1/auth/saml/login"
+                    ));
+                }
+            }
         }
         return new AuthDtos.ProvidersResponse(List.copyOf(providers));
     }

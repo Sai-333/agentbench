@@ -41,7 +41,8 @@ public class SamlAuthProvider implements AuthProvider {
 
     @Override
     public boolean enabled() {
-        return properties.isConfigured();
+        // Env IdP availability for SPI / fallback listing. DB IdPs are listed separately.
+        return properties.isEnvIdpConfigured();
     }
 
     public SamlProperties properties() {
@@ -54,15 +55,29 @@ public class SamlAuthProvider implements AuthProvider {
     }
 
     public AuthenticatedPrincipal linkOrCreate(SamlUserProfile profile) {
-        if (!enabled()) {
+        return linkOrCreate(profile, properties.getRegistrationId(), false);
+    }
+
+    /**
+     * @param registrationId IdP registration id used to scope the stored subject for DB IdPs
+     * @param scopeSubject   when true, store subject as {@code registrationId:nameId}
+     */
+    public AuthenticatedPrincipal linkOrCreate(
+            SamlUserProfile profile,
+            String registrationId,
+            boolean scopeSubject) {
+        if (!properties.isSpReady()) {
             throw ApiException.validation("Auth provider not configured: " + TYPE);
         }
         String email = profile.email().trim().toLowerCase(Locale.ROOT);
         String displayName = profile.displayName() == null || profile.displayName().isBlank()
                 ? email
                 : profile.displayName().trim();
+        String storedSubject = scopeSubject
+                ? registrationId + ":" + profile.subject()
+                : profile.subject();
 
-        var existingIdentity = userIdentityRepository.findByProviderAndSubject(TYPE, profile.subject());
+        var existingIdentity = userIdentityRepository.findByProviderAndSubject(TYPE, storedSubject);
         if (existingIdentity.isPresent()) {
             var user = userRepository.findById(existingIdentity.get().userId())
                     .orElseThrow(() -> ApiException.unauthorized("Linked user missing"));
@@ -73,14 +88,14 @@ public class SamlAuthProvider implements AuthProvider {
         try {
             if (byEmail.isPresent()) {
                 var user = byEmail.get();
-                userIdentityRepository.insert(user.id(), TYPE, profile.subject(), email);
+                userIdentityRepository.insert(user.id(), TYPE, storedSubject, email);
                 return new AuthenticatedPrincipal(user.id(), user.email(), user.displayName());
             }
             var created = userRepository.insert(email, null, displayName);
-            userIdentityRepository.insert(created.id(), TYPE, profile.subject(), email);
+            userIdentityRepository.insert(created.id(), TYPE, storedSubject, email);
             return new AuthenticatedPrincipal(created.id(), created.email(), created.displayName());
         } catch (DuplicateKeyException ex) {
-            return userIdentityRepository.findByProviderAndSubject(TYPE, profile.subject())
+            return userIdentityRepository.findByProviderAndSubject(TYPE, storedSubject)
                     .flatMap(identity -> userRepository.findById(identity.userId()))
                     .or(() -> userRepository.findByEmail(email))
                     .map(user -> new AuthenticatedPrincipal(user.id(), user.email(), user.displayName()))
