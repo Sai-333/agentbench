@@ -13,6 +13,7 @@ Packages the raw Kubernetes manifests under `deploy/kubernetes/` as a values-dri
 | Certified multi-tenant SaaS | **Not claimed** |
 | NetworkPolicies | **Yes** — default-deny + allow-needed (`networkPolicy.enabled`, default true) |
 | mTLS between services | **Optional** — `mtls.enabled` (default off); cert-manager Certificates **or** openssl Secrets; Spring Boot PEM SSL; not a service mesh |
+| RabbitMQ AMQPS (TLS) | **Optional** — `amqps.enabled` (default off); openssl / cert-manager PEMs; Spring SSL bundle; not Istio/Linkerd |
 | WORM audit | **Postgres append-only + hash chain** by default (`docs/AUDIT_WORM.md`); optional S3 Object Lock knobs via `config.s3ObjectLock*` (default off; needs Object Lock-enabled bucket) |
 | In-cluster Postgres/Redis/Rabbit | **Optional lab/demo only** — single replica, non-HA |
 
@@ -50,7 +51,29 @@ helm upgrade --install agentbench deploy/helm/agentbench -n agentbench \
 
 What it does: mounts PEM Secrets on API/worker (`SERVER_SSL_*`), switches probes to HTTPS, and (when frontend is enabled) overlays an nginx ConfigMap that proxies `/api` to the backend Service with a client certificate.
 
-**Residual (honest):** not Istio/Linkerd; not AMQPS for RabbitMQ (API↔worker work still goes through the queue); default `clientAuth=want` so kubelet probes work without a client cert; edge Ingress TLS is separate. See `docs/DEPLOYMENT.md` §3d.
+**Residual (honest):** not Istio/Linkerd; default `clientAuth=want` so kubelet probes work without a client cert; edge Ingress TLS is separate. Pair with optional AMQPS below for queue TLS. See `docs/DEPLOYMENT.md` §3d.
+
+## Optional RabbitMQ AMQPS (TLS)
+
+**Default off** — Mac Compose and the chart default stay plain AMQP on 5672.
+
+```bash
+# A) openssl Secrets
+./scripts/rabbitmq/generate-amqps-certs.sh --namespace agentbench --release agentbench --apply
+helm upgrade --install agentbench deploy/helm/agentbench -n agentbench \
+  --set amqps.enabled=true \
+  --set dependencies.rabbitmq.enabled=true
+
+# B) cert-manager
+helm upgrade --install agentbench deploy/helm/agentbench -n agentbench \
+  --set amqps.enabled=true \
+  --set amqps.certManager.enabled=true \
+  --set dependencies.rabbitmq.enabled=true
+```
+
+What it does: mounts client PEMs on API/worker, sets `SPRING_RABBITMQ_SSL_*` + port 5671, and (when in-cluster RabbitMQ is enabled) configures `listeners.ssl.default` plus an `amqps` Service port.
+
+**Residual (honest):** app-level AMQPS only — not a service mesh; management UI remains HTTP in the lab path; production should use your PKI / managed broker. See `docs/DEPLOYMENT.md` §3f.
 
 ## Dependency strategy
 

@@ -107,8 +107,14 @@ spec:
               {{- include "agentbench.selectorLabels" . | nindent 14 }}
               app.kubernetes.io/component: rabbitmq
       ports:
+        {{- if not (and .Values.amqps.enabled .Values.amqps.requireTls) }}
         - protocol: TCP
           port: 5672
+        {{- end }}
+        {{- if .Values.amqps.enabled }}
+        - protocol: TCP
+          port: {{ include "agentbench.amqps.port" . | int }}
+        {{- end }}
     {{- end }}
     {{- if .Values.networkPolicy.egress.allowExternalDataPlane }}
     # External managed Postgres / Redis / Rabbit (any destination on data ports).
@@ -120,6 +126,8 @@ spec:
           port: 6379
         - protocol: TCP
           port: 5672
+        - protocol: TCP
+          port: 5671
     {{- end }}
     {{- if .Values.networkPolicy.egress.allowWorldHttps }}
     # OIDC IdPs, S3/MinIO, LLM provider APIs (HTTP/HTTPS).
@@ -193,8 +201,14 @@ spec:
               {{- include "agentbench.selectorLabels" . | nindent 14 }}
               app.kubernetes.io/component: rabbitmq
       ports:
+        {{- if not (and .Values.amqps.enabled .Values.amqps.requireTls) }}
         - protocol: TCP
           port: 5672
+        {{- end }}
+        {{- if .Values.amqps.enabled }}
+        - protocol: TCP
+          port: {{ include "agentbench.amqps.port" . | int }}
+        {{- end }}
     {{- end }}
     {{- if .Values.networkPolicy.egress.allowExternalDataPlane }}
     - ports:
@@ -204,6 +218,8 @@ spec:
           port: 6379
         - protocol: TCP
           port: 5672
+        - protocol: TCP
+          port: 5671
     {{- end }}
     {{- if .Values.networkPolicy.egress.allowWorldHttps }}
     - to:
@@ -356,7 +372,13 @@ spec:
               {{- include "agentbench.selectorLabels" . | nindent 14 }}
               app.kubernetes.io/component: worker
       ports:
+        {{- if not (and .Values.amqps.enabled .Values.amqps.requireTls) }}
         - protocol: TCP
           port: 5672
+        {{- end }}
+        {{- if .Values.amqps.enabled }}
+        - protocol: TCP
+          port: {{ include "agentbench.amqps.port" . | int }}
+        {{- end }}
 {{- end }}
 {{- end }}

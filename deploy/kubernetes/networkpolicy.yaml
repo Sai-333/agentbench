@@ -69,6 +69,7 @@ spec:
           port: 8080
   egress:
     # External (or same-cluster) Postgres / Redis / Rabbit on well-known ports.
+    # 5671 = opt-in AMQPS (docs/DEPLOYMENT.md §3f); default Compose stays 5672.
     - ports:
         - protocol: TCP
           port: 5432
@@ -76,6 +77,8 @@ spec:
           port: 6379
         - protocol: TCP
           port: 5672
+        - protocol: TCP
+          port: 5671
     # OIDC / S3 / LLM HTTPS (and HTTP for lab MinIO endpoints).
     - to:
         - ipBlock:
@@ -116,6 +119,8 @@ spec:
           port: 6379
         - protocol: TCP
           port: 5672
+        - protocol: TCP
+          port: 5671
     - to:
         - ipBlock:
             cidr: 0.0.0.0/0

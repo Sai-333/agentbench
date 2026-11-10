@@ -142,3 +142,50 @@ Spring Boot PEM SSL env block for API/worker when mtls.enabled
 - name: SERVER_SSL_CLIENT_AUTH
   value: {{ .Values.mtls.clientAuth | quote }}
 {{- end }}
+
+{{/*
+AMQPS secret names (openssl script or cert-manager)
+*/}}
+{{- define "agentbench.amqps.caSecretName" -}}
+{{- default (printf "%s-amqps-ca" (include "agentbench.fullname" .)) .Values.amqps.secrets.ca }}
+{{- end }}
+
+{{- define "agentbench.amqps.serverSecretName" -}}
+{{- default (printf "%s-amqps-server" (include "agentbench.fullname" .)) .Values.amqps.secrets.server }}
+{{- end }}
+
+{{- define "agentbench.amqps.clientSecretName" -}}
+{{- default (printf "%s-amqps-client" (include "agentbench.fullname" .)) .Values.amqps.secrets.client }}
+{{- end }}
+
+{{- define "agentbench.amqps.mountPath" -}}
+{{- default "/var/agentbench/amqps" .Values.amqps.mountPath }}
+{{- end }}
+
+{{- define "agentbench.amqps.port" -}}
+{{- default "5671" .Values.amqps.port }}
+{{- end }}
+
+{{/*
+Spring Boot AMQPS PEM SSL bundle env for API/worker when amqps.enabled
+*/}}
+{{- define "agentbench.amqps.springSslEnv" -}}
+- name: SPRING_RABBITMQ_SSL_ENABLED
+  value: "true"
+- name: SPRING_RABBITMQ_PORT
+  value: {{ include "agentbench.amqps.port" . | quote }}
+- name: SPRING_RABBITMQ_SSL_BUNDLE
+  value: "rabbitmq"
+- name: SPRING_RABBITMQ_SSL_VERIFY_HOSTNAME
+  value: {{ .Values.amqps.verifyHostname | quote }}
+- name: SPRING_RABBITMQ_SSL_VALIDATE_SERVER_CERTIFICATE
+  value: {{ .Values.amqps.validateServerCertificate | quote }}
+- name: SPRING_SSL_BUNDLE_PEM_RABBITMQ_TRUSTSTORE_CERTIFICATE
+  value: {{ printf "file:%s/ca.crt" (include "agentbench.amqps.mountPath" .) | quote }}
+{{- if .Values.amqps.mutualTls }}
+- name: SPRING_SSL_BUNDLE_PEM_RABBITMQ_KEYSTORE_CERTIFICATE
+  value: {{ printf "file:%s/tls.crt" (include "agentbench.amqps.mountPath" .) | quote }}
+- name: SPRING_SSL_BUNDLE_PEM_RABBITMQ_KEYSTORE_PRIVATE_KEY
+  value: {{ printf "file:%s/tls.key" (include "agentbench.amqps.mountPath" .) | quote }}
+{{- end }}
+{{- end }}

@@ -1,0 +1,24 @@
+{{- if and .Values.amqps.enabled .Values.dependencies.rabbitmq.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "agentbench.fullname" . }}-rabbitmq-amqps
+  namespace: {{ include "agentbench.namespace" . }}
+  labels:
+    {{- include "agentbench.labels" . | nindent 4 }}
+    app.kubernetes.io/component: amqps
+data:
+  rabbitmq.conf: |
+    {{- if .Values.amqps.requireTls }}
+    listeners.tcp = none
+    {{- else }}
+    listeners.tcp.default = 5672
+    {{- end }}
+    listeners.ssl.default = {{ include "agentbench.amqps.port" . }}
+    ssl_options.cacertfile = /etc/rabbitmq/certs/ca.crt
+    ssl_options.certfile   = /etc/rabbitmq/certs/server.crt
+    ssl_options.keyfile    = /etc/rabbitmq/certs/server.key
+    ssl_options.verify     = verify_peer
+    ssl_options.fail_if_no_peer_cert = {{ ternary "true" "false" .Values.amqps.mutualTls }}
+    management.tcp.port = 15672
+{{- end }}

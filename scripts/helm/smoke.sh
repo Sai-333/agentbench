@@ -106,6 +106,37 @@ echo "${CM_OUT}" | grep -q 'kind: Issuer' \
 echo "${CM_OUT}" | grep -q 'SERVER_SSL_ENABLED' \
   || { echo "expected Spring SSL env with cert-manager path" >&2; exit 1; }
 
+echo "==> helm template (amqps openssl path — no Certificate CRs)"
+if echo "${DEFAULT_OUT}" | grep -q 'SPRING_RABBITMQ_SSL_ENABLED.*true'; then
+  echo "expected SPRING_RABBITMQ_SSL_ENABLED not true when amqps.enabled=false" >&2
+  exit 1
+fi
+AMQPS_OUT="$(helm template agentbench "${CHART}" --namespace agentbench \
+  --set amqps.enabled=true \
+  --set dependencies.rabbitmq.enabled=true)"
+echo "${AMQPS_OUT}" | grep -q 'SPRING_RABBITMQ_SSL_ENABLED' \
+  || { echo "expected SPRING_RABBITMQ_SSL_ENABLED when amqps.enabled=true" >&2; exit 1; }
+echo "${AMQPS_OUT}" | grep -q 'SPRING_SSL_BUNDLE_PEM_RABBITMQ_TRUSTSTORE_CERTIFICATE' \
+  || { echo "expected PEM truststore env when amqps.enabled=true" >&2; exit 1; }
+echo "${AMQPS_OUT}" | grep -q 'listeners.ssl.default' \
+  || { echo "expected rabbitmq.conf AMQPS listener when amqps + in-cluster rabbitmq" >&2; exit 1; }
+echo "${AMQPS_OUT}" | grep -q 'name: amqps' \
+  || { echo "expected amqps Service port when amqps.enabled=true" >&2; exit 1; }
+if echo "${AMQPS_OUT}" | grep -q 'kind: Certificate'; then
+  echo "expected no Certificate when amqps.certManager.enabled=false" >&2
+  exit 1
+fi
+
+echo "==> helm template (amqps + cert-manager)"
+AMQPS_CM_OUT="$(helm template agentbench "${CHART}" --namespace agentbench \
+  --set amqps.enabled=true \
+  --set amqps.certManager.enabled=true \
+  --set dependencies.rabbitmq.enabled=true)"
+echo "${AMQPS_CM_OUT}" | grep -q 'kind: Certificate' \
+  || { echo "expected cert-manager Certificate when amqps.certManager.enabled=true" >&2; exit 1; }
+echo "${AMQPS_CM_OUT}" | grep -q 'agentbench-amqps-ca\|-amqps-ca' \
+  || { echo "expected amqps CA Certificate name" >&2; exit 1; }
+
 echo "==> openssl cert script dry-run"
 GEN="${ROOT}/scripts/helm/generate-mtls-certs.sh"
 chmod +x "${GEN}"
@@ -116,6 +147,19 @@ test -f "${TMP_CERTS}/agentbench-mtls-backend.yaml" \
 grep -q 'ca.crt' "${TMP_CERTS}/agentbench-mtls-backend.yaml" \
   || { echo "expected ca.crt in backend Secret" >&2; exit 1; }
 rm -rf "${TMP_CERTS}"
+
+echo "==> amqps openssl cert script dry-run"
+AMQPS_GEN="${ROOT}/scripts/rabbitmq/generate-amqps-certs.sh"
+chmod +x "${AMQPS_GEN}"
+TMP_AMQPS="$(mktemp -d)"
+"${AMQPS_GEN}" --namespace agentbench --release agentbench --out "${TMP_AMQPS}"
+test -f "${TMP_AMQPS}/rabbitmq.conf" \
+  || { echo "expected rabbitmq.conf from generate-amqps-certs.sh" >&2; exit 1; }
+test -f "${TMP_AMQPS}/agentbench-amqps-server.yaml" \
+  || { echo "expected server Secret YAML from generate-amqps-certs.sh" >&2; exit 1; }
+grep -q 'listeners.ssl.default = 5671' "${TMP_AMQPS}/rabbitmq.conf" \
+  || { echo "expected SSL listener 5671 in rabbitmq.conf" >&2; exit 1; }
+rm -rf "${TMP_AMQPS}"
 
 echo "==> operator packaging smoke"
 "${ROOT}/scripts/operator/smoke.sh"

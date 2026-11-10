@@ -31,3 +31,6 @@ coverage/
 
 # Local mTLS openssl output (scripts/helm/generate-mtls-certs.sh)
 .mtls-certs/
+
+# Local AMQPS openssl output (scripts/rabbitmq/generate-amqps-certs.sh)
+.amqps-certs/

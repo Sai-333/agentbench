@@ -31,7 +31,14 @@ data:
   SPRING_RABBITMQ_HOST: {{ .Values.config.rabbitmqHost | quote }}
   SPRING_RABBITMQ_USERNAME: {{ .Values.config.rabbitmqUsername | quote }}
   {{- end }}
+  {{- if .Values.amqps.enabled }}
+  # Port/SSL env also set on Deployments via agentbench.amqps.springSslEnv (wins over ConfigMap duplicates).
+  SPRING_RABBITMQ_PORT: {{ include "agentbench.amqps.port" . | quote }}
+  SPRING_RABBITMQ_SSL_ENABLED: "true"
+  {{- else }}
   SPRING_RABBITMQ_PORT: {{ .Values.config.rabbitmqPort | quote }}
+  SPRING_RABBITMQ_SSL_ENABLED: "false"
+  {{- end }}
   AGENTBENCH_ARTIFACTS_ROOT: {{ .Values.config.artifactsRoot | quote }}
   ARTIFACT_STORAGE: {{ .Values.config.artifactStorage | quote }}
   AGENTBENCH_ARTIFACT_RETENTION_ENABLED: {{ .Values.config.artifactRetentionEnabled | quote }}
