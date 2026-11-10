@@ -62,6 +62,7 @@ Single-host Ampere A1 runbook (VM shape, ports, Docker, secrets, health checks, 
 | Auth | Local email/password + JWT (OIDC deferred) |
 | API docs | springdoc OpenAPI + Swagger UI |
 | Local runtime | Docker Compose (+ `docker-compose.prod.yml`) |
+| Artifacts | `ArtifactStorage`: local volume (default) or S3-compatible (`ARTIFACT_STORAGE=s3`, Compose `--profile s3` / MinIO) |
 | Eval isolation | Hardened Docker via `RuntimeIsolator` (local fallback for CI) |
 | K8s | Templates under `deploy/kubernetes/` (no real secrets) |
 
@@ -91,7 +92,16 @@ Roles (org-scoped): `OWNER`, `ADMIN`, `DEVELOPER`, `VIEWER`.
 | Ops | Backup / migrate / upgrade / DLQ snippets in `docs/OPERATIONS.md` |
 | Portfolio | Honest done vs deferred checklist |
 
-**Explicit non-claims:** no gVisor/Firecracker yet; no public leaderboards; no OIDC; not certified hostile multi-tenant SaaS.
+**Explicit non-claims:** no gVisor/Firecracker yet; no public leaderboards; no OIDC; no Postgres RLS; not certified hostile multi-tenant SaaS.
+
+### Optional MinIO artifact store
+
+```bash
+ARTIFACT_STORAGE=s3 docker compose --profile s3 up -d --build
+docker compose --profile s3 ps minio
+```
+
+See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) for S3 env vars, retention, and cleanup.
 
 ## Local development
 
@@ -129,7 +139,8 @@ Notable variables:
 - `AGENTBENCH_EXECUTION_MODE` (`docker` \| `local`)
 - `AGENTBENCH_RUNNER_IMAGE` / `AGENTBENCH_RUNNER_IMAGE_DIGEST`
 - `AGENTBENCH_EXEC_MEMORY_MB` / `AGENTBENCH_EXEC_CPU` / `AGENTBENCH_EXEC_PIDS` / `AGENTBENCH_EXEC_TIMEOUT_SEC`
-- `AGENTBENCH_ARTIFACT_RETENTION_DAYS` / `AGENTBENCH_ARTIFACT_MAX_LOG_BYTES`
+- `ARTIFACT_STORAGE` (`local` \| `s3`) + `AGENTBENCH_S3_*` when using MinIO/S3
+- `AGENTBENCH_ARTIFACT_RETENTION_DAYS` / `AGENTBENCH_ARTIFACT_MAX_LOG_BYTES` / `AGENTBENCH_ARTIFACT_MAX_OBJECT_BYTES`
 - `AGENTBENCH_EVAL_FLAKY_REPEAT_RUNS`
 - `AGENTBENCH_SHUTDOWN_TIMEOUT` / `AGENTBENCH_RABBIT_LISTENER_MAX_ATTEMPTS`
 

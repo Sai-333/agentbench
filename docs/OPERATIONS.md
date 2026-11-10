@@ -7,7 +7,8 @@
 | Component | What to back up | Notes |
 |---|---|---|
 | PostgreSQL | Logical dump (`pg_dump`) or volume snapshot of `postgres_data` | Includes Flyway history, orgs, evals, scores |
-| Artifacts volume | `artifacts_data` / PVC | Patches + logs; retention sweep deletes by TTL |
+| Artifacts volume | `artifacts_data` / PVC | Local blobs + eval workspaces; retention sweep deletes by TTL |
+| MinIO / S3 bucket | `minio_data` or external bucket | When `ARTIFACT_STORAGE=s3`; same retention days; workspaces stay on local volume |
 | Redis | Optional AOF (`appendonly yes`) | Locks/cache — rebuildable |
 | RabbitMQ | Definitions + durable queues | Commands are also mirrored in evaluation outbox |
 
@@ -45,6 +46,22 @@ docker compose exec postgres psql -U agentbench -d agentbench \
 ## Invalid baseline
 
 - If `requireTargetFailAtBaseline` (default true) and no target FAIL is observed, evaluation ends `FAILED` / `BASELINE_NOT_REPRODUCIBLE` (no agent retry).
+
+## Artifact retention / cleanup
+
+| Knob | Default | Effect |
+|---|---|---|
+| `AGENTBENCH_ARTIFACT_RETENTION_ENABLED` | `true` | When false, sweeps record `SKIPPED` and delete nothing |
+| `AGENTBENCH_ARTIFACT_RETENTION_DAYS` | `14` | Objects / workspace files older than this are deleted |
+| `AGENTBENCH_ARTIFACT_MAX_LOG_BYTES` | `20 MiB` | Truncate log/report payloads before persist |
+| `AGENTBENCH_ARTIFACT_MAX_OBJECT_BYTES` | `20 MiB` | `ArtifactStorage.store` rejects larger `contentLength` |
+| `AGENTBENCH_ARTIFACT_SWEEP_MS` | `3600000` | Scheduled sweep interval |
+
+- **local:** sweep walks `AGENTBENCH_ARTIFACTS_ROOT` (blobs + workspaces).
+- **s3:** sweep lists/deletes aged objects in the configured bucket (optional key prefix) and separately TTL-sweeps local `workspaces/`.
+- Each run inserts into `platform.artifact_cleanup_runs` (`deleted_files`, `freed_bytes`, `status`, `message`).
+
+Manual trigger is the Spring bean `ArtifactRetentionService#sweep` (no public HTTP endpoint in v1).
 
 ## Secret rotation
 

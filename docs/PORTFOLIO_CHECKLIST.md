@@ -1,6 +1,6 @@
 # AgentBench — Portfolio checklist (honest)
 
-**As of Milestone 9.** Marked items are evidenced in `main` / this repo. Deferred items are explicit non-claims.
+**As of post-M9 S3-compatible artifact storage.** Marked items are evidenced in `main` / this repo. Deferred items are explicit non-claims.
 
 ## Done (M0–M9)
 
@@ -20,6 +20,7 @@
 | Kubernetes templates (deploy/svc/config/secrets) | `deploy/kubernetes/` |
 | Ops runbook snippets + load-test **plan** + k6 smoke script | `docs/OPERATIONS.md`, `docs/PERFORMANCE.md` |
 | Threat model + portfolio honesty | this file + threat model |
+| S3-compatible artifact store (MinIO / AWS SDK v2) | `ArtifactStorage` + Compose `--profile s3`; `ARTIFACT_STORAGE=s3\|local` |
 
 ## Deferred / not claimed
 
@@ -29,7 +30,6 @@
 | Public leaderboards | **Deferred** — org-private only (Q9) |
 | OIDC / SSO | **Deferred** — local JWT only (Q1) |
 | Postgres RLS | **Deferred** — app-layer org isolation (Q12) |
-| S3-compatible artifact store | **Deferred** — local volume `ArtifactStorage` |
 | Managed cloud Helm chart / operators | **Deferred** — raw manifests only |
 | Certified hostile multi-tenant SaaS security | **Not claimed** |
 | Measured production throughput / capacity numbers | **Not claimed** without attached runs |
