@@ -92,7 +92,7 @@ Roles (org-scoped): `OWNER`, `ADMIN`, `DEVELOPER`, `VIEWER`.
 | Ops | Backup / migrate / upgrade / DLQ snippets in `docs/OPERATIONS.md` |
 | Portfolio | Honest done vs deferred checklist |
 
-**Explicit non-claims:** no Firecracker; gVisor is **opt-in on Linux with runsc** (not Mac Compose default; not a certified hostile multi-tenant claim). No enterprise SAML/SSO admin UI. Postgres RLS is defense-in-depth beside app-layer org filters (`docs/POSTGRES_RLS.md`). Public leaderboards are **opt-in** (OWNER/ADMIN publish; org-private default). Google/GitHub OIDC is optional beside local JWT (see `docs/AUTH_OIDC.md`). **CODING_CLI** is isolator-backed (`docs/AGENTS_CODING_CLI.md`) — not a certified hostile multi-tenant CLI sandbox.
+**Explicit non-claims:** no Firecracker; gVisor is **opt-in on Linux with runsc** (not Mac Compose default; not a certified hostile multi-tenant claim). No enterprise SAML/SSO admin UI. Postgres RLS is defense-in-depth beside app-layer org filters (`docs/POSTGRES_RLS.md`). Public leaderboards are **opt-in** (OWNER/ADMIN publish; org-private default). Google/GitHub OIDC is optional beside local JWT (see `docs/AUTH_OIDC.md`). **CODING_CLI** is isolator-backed (`docs/AGENTS_CODING_CLI.md`) — not a certified hostile multi-tenant CLI sandbox. Optional Sonar is **not** the sole scoring authority (`docs/QUALITY_SONAR.md`).
 
 ### Optional MinIO artifact store
 
@@ -166,6 +166,7 @@ Never edit applied migrations; forward-only only.
 | [docs/SECURITY_THREAT_MODEL.md](docs/SECURITY_THREAT_MODEL.md) | Threat model |
 | [docs/ARCHITECTURE_DECISIONS/ADR-004-docker-first-isolation.md](docs/ARCHITECTURE_DECISIONS/ADR-004-docker-first-isolation.md) | Docker default + optional gVisor |
 | [docs/PORTFOLIO_CHECKLIST.md](docs/PORTFOLIO_CHECKLIST.md) | Done vs deferred |
+| [docs/QUALITY_SONAR.md](docs/QUALITY_SONAR.md) | Optional SonarQube/SonarCloud quality path |
 | [deploy/kubernetes/](deploy/kubernetes/) | K8s templates |
 | [deploy/helm/agentbench/](deploy/helm/agentbench/) | Helm chart (install/upgrade/uninstall) |
 | [scripts/helm/smoke.sh](scripts/helm/smoke.sh) | `helm lint` + `helm template` smoke |

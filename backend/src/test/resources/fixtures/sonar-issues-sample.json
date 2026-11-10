@@ -1,0 +1,29 @@
+{
+  "total": 2,
+  "p": 1,
+  "ps": 100,
+  "issues": [
+    {
+      "key": "AYexample1",
+      "rule": "java:S106",
+      "severity": "MINOR",
+      "component": "agentbench-demo:src/main/java/Demo.java",
+      "project": "agentbench-demo",
+      "line": 12,
+      "message": "Replace this use of System.out by a logger.",
+      "status": "OPEN",
+      "type": "CODE_SMELL"
+    },
+    {
+      "key": "AYexample2",
+      "rule": "java:S1192",
+      "severity": "CRITICAL",
+      "component": "agentbench-demo:src/main/java/Demo.java",
+      "project": "agentbench-demo",
+      "line": 40,
+      "message": "Define a constant instead of duplicating this literal.",
+      "status": "OPEN",
+      "type": "CODE_SMELL"
+    }
+  ]
+}

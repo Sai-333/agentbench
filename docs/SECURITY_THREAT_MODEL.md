@@ -124,8 +124,8 @@ Shared-kernel breakout residual risk remains on the default path. Prefer **`agen
 
 ## 10. Code quality stage
 
-- Tools: **Checkstyle + SpotBugs + PMD** (XML when present; builtin Java heuristics otherwise).
-- **Sonar** is an optional/extensible stub only — never invents scores.
+- Tools: **Checkstyle + SpotBugs + PMD** (XML when present; builtin Java heuristics otherwise) — primary local path.
+- **Sonar** is optional (workspace issues JSON import or Web API fetch when `AGENTBENCH_SONAR_ENABLED=true`); default off; never invents scores; not sole scoring authority. See `docs/QUALITY_SONAR.md`.
 - Findings split into **newly introduced** vs **pre-existing** (fingerprint diff baseline↔post).
 - `code_quality` metric uses a real normalized score only when tools produce results; otherwise `stub=true` and raw=0.
 
