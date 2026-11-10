@@ -93,21 +93,20 @@ public class AnalyticsController {
     }
 
     @GetMapping(value = "/benchmark-versions/{versionId}/leaderboard/export", produces = {
-            "text/csv", MediaType.APPLICATION_JSON_VALUE
+            "text/csv", MediaType.APPLICATION_JSON_VALUE, MediaType.APPLICATION_PDF_VALUE
     })
-    @Operation(summary = "Export org-private leaderboard as CSV or JSON")
+    @Operation(summary = "Export org-private leaderboard as CSV, JSON, or PDF")
     public ResponseEntity<byte[]> exportLeaderboard(
             @PathVariable UUID orgId,
             @PathVariable UUID versionId,
             @RequestParam(required = false) UUID taskId,
             @RequestParam(defaultValue = "csv") String format) {
         byte[] body = analyticsService.exportLeaderboard(orgId, versionId, taskId, format);
-        boolean csv = "csv".equalsIgnoreCase(format);
-        return ResponseEntity.ok()
-                .header(HttpHeaders.CONTENT_DISPOSITION,
-                        "attachment; filename=\"leaderboard-" + versionId + (csv ? ".csv\"" : ".json\""))
-                .contentType(csv ? MediaType.parseMediaType("text/csv") : MediaType.APPLICATION_JSON)
-                .body(body);
+        return attachment(
+                body,
+                "leaderboard-" + versionId,
+                format,
+                "csv");
     }
 
     @GetMapping("/analytics/comparisons")
@@ -139,19 +138,49 @@ public class AnalyticsController {
     }
 
     @GetMapping(value = "/evaluations/{evaluationId}/export", produces = {
-            MediaType.APPLICATION_JSON_VALUE, "text/csv"
+            MediaType.APPLICATION_JSON_VALUE, "text/csv", MediaType.APPLICATION_PDF_VALUE
     })
-    @Operation(summary = "Download evaluation report as JSON or CSV")
+    @Operation(summary = "Download evaluation report as JSON, CSV, or PDF")
     public ResponseEntity<byte[]> exportEvaluation(
             @PathVariable UUID orgId,
             @PathVariable UUID evaluationId,
             @RequestParam(defaultValue = "json") String format) {
         byte[] body = analyticsService.exportEvaluation(orgId, evaluationId, format);
-        boolean csv = "csv".equalsIgnoreCase(format);
+        return attachment(
+                body,
+                "evaluation-" + evaluationId,
+                format,
+                "json");
+    }
+
+    private static ResponseEntity<byte[]> attachment(
+            byte[] body,
+            String filenameBase,
+            String format,
+            String defaultFormat) {
+        String normalized = format == null || format.isBlank()
+                ? defaultFormat
+                : format.trim().toLowerCase();
+        String extension;
+        MediaType mediaType;
+        switch (normalized) {
+            case "csv" -> {
+                extension = ".csv";
+                mediaType = MediaType.parseMediaType("text/csv");
+            }
+            case "pdf" -> {
+                extension = ".pdf";
+                mediaType = MediaType.APPLICATION_PDF;
+            }
+            default -> {
+                extension = ".json";
+                mediaType = MediaType.APPLICATION_JSON;
+            }
+        }
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION,
-                        "attachment; filename=\"evaluation-" + evaluationId + (csv ? ".csv\"" : ".json\""))
-                .contentType(csv ? MediaType.parseMediaType("text/csv") : MediaType.APPLICATION_JSON)
+                        "attachment; filename=\"" + filenameBase + extension + "\"")
+                .contentType(mediaType)
                 .body(body);
     }
 }
