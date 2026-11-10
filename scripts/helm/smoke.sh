@@ -19,6 +19,10 @@ echo "${DEFAULT_OUT}" | grep -q 'AGENTBENCH_PYTHON_RUNNER_IMAGE' \
   || { echo "expected AGENTBENCH_PYTHON_RUNNER_IMAGE in ConfigMap" >&2; exit 1; }
 echo "${DEFAULT_OUT}" | grep -q 'AGENTBENCH_NODE_RUNNER_IMAGE' \
   || { echo "expected AGENTBENCH_NODE_RUNNER_IMAGE in ConfigMap" >&2; exit 1; }
+echo "${DEFAULT_OUT}" | grep -q 'AGENTBENCH_QUALITY_PYTHON_ENABLED' \
+  || { echo "expected AGENTBENCH_QUALITY_PYTHON_ENABLED in ConfigMap" >&2; exit 1; }
+echo "${DEFAULT_OUT}" | grep -q 'AGENTBENCH_QUALITY_NODE_ENABLED' \
+  || { echo "expected AGENTBENCH_QUALITY_NODE_ENABLED in ConfigMap" >&2; exit 1; }
 echo "${DEFAULT_OUT}" | grep -q 'AGENTBENCH_JAVA_RUNNER_IMAGE' \
   || { echo "expected AGENTBENCH_JAVA_RUNNER_IMAGE in ConfigMap" >&2; exit 1; }
 echo "${DEFAULT_OUT}" | grep -q 'AGENTBENCH_ARTIFACT_RETENTION_DAYS' \

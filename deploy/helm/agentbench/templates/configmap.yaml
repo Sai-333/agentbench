@@ -57,6 +57,8 @@ data:
   AGENTBENCH_JAVA_RUNNER_IMAGE: {{ .Values.config.javaRunnerImage | quote }}
   AGENTBENCH_PYTHON_RUNNER_IMAGE: {{ .Values.config.pythonRunnerImage | quote }}
   AGENTBENCH_NODE_RUNNER_IMAGE: {{ .Values.config.nodeRunnerImage | quote }}
+  AGENTBENCH_QUALITY_PYTHON_ENABLED: {{ .Values.config.qualityPythonEnabled | quote }}
+  AGENTBENCH_QUALITY_NODE_ENABLED: {{ .Values.config.qualityNodeEnabled | quote }}
   AGENTBENCH_GITHUB_VALIDATION_ENABLED: {{ .Values.config.githubValidationEnabled | quote }}
   AGENTBENCH_OIDC_GOOGLE_ENABLED: {{ .Values.config.oidcGoogleEnabled | quote }}
   AGENTBENCH_OIDC_GITHUB_ENABLED: {{ .Values.config.oidcGithubEnabled | quote }}

@@ -65,6 +65,7 @@ Single-host Ampere A1 runbook (VM shape, ports, Docker, secrets, health checks, 
 | Artifacts | `ArtifactStorage`: local volume (default) or S3-compatible (`ARTIFACT_STORAGE=s3`, Compose `--profile s3` / MinIO) |
 | Eval isolation | Hardened Docker via `RuntimeIsolator` (default); optional `mode=gvisor` (`docker --runtime=runsc`) or `mode=firecracker` (Linux+KVM); local CI fallback |
 | Suite runners | Fixture-v1 + Maven/JUnit, pytest, Jest via `SuiteToolchainRunner` + isolator (`docs/RUNNERS.md`); hidden stays post-only |
+| Quality scanners | Checkstyle/SpotBugs/PMD primary; optional Sonar + opt-in ruff/eslint (`docs/QUALITY_SONAR.md`, `docs/QUALITY_LANGUAGE.md`) |
 | K8s | Templates under `deploy/kubernetes/` (incl. NetworkPolicies); Helm chart `deploy/helm/agentbench/` (optional `mtls.*`); optional Operator/CRD `deploy/operator/` (`AgentBenchInstance`); not certified multi-cloud SaaS; not a service mesh |
 
 ## Architecture
@@ -93,7 +94,7 @@ Roles (org-scoped): `OWNER`, `ADMIN`, `DEVELOPER`, `VIEWER`.
 | Ops | Backup / migrate / upgrade / DLQ snippets in `docs/OPERATIONS.md` |
 | Portfolio | Honest done vs deferred checklist |
 
-**Explicit non-claims:** gVisor and Firecracker are **opt-in** (Linux+runsc / Linux+KVM; not Mac Compose default; not a certified hostile multi-tenant claim). Firecracker still needs a KVM host + guest assets (`scripts/firecracker/`). SAML SP login is optional (`docs/AUTH_SAML.md`) with org-scoped multi-IdP admin (OWNER/ADMIN) and optional SP AuthnRequest signing (default off). Postgres RLS is defense-in-depth beside app-layer org filters (`docs/POSTGRES_RLS.md`). Public leaderboards are **opt-in** (OWNER/ADMIN publish; org-private default) with optional HMAC-signed embeds + Cache-Control (`docs/PUBLIC_LEADERBOARDS.md`) — no managed CDN or anonymous writes claimed. Google/GitHub OIDC is optional beside local JWT (see `docs/AUTH_OIDC.md`). **CODING_CLI** is isolator-backed (`docs/AGENTS_CODING_CLI.md`) — not a certified hostile multi-tenant CLI sandbox. Optional Sonar is **not** the sole scoring authority (`docs/QUALITY_SONAR.md`). Python/Node runner images must be built/pulled on the worker (`deploy/runners/`, `docs/RUNNERS.md`) before those frameworks run under Docker — not a claim that every Compose boot includes them.
+**Explicit non-claims:** gVisor and Firecracker are **opt-in** (Linux+runsc / Linux+KVM; not Mac Compose default; not a certified hostile multi-tenant claim). Firecracker still needs a KVM host + guest assets (`scripts/firecracker/`). SAML SP login is optional (`docs/AUTH_SAML.md`) with org-scoped multi-IdP admin (OWNER/ADMIN) and optional SP AuthnRequest signing (default off). Postgres RLS is defense-in-depth beside app-layer org filters (`docs/POSTGRES_RLS.md`). Public leaderboards are **opt-in** (OWNER/ADMIN publish; org-private default) with optional HMAC-signed embeds + Cache-Control (`docs/PUBLIC_LEADERBOARDS.md`) — no managed CDN or anonymous writes claimed. Google/GitHub OIDC is optional beside local JWT (see `docs/AUTH_OIDC.md`). **CODING_CLI** is isolator-backed (`docs/AGENTS_CODING_CLI.md`) — not a certified hostile multi-tenant CLI sandbox. Optional Sonar is **not** the sole scoring authority (`docs/QUALITY_SONAR.md`). Opt-in Python (ruff) / Node (eslint) quality scanners are also **not** sole scoring authority (`docs/QUALITY_LANGUAGE.md`; default off). Python/Node runner images must be built/pulled on the worker (`deploy/runners/`, `docs/RUNNERS.md`) before those frameworks (or isolator quality scans) run under Docker — not a claim that every Compose boot includes them.
 
 ### Optional MinIO artifact store
 
@@ -174,6 +175,8 @@ Never edit applied migrations; forward-only only.
 | [docs/PORTFOLIO_CHECKLIST.md](docs/PORTFOLIO_CHECKLIST.md) | Done vs deferred |
 | [docs/SCORING_METHODOLOGY.md](docs/SCORING_METHODOLOGY.md) | F2P/P2P/P2F/F2F, hidden post-only, flake quarantine, baseline gates |
 | [docs/QUALITY_SONAR.md](docs/QUALITY_SONAR.md) | Optional SonarQube/SonarCloud quality path |
+| [docs/QUALITY_LANGUAGE.md](docs/QUALITY_LANGUAGE.md) | Optional Python (ruff) / Node (eslint) quality scanners |
+| [docs/RUNNERS.md](docs/RUNNERS.md) | Suite runners (Maven / pytest / Jest) |
 | [deploy/kubernetes/](deploy/kubernetes/) | K8s templates |
 | [deploy/helm/agentbench/](deploy/helm/agentbench/) | Helm chart (install/upgrade/uninstall) |
 | [deploy/operator/](deploy/operator/) | AgentBenchInstance CRD + helm-operator packaging |

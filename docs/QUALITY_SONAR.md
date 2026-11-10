@@ -55,4 +55,5 @@ Optional per-workspace branch override for API mode: write the branch name to `.
 |---|---|
 | Optional Sonar integration (import + API) | Done when enabled |
 | Checkstyle / SpotBugs / PMD primary | Unchanged |
+| Optional Python (ruff) / Node (eslint) scanners | Separate opt-in path — see `docs/QUALITY_LANGUAGE.md` |
 | Sonar as sole scoring authority | **Not claimed** |

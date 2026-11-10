@@ -32,8 +32,8 @@ import java.util.UUID;
 
 /**
  * Computes weighted scores from raw metrics. Raw metrics are always persisted separately.
- * {@code code_quality} uses Checkstyle/SpotBugs/PMD results when present; otherwise stub raw=0
- * with {@code stub=true}. Never invents fake quality scores.
+ * {@code code_quality} uses Checkstyle/SpotBugs/PMD (plus optional Sonar/ruff/eslint) results when
+ * present; otherwise stub raw=0 with {@code stub=true}. Never invents fake quality scores.
  */
 @Service
 public class ScoringService {

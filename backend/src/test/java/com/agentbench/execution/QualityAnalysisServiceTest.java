@@ -1,6 +1,10 @@
 package com.agentbench.execution;
 
 import com.agentbench.execution.quality.CheckstyleReportParser;
+import com.agentbench.execution.quality.NodeQualityAnalyzer;
+import com.agentbench.execution.quality.NodeQualityProperties;
+import com.agentbench.execution.quality.PythonQualityAnalyzer;
+import com.agentbench.execution.quality.PythonQualityProperties;
 import com.agentbench.execution.quality.QualityAnalysisService;
 import com.agentbench.execution.quality.QualityToolReport;
 import com.agentbench.execution.quality.SonarProperties;
@@ -23,7 +27,11 @@ class QualityAnalysisServiceTest {
 
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final QualityAnalysisService service =
-            new QualityAnalysisService(objectMapper, SonarQualityAnalyzer.disabled());
+            new QualityAnalysisService(
+                    objectMapper,
+                    SonarQualityAnalyzer.disabled(),
+                    PythonQualityAnalyzer.disabled(),
+                    NodeQualityAnalyzer.disabled());
 
     @TempDir
     Path temp;
@@ -123,7 +131,9 @@ class QualityAnalysisServiceTest {
         props.setProjectKey("demo");
         QualityAnalysisService withSonar = new QualityAnalysisService(
                 objectMapper,
-                new SonarQualityAnalyzer(props, new SonarQualityClient(objectMapper)));
+                new SonarQualityAnalyzer(props, new SonarQualityClient(objectMapper)),
+                PythonQualityAnalyzer.disabled(),
+                NodeQualityAnalyzer.disabled());
 
         QualityAnalysisService.AggregatedQuality result = withSonar.analyze(baseline, patched);
         assertTrue(result.realResults());
@@ -137,5 +147,58 @@ class QualityAnalysisServiceTest {
         // Primary tools array still present (checkstyle/pmd/spotbugs or builtin).
         assertTrue(metrics.path("tools").isArray());
         assertTrue(metrics.path("tools").size() >= 1);
+    }
+
+    @Test
+    void languageScannersContributeAlongsidePrimaryJavaTools() throws Exception {
+        Path baseline = temp.resolve("lang-b");
+        Path patched = temp.resolve("lang-p");
+        Files.createDirectories(baseline.resolve(".agentbench"));
+        Files.createDirectories(patched.resolve(".agentbench"));
+        Files.createDirectories(baseline.resolve("src"));
+        Files.createDirectories(patched.resolve("src"));
+        Files.writeString(baseline.resolve("src/App.java"), "class App {}\n", StandardCharsets.UTF_8);
+        Files.writeString(patched.resolve("src/App.java"), "class App {}\n", StandardCharsets.UTF_8);
+        Files.writeString(baseline.resolve("app.py"), "x = 1\n", StandardCharsets.UTF_8);
+        Files.writeString(patched.resolve("app.py"), "print(1)\nx = 1\n", StandardCharsets.UTF_8);
+        Files.writeString(baseline.resolve("index.js"), "const x = 1\n", StandardCharsets.UTF_8);
+        Files.writeString(patched.resolve("index.js"), "console.log(1)\n", StandardCharsets.UTF_8);
+
+        Files.writeString(baseline.resolve(".agentbench/ruff.json"), "[]\n", StandardCharsets.UTF_8);
+        Files.writeString(patched.resolve(".agentbench/ruff.json"), """
+                [{"code":"T201","message":"print","filename":"app.py","location":{"row":1,"column":1}}]
+                """, StandardCharsets.UTF_8);
+        Files.writeString(baseline.resolve(".agentbench/eslint.json"),
+                "[{\"filePath\":\"index.js\",\"messages\":[]}]\n", StandardCharsets.UTF_8);
+        Files.writeString(patched.resolve(".agentbench/eslint.json"), """
+                [{"filePath":"index.js","messages":[{"ruleId":"no-console","severity":1,"line":1,"message":"console"}]}]
+                """, StandardCharsets.UTF_8);
+
+        PythonQualityProperties py = new PythonQualityProperties();
+        py.setEnabled(true);
+        py.setInvokeIsolator(false);
+        NodeQualityProperties node = new NodeQualityProperties();
+        node.setEnabled(true);
+        node.setInvokeIsolator(false);
+
+        QualityAnalysisService withLang = new QualityAnalysisService(
+                objectMapper,
+                SonarQualityAnalyzer.disabled(),
+                new PythonQualityAnalyzer(py, null, new com.agentbench.execution.config.ExecutionProperties(), objectMapper),
+                new NodeQualityAnalyzer(node, null, new com.agentbench.execution.config.ExecutionProperties(), objectMapper));
+
+        QualityAnalysisService.AggregatedQuality result = withLang.analyze(baseline, patched);
+        assertTrue(result.realResults());
+        assertTrue(result.toolLabel().contains("ruff"));
+        assertTrue(result.toolLabel().contains("eslint"));
+        assertTrue(result.toolLabel().startsWith("checkstyle+spotbugs+pmd"));
+        JsonNode metrics = objectMapper.readTree(result.metricsJson());
+        assertTrue(metrics.path("pythonEnabled").asBoolean());
+        assertTrue(metrics.path("nodeEnabled").asBoolean());
+        assertTrue(metrics.path("pythonContributed").asBoolean());
+        assertTrue(metrics.path("nodeContributed").asBoolean());
+        assertEquals(1, metrics.path("ruff").path("newFindings").asInt());
+        assertEquals(1, metrics.path("eslint").path("newFindings").asInt());
+        assertFalse(metrics.path("sonarEnabled").asBoolean());
     }
 }

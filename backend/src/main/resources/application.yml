@@ -230,6 +230,24 @@ agentbench:
       pull-request: ${AGENTBENCH_SONAR_PULL_REQUEST:}
       timeout-sec: ${AGENTBENCH_SONAR_TIMEOUT_SEC:20}
       max-issues: ${AGENTBENCH_SONAR_MAX_ISSUES:500}
+    python:
+      # Optional ruff scanner. Default off. Checkstyle/SpotBugs/PMD remain primary for Java.
+      # Report import → RuntimeIsolator (python runner image) → builtin heuristics. See docs/QUALITY_LANGUAGE.md.
+      enabled: ${AGENTBENCH_QUALITY_PYTHON_ENABLED:false}
+      tool: ruff
+      timeout-sec: ${AGENTBENCH_QUALITY_PYTHON_TIMEOUT_SEC:60}
+      allow-builtin-heuristics: ${AGENTBENCH_QUALITY_PYTHON_BUILTIN:true}
+      invoke-isolator: ${AGENTBENCH_QUALITY_PYTHON_ISOLATOR:true}
+      command: ${AGENTBENCH_QUALITY_PYTHON_COMMAND:}
+    node:
+      # Optional eslint scanner. Default off. Checkstyle/SpotBugs/PMD remain primary for Java.
+      # Report import → RuntimeIsolator (node runner image) → builtin heuristics. See docs/QUALITY_LANGUAGE.md.
+      enabled: ${AGENTBENCH_QUALITY_NODE_ENABLED:false}
+      tool: eslint
+      timeout-sec: ${AGENTBENCH_QUALITY_NODE_TIMEOUT_SEC:60}
+      allow-builtin-heuristics: ${AGENTBENCH_QUALITY_NODE_BUILTIN:true}
+      invoke-isolator: ${AGENTBENCH_QUALITY_NODE_ISOLATOR:true}
+      command: ${AGENTBENCH_QUALITY_NODE_COMMAND:}
   agents:
     default-max-retries: ${AGENTBENCH_AGENTS_MAX_RETRIES:2}
     default-timeout-sec: ${AGENTBENCH_AGENTS_TIMEOUT_SEC:60}
