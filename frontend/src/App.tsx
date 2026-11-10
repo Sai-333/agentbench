@@ -17,6 +17,7 @@ import type {
   Evaluation,
   EvaluationDetail,
   EvaluationSearchResponse,
+  LeaderboardPublicationStatus,
   LeaderboardResponse,
   MeResponse,
   Org,
@@ -118,6 +119,8 @@ function App() {
   const [leaderboard, setLeaderboard] = useState<LeaderboardResponse | null>(null)
   const [leaderboardState, setLeaderboardState] = useState<LoadState>('idle')
   const [leaderboardError, setLeaderboardError] = useState<string | null>(null)
+  const [publication, setPublication] = useState<LeaderboardPublicationStatus | null>(null)
+  const [publicationBusy, setPublicationBusy] = useState(false)
   const [comparison, setComparison] = useState<ComparisonResponse | null>(null)
   const [comparisonState, setComparisonState] = useState<LoadState>('idle')
   const [comparisonError, setComparisonError] = useState<string | null>(null)
@@ -208,19 +211,27 @@ function App() {
   const loadLeaderboard = useCallback(async (orgId: string, versionId: string) => {
     if (!versionId) {
       setLeaderboard(null)
+      setPublication(null)
       setLeaderboardState('empty')
       return
     }
     setLeaderboardState('loading')
     setLeaderboardError(null)
     try {
-      const data = await api<LeaderboardResponse>(
-        `/api/v1/orgs/${orgId}/benchmark-versions/${versionId}/leaderboard?page=0&size=50`,
-      )
+      const [data, pub] = await Promise.all([
+        api<LeaderboardResponse>(
+          `/api/v1/orgs/${orgId}/benchmark-versions/${versionId}/leaderboard?page=0&size=50`,
+        ),
+        api<LeaderboardPublicationStatus>(
+          `/api/v1/orgs/${orgId}/benchmark-versions/${versionId}/leaderboard/publication`,
+        ),
+      ])
       setLeaderboard(data)
+      setPublication(pub)
       setLeaderboardState(data.entries.length === 0 ? 'empty' : 'ready')
     } catch (err) {
       setLeaderboard(null)
+      setPublication(null)
       setLeaderboardError(err instanceof Error ? err.message : 'Could not load leaderboard')
       setLeaderboardState('error')
     }
@@ -550,6 +561,43 @@ function App() {
       setError(err instanceof Error ? err.message : 'Leaderboard export failed')
     } finally {
       setBusy(false)
+    }
+  }
+
+  async function handlePublishLeaderboard(publicSlug: string, title: string) {
+    if (!selectedOrgId || !selectedVersionId) return
+    setPublicationBusy(true)
+    setError(null)
+    try {
+      const body: { publicSlug?: string; title?: string } = {}
+      if (publicSlug) body.publicSlug = publicSlug
+      if (title) body.title = title
+      const status = await api<LeaderboardPublicationStatus>(
+        `/api/v1/orgs/${selectedOrgId}/benchmark-versions/${selectedVersionId}/leaderboard/publish`,
+        { method: 'POST', body: JSON.stringify(body) },
+      )
+      setPublication(status)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Publish failed')
+    } finally {
+      setPublicationBusy(false)
+    }
+  }
+
+  async function handleUnpublishLeaderboard() {
+    if (!selectedOrgId || !selectedVersionId) return
+    setPublicationBusy(true)
+    setError(null)
+    try {
+      const status = await api<LeaderboardPublicationStatus>(
+        `/api/v1/orgs/${selectedOrgId}/benchmark-versions/${selectedVersionId}/leaderboard/unpublish`,
+        { method: 'POST', body: '{}' },
+      )
+      setPublication(status)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unpublish failed')
+    } finally {
+      setPublicationBusy(false)
     }
   }
 
@@ -1069,6 +1117,7 @@ function App() {
   const selectedBenchmark = benchmarks.find((b) => b.id === selectedBenchmarkId)
   const selectedVersion = versions.find((v) => v.id === selectedVersionId)
   const canEdit = role === 'OWNER' || role === 'ADMIN' || role === 'DEVELOPER'
+  const canPublishLeaderboard = role === 'OWNER' || role === 'ADMIN'
   const draftSelected = selectedVersion?.status === 'DRAFT'
 
   return (
@@ -1218,6 +1267,11 @@ function App() {
                     error={leaderboardError}
                     busy={busy}
                     onExport={(format) => void handleExportLeaderboard(format)}
+                    canPublish={canPublishLeaderboard}
+                    publication={publication}
+                    publicationBusy={publicationBusy}
+                    onPublish={(slug, title) => void handlePublishLeaderboard(slug, title)}
+                    onUnpublish={() => void handleUnpublishLeaderboard()}
                   />
                 </>
               ) : (

@@ -1,6 +1,6 @@
 # AgentBench — Portfolio checklist (honest)
 
-**As of post-M9 OIDC auth + S3-compatible artifact storage.** Marked items are evidenced in `main` / this repo. Deferred items are explicit non-claims.
+**As of post-M9 public leaderboards + OIDC auth + S3-compatible artifact storage.** Marked items are evidenced in `main` / this repo. Deferred items are explicit non-claims.
 
 ## Done (M0–M9 + deferred follow-ups landed)
 
@@ -16,6 +16,7 @@
 | Scoring + visible F2P/P2P/P2F/F2F; hidden post-only pass rate | M6 |
 | Hardened Docker `RuntimeIsolator` + quality tools | M7 |
 | Org-private analytics / leaderboard / exports | M8 |
+| Opt-in public leaderboards (OWNER/ADMIN publish; sanitized payload) | Flyway V11; `/api/v1/public/leaderboards/{slug}`; org-private remains default |
 | Recovery tests (baseline / cancel / timeout / retry policy / DLQ topology) | M9 tests |
 | Graceful shutdown + prod-ish Compose overlay | `application.yml`, `docker-compose.prod.yml` |
 | Kubernetes templates (deploy/svc/config/secrets) | `deploy/kubernetes/` |
@@ -28,7 +29,6 @@
 | Item | Status |
 |---|---|
 | gVisor / Firecracker isolation | **Deferred** — interface ready (`RuntimeIsolator`); Docker residual risk remains |
-| Public leaderboards | **Deferred** — org-private only (Q9) |
 | Full enterprise SSO (SAML / multi-IdP admin UI) | **Deferred** — Google/GitHub OIDC authorization-code only (Q1 partial) |
 | Postgres RLS | **Deferred** — app-layer org isolation (Q12) |
 | Managed cloud Helm chart / operators | **Deferred** — raw manifests only |
@@ -39,6 +39,8 @@
 | Full CODING_CLI production isolation | Skeleton only |
 | NetworkPolicies / mTLS / WORM audit | Draft / later |
 | PDF report stack | JSON/CSV only |
+| Auto-updating public boards / signed embeds / CDN caching | **Not claimed** — live query of published slug only |
+| Anonymous write / vote / comment on public boards | **Not claimed** — read-only public GET |
 
 ## Demo path
 

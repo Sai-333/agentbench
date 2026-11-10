@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import type {
   ComparisonResponse,
   CostAnalyticsResponse,
@@ -160,18 +160,41 @@ export function LeaderboardPanel({
   error,
   onExport,
   busy,
+  canPublish,
+  publication,
+  publicationBusy,
+  onPublish,
+  onUnpublish,
 }: {
   board: LeaderboardResponse | null
   state: LoadState
   error: string | null
   onExport: (format: 'csv' | 'json') => void
   busy: boolean
+  canPublish: boolean
+  publication: {
+    published: boolean
+    publicSlug: string | null
+    title: string | null
+    publicPath: string | null
+  } | null
+  publicationBusy: boolean
+  onPublish: (publicSlug: string, title: string) => void
+  onUnpublish: () => void
 }) {
+  const [slugDraft, setSlugDraft] = useState('')
+  const [titleDraft, setTitleDraft] = useState('')
+
+  useEffect(() => {
+    setSlugDraft(publication?.publicSlug || '')
+    setTitleDraft(publication?.title || '')
+  }, [publication?.publicSlug, publication?.title])
+
   return (
     <div className="dash-stack">
       <div className="toolbar">
         <p className="muted small">
-          Org-private only · same benchmark version · best score per agent×task
+          Org-private by default · same benchmark version · best score per agent×task
         </p>
         <div className="toolbar-actions">
           <button type="button" className="cta secondary" disabled={busy || !board} onClick={() => onExport('csv')}>
@@ -182,6 +205,71 @@ export function LeaderboardPanel({
           </button>
         </div>
       </div>
+      {(canPublish || publication?.published) && (
+        <div className="publish-box">
+          <h3>Public publication</h3>
+          <p className="muted small">
+            {canPublish
+              ? 'OWNER/ADMIN only. Publishes a sanitized snapshot (no internal IDs, tokens, costs, or secrets).'
+              : 'This version has an active public leaderboard (read-only for your role).'}
+          </p>
+          {publication?.published ? (
+            <div className="toolbar">
+              <p className="muted small">
+                Live at{' '}
+                <a href={publication.publicPath || '#'} target="_blank" rel="noreferrer">
+                  {publication.publicPath}
+                </a>
+                {publication.publicSlug ? ` · slug ${publication.publicSlug}` : ''}
+              </p>
+              {canPublish && (
+                <div className="toolbar-actions">
+                  <button
+                    type="button"
+                    className="cta secondary"
+                    disabled={publicationBusy}
+                    onClick={() => onUnpublish()}
+                  >
+                    Unpublish
+                  </button>
+                </div>
+              )}
+            </div>
+          ) : canPublish ? (
+            <form
+              className="form compact"
+              onSubmit={(event) => {
+                event.preventDefault()
+                onPublish(slugDraft.trim(), titleDraft.trim())
+              }}
+            >
+              <label>
+                Public slug
+                <input
+                  value={slugDraft}
+                  onChange={(e) => setSlugDraft(e.target.value)}
+                  placeholder="my-org-bench-1-0-0"
+                  pattern="[a-z0-9]+(?:-[a-z0-9]+)*"
+                  minLength={3}
+                  maxLength={80}
+                />
+              </label>
+              <label>
+                Title
+                <input
+                  value={titleDraft}
+                  onChange={(e) => setTitleDraft(e.target.value)}
+                  placeholder="Optional display title"
+                  maxLength={200}
+                />
+              </label>
+              <button className="cta" type="submit" disabled={publicationBusy}>
+                Publish publicly
+              </button>
+            </form>
+          ) : null}
+        </div>
+      )}
       <StateBlock
         state={state}
         error={error}

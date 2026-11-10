@@ -316,6 +316,42 @@ export type LeaderboardResponse = {
   page: PageMeta
 }
 
+export type LeaderboardPublicationStatus = {
+  published: boolean
+  publicSlug: string | null
+  title: string | null
+  publishedAt: string | null
+  publishedBy: string | null
+  unpublishedAt: string | null
+  publicPath: string | null
+}
+
+export type PublicLeaderboardEntry = {
+  rank: number
+  agentName: string
+  adapterType: string
+  taskSlug: string
+  weightedTotal: number
+  scoreStatus: string
+  transitionSummary: Record<string, number>
+  completedAt: string | null
+  durationMs: number | null
+}
+
+export type PublicLeaderboardResponse = {
+  publicSlug: string
+  title: string
+  orgSlug: string
+  orgName: string
+  benchmarkName: string
+  benchmarkVersion: string
+  scoringProfileKey: string
+  note: string
+  publishedAt: string
+  entries: PublicLeaderboardEntry[]
+  page: PageMeta
+}
+
 export type ComparisonResponse = {
   benchmarkVersionId: string
   scoringProfileKey: string

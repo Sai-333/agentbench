@@ -17,7 +17,7 @@ import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 
 /**
- * JWT bearer auth; public health/OpenAPI/info/auth/OIDC endpoints.
+ * JWT bearer auth; public health/OpenAPI/info/auth/OIDC/public-leaderboard endpoints.
  * Org membership/role checks are enforced in services via OrgAccessService.
  */
 @Configuration
@@ -50,7 +50,8 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET,
                                 "/api/v1/auth/providers",
                                 "/api/v1/auth/oidc/*/authorize",
-                                "/api/v1/auth/oidc/*/callback"
+                                "/api/v1/auth/oidc/*/callback",
+                                "/api/v1/public/leaderboards/**"
                         ).permitAll()
                         .requestMatchers(HttpMethod.POST,
                                 "/api/v1/auth/register",

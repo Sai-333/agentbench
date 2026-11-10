@@ -92,7 +92,7 @@ Roles (org-scoped): `OWNER`, `ADMIN`, `DEVELOPER`, `VIEWER`.
 | Ops | Backup / migrate / upgrade / DLQ snippets in `docs/OPERATIONS.md` |
 | Portfolio | Honest done vs deferred checklist |
 
-**Explicit non-claims:** no gVisor/Firecracker yet; no public leaderboards; no enterprise SAML/SSO admin UI; no Postgres RLS; not certified hostile multi-tenant SaaS. Google/GitHub OIDC is optional beside local JWT (see `docs/AUTH_OIDC.md`).
+**Explicit non-claims:** no gVisor/Firecracker yet; no enterprise SAML/SSO admin UI; no Postgres RLS; not certified hostile multi-tenant SaaS. Public leaderboards are **opt-in** (OWNER/ADMIN publish; org-private default). Google/GitHub OIDC is optional beside local JWT (see `docs/AUTH_OIDC.md`).
 
 ### Optional MinIO artifact store
 

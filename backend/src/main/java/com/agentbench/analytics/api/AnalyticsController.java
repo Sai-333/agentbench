@@ -11,6 +11,8 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -20,7 +22,7 @@ import java.util.UUID;
 
 @RestController
 @RequestMapping(ApiPaths.ORG_BASE)
-@Tag(name = "Analytics", description = "Org-private dashboards, leaderboards, comparisons, costs, exports (M8)")
+@Tag(name = "Analytics", description = "Org-private dashboards, leaderboards, comparisons, costs, exports; opt-in public publish")
 @SecurityRequirement(name = "bearerAuth")
 public class AnalyticsController {
 
@@ -55,7 +57,7 @@ public class AnalyticsController {
     }
 
     @GetMapping("/benchmark-versions/{versionId}/leaderboard")
-    @Operation(summary = "Org-private leaderboard for a benchmark version (not public)")
+    @Operation(summary = "Org-private leaderboard for a benchmark version (default; not public)")
     public AnalyticsDtos.LeaderboardResponse leaderboard(
             @PathVariable UUID orgId,
             @PathVariable UUID versionId,
@@ -63,6 +65,31 @@ public class AnalyticsController {
             @RequestParam(required = false) Integer page,
             @RequestParam(required = false) Integer size) {
         return analyticsService.leaderboard(orgId, versionId, taskId, page, size);
+    }
+
+    @GetMapping("/benchmark-versions/{versionId}/leaderboard/publication")
+    @Operation(summary = "Publication status for this version's leaderboard (org members)")
+    public AnalyticsDtos.LeaderboardPublicationStatus publicationStatus(
+            @PathVariable UUID orgId,
+            @PathVariable UUID versionId) {
+        return analyticsService.publicationStatus(orgId, versionId);
+    }
+
+    @PostMapping("/benchmark-versions/{versionId}/leaderboard/publish")
+    @Operation(summary = "Publish leaderboard snapshot to a public slug (OWNER/ADMIN)")
+    public AnalyticsDtos.LeaderboardPublicationStatus publishLeaderboard(
+            @PathVariable UUID orgId,
+            @PathVariable UUID versionId,
+            @RequestBody(required = false) AnalyticsDtos.PublishLeaderboardRequest request) {
+        return analyticsService.publishLeaderboard(orgId, versionId, request);
+    }
+
+    @PostMapping("/benchmark-versions/{versionId}/leaderboard/unpublish")
+    @Operation(summary = "Revoke public leaderboard publication (OWNER/ADMIN)")
+    public AnalyticsDtos.LeaderboardPublicationStatus unpublishLeaderboard(
+            @PathVariable UUID orgId,
+            @PathVariable UUID versionId) {
+        return analyticsService.unpublishLeaderboard(orgId, versionId);
     }
 
     @GetMapping(value = "/benchmark-versions/{versionId}/leaderboard/export", produces = {
