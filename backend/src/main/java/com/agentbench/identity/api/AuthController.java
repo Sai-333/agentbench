@@ -5,6 +5,7 @@ import com.agentbench.identity.security.OrgAccessService;
 import com.agentbench.identity.security.UserPrincipal;
 import com.agentbench.identity.service.AuthService;
 import com.agentbench.identity.service.OidcAuthService;
+import com.agentbench.identity.service.SamlAuthService;
 import com.agentbench.platform.api.ApiPaths;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -27,24 +28,27 @@ import java.net.URI;
 
 @RestController
 @RequestMapping(ApiPaths.API_V1)
-@Tag(name = "Auth", description = "Registration, login, OIDC, JWT refresh/logout")
+@Tag(name = "Auth", description = "Registration, login, OIDC, SAML, JWT refresh/logout")
 public class AuthController {
 
     private final AuthService authService;
     private final OidcAuthService oidcAuthService;
+    private final SamlAuthService samlAuthService;
     private final OrgAccessService orgAccessService;
 
     public AuthController(
             AuthService authService,
             OidcAuthService oidcAuthService,
+            SamlAuthService samlAuthService,
             OrgAccessService orgAccessService) {
         this.authService = authService;
         this.oidcAuthService = oidcAuthService;
+        this.samlAuthService = samlAuthService;
         this.orgAccessService = orgAccessService;
     }
 
     @GetMapping(value = "/auth/providers", produces = MediaType.APPLICATION_JSON_VALUE)
-    @Operation(summary = "List enabled auth providers (local always; OIDC when configured)")
+    @Operation(summary = "List enabled auth providers (local always; OIDC/SAML when configured)")
     public AuthDtos.ProvidersResponse providers() {
         return authService.listProviders();
     }
@@ -88,6 +92,41 @@ public class AuthController {
             @PathVariable("provider") String provider,
             @Valid @RequestBody AuthDtos.OidcTokenRequest request) {
         return oidcAuthService.completeWithCode(provider, request.code(), request.state());
+    }
+
+    @GetMapping("/auth/saml/login")
+    @Operation(summary = "Start SAML 2.0 SP-initiated login (browser redirect to IdP)")
+    public ResponseEntity<Void> samlLogin() {
+        URI location = samlAuthService.beginLogin();
+        return ResponseEntity.status(HttpStatus.FOUND).header(HttpHeaders.LOCATION, location.toString()).build();
+    }
+
+    @GetMapping(value = "/auth/saml/metadata", produces = MediaType.APPLICATION_XML_VALUE)
+    @Operation(summary = "Export SP metadata XML for IdP registration")
+    public ResponseEntity<String> samlMetadata() {
+        return ResponseEntity.ok()
+                .contentType(MediaType.APPLICATION_XML)
+                .body(samlAuthService.spMetadataXml());
+    }
+
+    @PostMapping(
+            value = "/auth/saml/acs",
+            consumes = MediaType.APPLICATION_FORM_URLENCODED_VALUE)
+    @Operation(summary = "SAML Assertion Consumer Service — redirects to frontend with tokens in URL fragment")
+    public ResponseEntity<Void> samlAcs(
+            @RequestParam("SAMLResponse") String samlResponse,
+            @RequestParam("RelayState") String relayState) {
+        URI location = samlAuthService.completeBrowserAcs(samlResponse, relayState);
+        return ResponseEntity.status(HttpStatus.FOUND).header(HttpHeaders.LOCATION, location.toString()).build();
+    }
+
+    @PostMapping(
+            value = "/auth/saml/token",
+            consumes = MediaType.APPLICATION_JSON_VALUE,
+            produces = MediaType.APPLICATION_JSON_VALUE)
+    @Operation(summary = "Exchange SAMLResponse + RelayState for AgentBench JWTs (API / tests)")
+    public AuthDtos.TokenResponse samlToken(@Valid @RequestBody AuthDtos.SamlTokenRequest request) {
+        return samlAuthService.completeWithResponse(request.samlResponse(), request.relayState());
     }
 
     @PostMapping(value = "/auth/refresh", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)

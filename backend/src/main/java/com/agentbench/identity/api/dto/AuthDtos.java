@@ -69,4 +69,10 @@ public final class AuthDtos {
             @NotBlank String state
     ) {
     }
+
+    public record SamlTokenRequest(
+            @NotBlank String samlResponse,
+            @NotBlank String relayState
+    ) {
+    }
 }

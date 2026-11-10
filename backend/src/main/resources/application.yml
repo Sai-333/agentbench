@@ -149,6 +149,19 @@ agentbench:
       user-info-uri: ${AGENTBENCH_OIDC_GITHUB_USERINFO_URI:https://api.github.com/user}
       email-uri: ${AGENTBENCH_OIDC_GITHUB_EMAIL_URI:https://api.github.com/user/emails}
       scopes: ${AGENTBENCH_OIDC_GITHUB_SCOPES:read:user user:email}
+  saml:
+    # SAML 2.0 SP — disabled by default for local Compose. See docs/AUTH_SAML.md
+    enabled: ${AGENTBENCH_SAML_ENABLED:false}
+    registration-id: ${AGENTBENCH_SAML_REGISTRATION_ID:agentbench}
+    display-name: ${AGENTBENCH_SAML_DISPLAY_NAME:Enterprise SSO}
+    entity-id: ${AGENTBENCH_SAML_ENTITY_ID:http://localhost:8080/saml2/metadata}
+    acs-url: ${AGENTBENCH_SAML_ACS_URL:http://localhost:8080/api/v1/auth/saml/acs}
+    metadata-url: ${AGENTBENCH_SAML_METADATA_URL:}
+    metadata-xml: ${AGENTBENCH_SAML_METADATA_XML:}
+    success-redirect-url: ${AGENTBENCH_SAML_SUCCESS_REDIRECT_URL:http://localhost:3000/}
+    attribute-mapping:
+      email: ${AGENTBENCH_SAML_ATTR_EMAIL:email}
+      display-name: ${AGENTBENCH_SAML_ATTR_DISPLAY_NAME:displayName}
   secrets:
     # Base64-encoded 32-byte AES key. Default is for local/Compose only.
     encryption-key: ${AGENTBENCH_SECRETS_ENCRYPTION_KEY:MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=}

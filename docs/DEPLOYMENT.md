@@ -33,6 +33,10 @@ Disabled by default. Password registration/login always works. To enable “Cont
 
 Never commit real client secrets. Endpoint overrides exist for CI mocks (`AGENTBENCH_OIDC_*_TOKEN_URI`, etc.).
 
+### Optional SAML 2.0 (enterprise SSO)
+
+Disabled by default. Config-driven single IdP (metadata URL or XML) — see **[docs/AUTH_SAML.md](AUTH_SAML.md)**. Set `AGENTBENCH_SAML_ENABLED=true` plus entity ID, ACS URL, and IdP metadata; multi-IdP admin UI is not included.
+
 ### S3-compatible artifacts (MinIO profile)
 
 Local filesystem remains the simple-demo default. To store blobs in MinIO:
