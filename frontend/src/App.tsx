@@ -33,6 +33,7 @@ import {
   OpsHealthPanel,
   OverviewPanel,
 } from './DashboardPanels'
+import { resetForm } from './formUtils'
 import './App.css'
 
 type Mode = 'login' | 'register'
@@ -396,7 +397,8 @@ function App() {
     event.preventDefault()
     setError(null)
     setBusy(true)
-    const form = new FormData(event.currentTarget)
+    const formEl = event.currentTarget
+    const form = new FormData(formEl)
     const name = String(form.get('name') || '')
     const slug = String(form.get('slug') || '') || slugify(name)
     try {
@@ -404,7 +406,7 @@ function App() {
         method: 'POST',
         body: JSON.stringify({ name, slug }),
       })
-      event.currentTarget.reset()
+      resetForm(formEl)
       setSelectedOrgId(org.id)
       await loadWorkspace()
     } catch (err) {
@@ -546,7 +548,7 @@ function App() {
           config,
         }),
       })
-      formEl.reset()
+      resetForm(formEl)
       await loadAgents(selectedOrgId)
       await loadEvaluations(selectedOrgId)
       setSelectedAgent(created)
@@ -574,7 +576,7 @@ function App() {
           plaintext: String(form.get('plaintext') || ''),
         }),
       })
-      formEl.reset()
+      resetForm(formEl)
       await loadAgents(selectedOrgId)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not create secret')
@@ -638,7 +640,7 @@ function App() {
         method: 'POST',
         body: JSON.stringify({ benchmarkVersionId, taskId, agentId }),
       })
-      formEl.reset()
+      resetForm(formEl)
       await loadEvaluations(selectedOrgId)
       await loadEvaluationSearch(selectedOrgId, 0)
       await loadOverview(selectedOrgId)
@@ -703,7 +705,8 @@ function App() {
     }
     setError(null)
     setBusy(true)
-    const form = new FormData(event.currentTarget)
+    const formEl = event.currentTarget
+    const form = new FormData(formEl)
     const name = String(form.get('name') || '')
     const description = String(form.get('description') || '')
     try {
@@ -711,7 +714,7 @@ function App() {
         method: 'POST',
         body: JSON.stringify({ name, description }),
       })
-      event.currentTarget.reset()
+      resetForm(formEl)
       const projectList = await api<Project[]>(`/api/v1/orgs/${selectedOrgId}/projects`)
       setProjects(projectList)
     } catch (err) {
@@ -743,7 +746,7 @@ function App() {
           projectId: projectId || null,
         }),
       })
-      formEl.reset()
+      resetForm(formEl)
       setSelectedBenchmarkId(created.id)
       await loadBenchmarks(selectedOrgId)
     } catch (err) {
@@ -787,7 +790,7 @@ function App() {
           body: JSON.stringify({ version, changelog }),
         },
       )
-      formEl.reset()
+      resetForm(formEl)
       setSelectedVersionId(created.id)
       const list = await api<BenchmarkVersion[]>(
         `/api/v1/orgs/${selectedOrgId}/benchmarks/${selectedBenchmarkId}/versions`,
@@ -885,7 +888,7 @@ function App() {
           }),
         },
       )
-      formEl.reset()
+      resetForm(formEl)
       const taskList = await api<Task[]>(
         `/api/v1/orgs/${selectedOrgId}/benchmark-versions/${selectedVersionId}/tasks`,
       )
