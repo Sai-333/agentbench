@@ -1,6 +1,6 @@
 # AgentBench — Portfolio checklist (honest)
 
-**As of post-M9 public leaderboards + OIDC auth + S3-compatible artifact storage + Postgres RLS + measured local k6 smoke + opt-in gVisor + Helm chart + NetworkPolicies.** Marked items are evidenced in `main` / this repo. Deferred items are explicit non-claims.
+**As of post-M9 public leaderboards + OIDC auth + S3-compatible artifact storage + Postgres RLS + measured local k6 smoke + opt-in gVisor + Helm chart + NetworkPolicies + PDF exports.** Marked items are evidenced in `main` / this repo. Deferred items are explicit non-claims.
 
 ## Done (M0–M9 + deferred follow-ups landed)
 
@@ -17,6 +17,7 @@
 | Hardened Docker `RuntimeIsolator` + quality tools | M7 |
 | Opt-in gVisor (`runsc`) behind `RuntimeIsolator` | `mode=gvisor` → `docker --runtime=runsc`; fail-fast without runsc; ADR-004; Mac stays Docker |
 | Org-private analytics / leaderboard / exports | M8 |
+| PDF evaluation / leaderboard report export | OpenPDF; `GET .../evaluations/{id}/export?format=pdf` + `.../leaderboard/export?format=pdf`; VIEWER RBAC; UI Export PDF; `ReportExportServiceTest` + `AnalyticsDashboardTest` |
 | Opt-in public leaderboards (OWNER/ADMIN publish; sanitized payload) | Flyway V11; `/api/v1/public/leaderboards/{slug}`; org-private remains default |
 | Recovery tests (baseline / cancel / timeout / retry policy / DLQ topology) | M9 tests |
 | Graceful shutdown + prod-ish Compose overlay | `application.yml`, `docker-compose.prod.yml` |
@@ -44,7 +45,6 @@
 | Full CODING_CLI production isolation | Skeleton only |
 | mTLS between services | **Deferred** — NetworkPolicies are L3/L4 only |
 | WORM audit storage | **Deferred** — audit log exists; not WORM |
-| PDF report stack | JSON/CSV only |
 | Auto-updating public boards / signed embeds / CDN caching | **Not claimed** — live query of published slug only |
 | Anonymous write / vote / comment on public boards | **Not claimed** — read-only public GET |
 

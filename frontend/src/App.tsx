@@ -531,7 +531,7 @@ function App() {
     }
   }
 
-  async function handleExportEvaluation(format: 'json' | 'csv') {
+  async function handleExportEvaluation(format: 'json' | 'csv' | 'pdf') {
     if (!selectedOrgId || !selectedEvaluation) return
     setBusy(true)
     setError(null)
@@ -548,7 +548,7 @@ function App() {
     }
   }
 
-  async function handleExportLeaderboard(format: 'csv' | 'json') {
+  async function handleExportLeaderboard(format: 'csv' | 'json' | 'pdf') {
     if (!selectedOrgId || !selectedVersionId) return
     setBusy(true)
     setError(null)
@@ -1805,6 +1805,14 @@ function App() {
                 disabled={busy}
               >
                 Export CSV
+              </button>
+              <button
+                type="button"
+                className="cta secondary"
+                onClick={() => void handleExportEvaluation('pdf')}
+                disabled={busy}
+              >
+                Export PDF
               </button>
               {canEdit && !TERMINAL_STATES.has(selectedEvaluation.evaluation.state) && (
                   <button type="button" className="cta secondary" onClick={handleCancelEvaluation} disabled={busy}>

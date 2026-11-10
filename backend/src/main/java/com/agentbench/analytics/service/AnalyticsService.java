@@ -249,7 +249,9 @@ public class AnalyticsService {
         return switch (normalized) {
             case "csv" -> reportExportService.toCsv(report).getBytes(StandardCharsets.UTF_8);
             case "json" -> reportExportService.toJson(report).getBytes(StandardCharsets.UTF_8);
-            default -> throw ApiException.validation("Unsupported export format: " + format + " (use json or csv)");
+            case "pdf" -> reportExportService.toPdf(report);
+            default -> throw ApiException.validation(
+                    "Unsupported export format: " + format + " (use json, csv, or pdf)");
         };
     }
 
@@ -266,7 +268,9 @@ public class AnalyticsService {
                     throw new IllegalStateException("Failed to serialize leaderboard", ex);
                 }
             }
-            default -> throw ApiException.validation("Unsupported export format: " + format + " (use json or csv)");
+            case "pdf" -> reportExportService.leaderboardPdf(board);
+            default -> throw ApiException.validation(
+                    "Unsupported export format: " + format + " (use json, csv, or pdf)");
         };
     }
 

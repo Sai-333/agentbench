@@ -24,9 +24,11 @@ import java.time.Instant;
 import java.util.Map;
 import java.util.UUID;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -115,13 +117,58 @@ class AnalyticsDashboardTest {
                 .andExpect(result -> assertTrue(
                         result.getResponse().getContentAsString().contains("section,key,value")));
 
+        mockMvc.perform(get("/api/v1/orgs/{orgId}/evaluations/{evaluationId}/export",
+                        orgA, fixtureA.evaluationId())
+                        .param("format", "pdf")
+                        .header("Authorization", "Bearer " + tokenA))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Content-Type", "application/pdf"))
+                .andExpect(header().string(
+                        "Content-Disposition",
+                        "attachment; filename=\"evaluation-" + fixtureA.evaluationId() + ".pdf\""))
+                .andExpect(result -> {
+                    byte[] body = result.getResponse().getContentAsByteArray();
+                    assertTrue(body.length > 4);
+                    assertEquals('%', (char) body[0]);
+                    assertEquals('P', (char) body[1]);
+                    assertEquals('D', (char) body[2]);
+                    assertEquals('F', (char) body[3]);
+                });
+
+        mockMvc.perform(get("/api/v1/orgs/{orgId}/benchmark-versions/{versionId}/leaderboard/export",
+                        orgA, fixtureA.benchmarkVersionId())
+                        .param("format", "pdf")
+                        .header("Authorization", "Bearer " + tokenA))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Content-Type", "application/pdf"))
+                .andExpect(result -> {
+                    byte[] body = result.getResponse().getContentAsByteArray();
+                    assertTrue(body.length > 4);
+                    assertEquals('%', (char) body[0]);
+                    assertEquals('P', (char) body[1]);
+                    assertEquals('D', (char) body[2]);
+                    assertEquals('F', (char) body[3]);
+                });
+
         mockMvc.perform(get("/api/v1/orgs/{orgId}/analytics/health", orgA)
                         .header("Authorization", "Bearer " + tokenA))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.counts.totalEvaluations").value(2));
 
-        // Org B cannot read Org A analytics.
+        // Org B cannot read Org A analytics or exports.
         mockMvc.perform(get("/api/v1/orgs/{orgId}/analytics/overview", orgA)
+                        .header("Authorization", "Bearer " + tokenB))
+                .andExpect(status().isForbidden());
+
+        mockMvc.perform(get("/api/v1/orgs/{orgId}/evaluations/{evaluationId}/export",
+                        orgA, fixtureA.evaluationId())
+                        .param("format", "pdf")
+                        .header("Authorization", "Bearer " + tokenB))
+                .andExpect(status().isForbidden());
+
+        mockMvc.perform(get("/api/v1/orgs/{orgId}/benchmark-versions/{versionId}/leaderboard/export",
+                        orgA, fixtureA.benchmarkVersionId())
+                        .param("format", "pdf")
                         .header("Authorization", "Bearer " + tokenB))
                 .andExpect(status().isForbidden());
 

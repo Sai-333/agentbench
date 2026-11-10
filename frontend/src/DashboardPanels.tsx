@@ -169,7 +169,7 @@ export function LeaderboardPanel({
   board: LeaderboardResponse | null
   state: LoadState
   error: string | null
-  onExport: (format: 'csv' | 'json') => void
+  onExport: (format: 'csv' | 'json' | 'pdf') => void
   busy: boolean
   canPublish: boolean
   publication: {
@@ -202,6 +202,9 @@ export function LeaderboardPanel({
           </button>
           <button type="button" className="cta secondary" disabled={busy || !board} onClick={() => onExport('json')}>
             Export JSON
+          </button>
+          <button type="button" className="cta secondary" disabled={busy || !board} onClick={() => onExport('pdf')}>
+            Export PDF
           </button>
         </div>
       </div>
