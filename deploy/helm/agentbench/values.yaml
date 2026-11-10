@@ -102,6 +102,9 @@ config:
   artifactSweepMs: "3600000"
   artifactMaxLogBytes: "20971520"
   artifactMaxObjectBytes: "20971520"
+  # Pattern-based secret scan on artifact persist (R7). Not full DLP.
+  artifactSecretScanEnabled: "true"
+  artifactSecretScanMode: "REDACT"
   # docker (default) | gvisor (requires runsc) | firecracker (requires KVM+wrapper) | local (CI only)
   executionMode: "docker"
   dockerEnabled: "true"

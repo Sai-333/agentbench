@@ -29,6 +29,7 @@ import com.agentbench.execution.service.SuiteExecutionService;
 import com.agentbench.execution.service.WorkspaceProvisioner;
 import com.agentbench.platform.error.ApiException;
 import com.agentbench.platform.infra.storage.ArtifactRetentionService;
+import com.agentbench.platform.infra.storage.ArtifactSecretScanner;
 import com.agentbench.platform.infra.storage.ArtifactStorage;
 import com.agentbench.agents.infra.SecretRedactor;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -69,6 +70,7 @@ public class EvaluationStageProcessor {
     private final PatchValidator patchValidator;
     private final AgentInvocationService agentInvocationService;
     private final ArtifactStorage artifactStorage;
+    private final ArtifactSecretScanner artifactSecretScanner;
     private final TransitionClassificationEngine classificationEngine;
     private final FlakyDetectionService flakyDetectionService;
     private final ScoringService scoringService;
@@ -87,6 +89,7 @@ public class EvaluationStageProcessor {
             PatchValidator patchValidator,
             AgentInvocationService agentInvocationService,
             ArtifactStorage artifactStorage,
+            ArtifactSecretScanner artifactSecretScanner,
             TransitionClassificationEngine classificationEngine,
             FlakyDetectionService flakyDetectionService,
             ScoringService scoringService,
@@ -103,6 +106,7 @@ public class EvaluationStageProcessor {
         this.patchValidator = patchValidator;
         this.agentInvocationService = agentInvocationService;
         this.artifactStorage = artifactStorage;
+        this.artifactSecretScanner = artifactSecretScanner;
         this.classificationEngine = classificationEngine;
         this.flakyDetectionService = flakyDetectionService;
         this.scoringService = scoringService;
@@ -560,7 +564,10 @@ public class EvaluationStageProcessor {
     private void storePatch(Evaluation evaluation, String patchText, int maxBytes) throws Exception {
         List<String> allowed = allowedPaths(objectMapper.readTree(evaluation.snapshotJson()).path("task"));
         var validated = patchValidator.validate(patchText, maxBytes, allowed);
-        byte[] bytes = validated.text().getBytes(StandardCharsets.UTF_8);
+        // Scan/redact before digest so content_digest matches persisted bytes (R7).
+        String keyHint = "orgs/%s/evaluations/%s/patches".formatted(evaluation.orgId(), evaluation.id());
+        String safeText = artifactSecretScanner.prepareText(keyHint, validated.text(), "text/x-diff").content();
+        byte[] bytes = safeText.getBytes(StandardCharsets.UTF_8);
         String digest = sha256(bytes);
         String key = "orgs/%s/evaluations/%s/patches/%s.diff".formatted(
                 evaluation.orgId(), evaluation.id(), digest);

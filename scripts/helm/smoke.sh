@@ -25,6 +25,10 @@ echo "${DEFAULT_OUT}" | grep -q 'AGENTBENCH_ARTIFACT_RETENTION_DAYS' \
   || { echo "expected AGENTBENCH_ARTIFACT_RETENTION_DAYS in ConfigMap" >&2; exit 1; }
 echo "${DEFAULT_OUT}" | grep -q 'AGENTBENCH_ARTIFACT_SWEEP_MS' \
   || { echo "expected AGENTBENCH_ARTIFACT_SWEEP_MS in ConfigMap" >&2; exit 1; }
+echo "${DEFAULT_OUT}" | grep -q 'AGENTBENCH_ARTIFACT_SECRET_SCAN_ENABLED' \
+  || { echo "expected AGENTBENCH_ARTIFACT_SECRET_SCAN_ENABLED in ConfigMap" >&2; exit 1; }
+echo "${DEFAULT_OUT}" | grep -q 'AGENTBENCH_ARTIFACT_SECRET_SCAN_MODE' \
+  || { echo "expected AGENTBENCH_ARTIFACT_SECRET_SCAN_MODE in ConfigMap" >&2; exit 1; }
 echo "${DEFAULT_OUT}" | grep -q 'kind: NetworkPolicy' \
   || { echo "expected NetworkPolicy resources when networkPolicy.enabled=true" >&2; exit 1; }
 echo "${DEFAULT_OUT}" | grep -q 'agentbench-default-deny\|-default-deny' \
