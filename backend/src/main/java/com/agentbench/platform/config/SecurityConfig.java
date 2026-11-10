@@ -65,7 +65,9 @@ public class SecurityConfig {
                                 "/api/v1/auth/logout",
                                 "/api/v1/auth/oidc/*/token",
                                 "/api/v1/auth/saml/acs",
-                                "/api/v1/auth/saml/token"
+                                "/api/v1/auth/saml/token",
+                                "/api/v1/public/leaderboards/*/comments",
+                                "/api/v1/public/leaderboards/*/votes"
                         ).permitAll()
                         .anyRequest().authenticated()
                 )

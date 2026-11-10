@@ -152,6 +152,13 @@ agentbench:
     # CDN-friendly Cache-Control for public + embed GETs (no CDN required).
     cache-max-age-seconds: ${AGENTBENCH_PUBLIC_CACHE_MAX_AGE_SECONDS:60}
     cache-stale-while-revalidate-seconds: ${AGENTBENCH_PUBLIC_CACHE_SWR_SECONDS:300}
+    # Anonymous-capable comments / votes (published boards only).
+    max-comment-body-length: ${AGENTBENCH_PUBLIC_COMMENT_MAX_LEN:2000}
+    max-display-name-length: ${AGENTBENCH_PUBLIC_DISPLAY_NAME_MAX_LEN:80}
+    comment-rate-limit: ${AGENTBENCH_PUBLIC_COMMENT_RATE_LIMIT:5}
+    comment-rate-window-seconds: ${AGENTBENCH_PUBLIC_COMMENT_RATE_WINDOW_SECONDS:600}
+    vote-rate-limit: ${AGENTBENCH_PUBLIC_VOTE_RATE_LIMIT:30}
+    vote-rate-window-seconds: ${AGENTBENCH_PUBLIC_VOTE_RATE_WINDOW_SECONDS:600}
   oidc:
     # Frontend URL that receives access/refresh tokens in the URL fragment after IdP callback.
     success-redirect-url: ${AGENTBENCH_OIDC_SUCCESS_REDIRECT_URL:http://localhost:3000/}

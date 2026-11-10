@@ -143,6 +143,43 @@ public final class AnalyticsDtos {
     ) {
     }
 
+    public record CreatePublicCommentRequest(
+            String body,
+            String displayName
+    ) {
+    }
+
+    public record PublicCommentResponse(
+            UUID id,
+            String body,
+            String displayName,
+            boolean authenticatedAuthor,
+            Instant createdAt
+    ) {
+    }
+
+    public record PublicCommentListResponse(
+            String publicSlug,
+            List<PublicCommentResponse> comments,
+            PageMeta page
+    ) {
+    }
+
+    public record CastPublicVoteRequest(
+            int value,
+            String voterFingerprint
+    ) {
+    }
+
+    public record PublicVoteSummaryResponse(
+            String publicSlug,
+            long upCount,
+            long downCount,
+            long score,
+            Integer myVote
+    ) {
+    }
+
     public record ComparisonResponse(
             UUID benchmarkVersionId,
             String scoringProfileKey,

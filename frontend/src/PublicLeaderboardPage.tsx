@@ -1,18 +1,48 @@
 import { useEffect, useState } from 'react'
-import { api } from './api'
-import type { PublicLeaderboardResponse } from './api'
+import type { FormEvent } from 'react'
+import { api, getAccessToken } from './api'
+import type {
+  PublicCommentListResponse,
+  PublicLeaderboardResponse,
+  PublicVoteSummaryResponse,
+} from './api'
 import './App.css'
 
 type LoadState = 'loading' | 'ready' | 'error' | 'empty'
+
+const VOTER_KEY = 'agentbench.publicVoterFingerprint'
+const DISPLAY_NAME_KEY = 'agentbench.publicDisplayName'
+
+function voterFingerprint(): string {
+  const existing = localStorage.getItem(VOTER_KEY)
+  if (existing && /^[a-zA-Z0-9_-]{8,64}$/.test(existing)) {
+    return existing
+  }
+  const created =
+    typeof crypto !== 'undefined' && 'randomUUID' in crypto
+      ? crypto.randomUUID().replace(/-/g, '')
+      : `fp${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`
+  localStorage.setItem(VOTER_KEY, created)
+  return created
+}
 
 export function PublicLeaderboardPage({ slug }: { slug: string }) {
   const [board, setBoard] = useState<PublicLeaderboardResponse | null>(null)
   const [state, setState] = useState<LoadState>('loading')
   const [error, setError] = useState<string | null>(null)
+  const [votes, setVotes] = useState<PublicVoteSummaryResponse | null>(null)
+  const [comments, setComments] = useState<PublicCommentListResponse | null>(null)
+  const [displayName, setDisplayName] = useState(() => localStorage.getItem(DISPLAY_NAME_KEY) || '')
+  const [commentBody, setCommentBody] = useState('')
+  const [engagementError, setEngagementError] = useState<string | null>(null)
+  const [posting, setPosting] = useState(false)
+  const [voting, setVoting] = useState(false)
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
     const stored = localStorage.getItem('agentbench.theme')
     return stored === 'dark' ? 'dark' : 'light'
   })
+
+  const withOptionalAuth = !!getAccessToken()
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme
@@ -24,18 +54,36 @@ export function PublicLeaderboardPage({ slug }: { slug: string }) {
     async function load() {
       setState('loading')
       setError(null)
+      setEngagementError(null)
+      const fp = voterFingerprint()
       try {
-        const data = await api<PublicLeaderboardResponse>(
-          `/api/v1/public/leaderboards/${encodeURIComponent(slug)}?page=0&size=100`,
-          {},
-          false,
-        )
+        const [data, voteData, commentData] = await Promise.all([
+          api<PublicLeaderboardResponse>(
+            `/api/v1/public/leaderboards/${encodeURIComponent(slug)}?page=0&size=100`,
+            {},
+            false,
+          ),
+          api<PublicVoteSummaryResponse>(
+            `/api/v1/public/leaderboards/${encodeURIComponent(slug)}/votes?voterFingerprint=${encodeURIComponent(fp)}`,
+            {},
+            withOptionalAuth,
+          ),
+          api<PublicCommentListResponse>(
+            `/api/v1/public/leaderboards/${encodeURIComponent(slug)}/comments?page=0&size=50`,
+            {},
+            false,
+          ),
+        ])
         if (cancelled) return
         setBoard(data)
+        setVotes(voteData)
+        setComments(commentData)
         setState(data.entries.length === 0 ? 'empty' : 'ready')
       } catch (err) {
         if (cancelled) return
         setBoard(null)
+        setVotes(null)
+        setComments(null)
         setError(err instanceof Error ? err.message : 'Leaderboard not found')
         setState('error')
       }
@@ -44,7 +92,61 @@ export function PublicLeaderboardPage({ slug }: { slug: string }) {
     return () => {
       cancelled = true
     }
-  }, [slug])
+  }, [slug, withOptionalAuth])
+
+  async function castVote(value: 1 | -1) {
+    setVoting(true)
+    setEngagementError(null)
+    try {
+      const updated = await api<PublicVoteSummaryResponse>(
+        `/api/v1/public/leaderboards/${encodeURIComponent(slug)}/votes`,
+        {
+          method: 'POST',
+          body: JSON.stringify({ value, voterFingerprint: voterFingerprint() }),
+        },
+        withOptionalAuth,
+      )
+      setVotes(updated)
+    } catch (err) {
+      setEngagementError(err instanceof Error ? err.message : 'Vote failed')
+    } finally {
+      setVoting(false)
+    }
+  }
+
+  async function submitComment(event: FormEvent) {
+    event.preventDefault()
+    setPosting(true)
+    setEngagementError(null)
+    const name = displayName.trim()
+    if (name) {
+      localStorage.setItem(DISPLAY_NAME_KEY, name)
+    }
+    try {
+      await api(
+        `/api/v1/public/leaderboards/${encodeURIComponent(slug)}/comments`,
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            body: commentBody,
+            displayName: name || undefined,
+          }),
+        },
+        withOptionalAuth,
+      )
+      setCommentBody('')
+      const refreshed = await api<PublicCommentListResponse>(
+        `/api/v1/public/leaderboards/${encodeURIComponent(slug)}/comments?page=0&size=50`,
+        {},
+        false,
+      )
+      setComments(refreshed)
+    } catch (err) {
+      setEngagementError(err instanceof Error ? err.message : 'Comment failed')
+    } finally {
+      setPosting(false)
+    }
+  }
 
   return (
     <main className="shell wide">
@@ -118,6 +220,85 @@ export function PublicLeaderboardPage({ slug }: { slug: string }) {
           </div>
         )}
       </section>
+
+      {board && state !== 'error' && (
+        <section className="panel engagement-panel">
+          <h2>Community</h2>
+          <p className="muted small">
+            Anonymous comments and up/down votes are allowed on published boards. Org OWNER/ADMIN can
+            moderate comments. Rate limits apply.
+          </p>
+
+          <div className="vote-row">
+            <button
+              type="button"
+              className={`cta secondary${votes?.myVote === 1 ? ' vote-active' : ''}`}
+              disabled={voting}
+              onClick={() => void castVote(1)}
+            >
+              ▲ Up ({votes?.upCount ?? 0})
+            </button>
+            <button
+              type="button"
+              className={`cta secondary${votes?.myVote === -1 ? ' vote-active' : ''}`}
+              disabled={voting}
+              onClick={() => void castVote(-1)}
+            >
+              ▼ Down ({votes?.downCount ?? 0})
+            </button>
+            <span className="muted small">Score {votes?.score ?? 0}</span>
+          </div>
+
+          <form className="comment-form" onSubmit={(e) => void submitComment(e)}>
+            <label>
+              Display name
+              <input
+                value={displayName}
+                onChange={(e) => setDisplayName(e.target.value)}
+                maxLength={80}
+                placeholder="Anonymous"
+              />
+            </label>
+            <label>
+              Comment
+              <textarea
+                value={commentBody}
+                onChange={(e) => setCommentBody(e.target.value)}
+                maxLength={2000}
+                rows={3}
+                required
+                placeholder="Share feedback on this public board…"
+              />
+            </label>
+            <button className="cta" type="submit" disabled={posting || !commentBody.trim()}>
+              {posting ? 'Posting…' : 'Post comment'}
+            </button>
+          </form>
+
+          {engagementError && (
+            <p className="error banner" role="alert">
+              {engagementError}
+            </p>
+          )}
+
+          <div className="comment-list">
+            {(comments?.comments?.length ?? 0) === 0 ? (
+              <p className="muted">No comments yet.</p>
+            ) : (
+              comments?.comments.map((comment) => (
+                <article key={comment.id} className="comment-item">
+                  <header>
+                    <strong>{comment.displayName}</strong>
+                    {comment.authenticatedAuthor && <span className="badge">signed-in</span>}
+                    <span className="muted small">{new Date(comment.createdAt).toLocaleString()}</span>
+                  </header>
+                  <p>{comment.body}</p>
+                </article>
+              ))
+            )}
+          </div>
+        </section>
+      )}
     </main>
   )
 }

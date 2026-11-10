@@ -26,6 +26,24 @@ public class PublicLeaderboardProperties {
     /** Optional stale-while-revalidate hint (seconds); 0 disables. */
     private int cacheStaleWhileRevalidateSeconds = 300;
 
+    /** Max comment body length (chars). */
+    private int maxCommentBodyLength = 2000;
+
+    /** Max display name length (chars). */
+    private int maxDisplayNameLength = 80;
+
+    /** Anonymous/auth comment rate limit per client key (IP) per window. */
+    private int commentRateLimit = 5;
+
+    /** Comment rate window (seconds). */
+    private int commentRateWindowSeconds = 600;
+
+    /** Vote upsert rate limit per client key (IP) per window. */
+    private int voteRateLimit = 30;
+
+    /** Vote rate window (seconds). */
+    private int voteRateWindowSeconds = 600;
+
     public String getEmbedSecret() {
         return embedSecret;
     }
@@ -64,5 +82,53 @@ public class PublicLeaderboardProperties {
 
     public void setCacheStaleWhileRevalidateSeconds(int cacheStaleWhileRevalidateSeconds) {
         this.cacheStaleWhileRevalidateSeconds = cacheStaleWhileRevalidateSeconds;
+    }
+
+    public int getMaxCommentBodyLength() {
+        return maxCommentBodyLength;
+    }
+
+    public void setMaxCommentBodyLength(int maxCommentBodyLength) {
+        this.maxCommentBodyLength = maxCommentBodyLength;
+    }
+
+    public int getMaxDisplayNameLength() {
+        return maxDisplayNameLength;
+    }
+
+    public void setMaxDisplayNameLength(int maxDisplayNameLength) {
+        this.maxDisplayNameLength = maxDisplayNameLength;
+    }
+
+    public int getCommentRateLimit() {
+        return commentRateLimit;
+    }
+
+    public void setCommentRateLimit(int commentRateLimit) {
+        this.commentRateLimit = commentRateLimit;
+    }
+
+    public int getCommentRateWindowSeconds() {
+        return commentRateWindowSeconds;
+    }
+
+    public void setCommentRateWindowSeconds(int commentRateWindowSeconds) {
+        this.commentRateWindowSeconds = commentRateWindowSeconds;
+    }
+
+    public int getVoteRateLimit() {
+        return voteRateLimit;
+    }
+
+    public void setVoteRateLimit(int voteRateLimit) {
+        this.voteRateLimit = voteRateLimit;
+    }
+
+    public int getVoteRateWindowSeconds() {
+        return voteRateWindowSeconds;
+    }
+
+    public void setVoteRateWindowSeconds(int voteRateWindowSeconds) {
+        this.voteRateWindowSeconds = voteRateWindowSeconds;
     }
 }

@@ -24,6 +24,7 @@
 | PDF evaluation / leaderboard report export | OpenPDF; `GET .../evaluations/{id}/export?format=pdf` + `.../leaderboard/export?format=pdf`; VIEWER RBAC; UI Export PDF; `ReportExportServiceTest` + `AnalyticsDashboardTest` |
 | Opt-in public leaderboards (OWNER/ADMIN publish; sanitized payload) | Flyway V11; `/api/v1/public/leaderboards/{slug}`; org-private remains default |
 | Signed embeds + Cache-Control for public boards | HMAC embed tokens (OWNER/ADMIN mint); `/embed?token=`; Cache-Control + ETag; UI copy snippet; `docs/PUBLIC_LEADERBOARDS.md` |
+| Anonymous-capable comments + up/down votes on public boards | Flyway V21; public POST/GET comments + votes on published slugs only; optional JWT attribution; OWNER/ADMIN soft-delete; IP rate + size limits; UI on `/public/leaderboards/{slug}`; embed HTML read-only tallies; `docs/PUBLIC_LEADERBOARDS.md` — **residual:** in-process rate limits (not distributed WAF/CAPTCHA); board-level votes only (not per-entry/stars) |
 | Recovery tests (baseline / cancel / timeout / retry policy / DLQ topology) | M9 tests |
 | Graceful shutdown + prod-ish Compose overlay | `application.yml`, `docker-compose.prod.yml` |
 | Kubernetes templates (deploy/svc/config/secrets) | `deploy/kubernetes/` |
@@ -60,7 +61,7 @@
 | Full service-mesh mTLS product (Istio/Linkerd) / AMQPS for RabbitMQ | **Not claimed** — optional app-level Helm mTLS landed for HTTP surfaces; queue and mesh remain out of scope |
 | AWS S3 Object Lock / Compliance-mode WORM | **Not claimed** — Postgres append-only + hash chain landed; Object Lock can be layered later (`docs/AUDIT_WORM.md`) |
 | Full CDN / edge network product | **Not claimed** — Cache-Control + ETag are CDN-friendly; no managed CDN required or asserted |
-| Anonymous write / vote / comment on public boards | **Not claimed** — read-only public GET / signed embed reads |
+| Distributed anti-spam / CAPTCHA / ML moderation for public boards | **Not claimed** — comments/votes landed with size limits, in-process IP rate limits, OWNER/ADMIN soft-delete; not a full abuse platform |
 
 ## Demo path
 
