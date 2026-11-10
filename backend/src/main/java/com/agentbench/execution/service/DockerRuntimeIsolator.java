@@ -80,7 +80,7 @@ public class DockerRuntimeIsolator implements RuntimeIsolator {
         Map<String, Object> meta = new LinkedHashMap<>();
         meta.put("runtime", RUNTIME_NAME);
         meta.put("stage", spec.stage().name());
-        meta.put("image", properties.resolvedImageRef());
+        meta.put("image", resolveImage(spec));
         meta.put("network", spec.networkEnabled() ? "allowlist-or-bridge" : "none");
         meta.put("privileged", false);
         meta.put("dockerSockMounted", false);
@@ -92,7 +92,7 @@ public class DockerRuntimeIsolator implements RuntimeIsolator {
         meta.put("command", redactCommand(cmd));
 
         log.info("Starting hardened docker run name={} stage={} image={}",
-                spec.runName(), spec.stage(), properties.resolvedImageRef());
+                spec.runName(), spec.stage(), resolveImage(spec));
 
         ProcessBuilder pb = new ProcessBuilder(cmd);
         pb.redirectErrorStream(false);
@@ -207,9 +207,16 @@ public class DockerRuntimeIsolator implements RuntimeIsolator {
             cmd.add("-e");
             cmd.add(env.getKey() + "=" + env.getValue());
         }
-        cmd.add(properties.resolvedImageRef());
+        cmd.add(resolveImage(spec));
         cmd.addAll(spec.command());
         return cmd;
+    }
+
+    public String resolveImage(IsolationSpec spec) {
+        if (spec.imageOverride() != null && !spec.imageOverride().isBlank()) {
+            return spec.imageOverride().trim();
+        }
+        return properties.resolvedImageRef();
     }
 
     public static void assertSafeSpec(IsolationSpec spec) {
@@ -217,6 +224,12 @@ public class DockerRuntimeIsolator implements RuntimeIsolator {
             String lower = part.toLowerCase(Locale.ROOT);
             if (lower.contains("docker.sock") || lower.contains("--privileged")) {
                 throw new IllegalArgumentException("Rejected unsafe isolation command fragment");
+            }
+        }
+        if (spec.imageOverride() != null) {
+            String lower = spec.imageOverride().toLowerCase(Locale.ROOT);
+            if (lower.contains("docker.sock") || lower.contains("--privileged")) {
+                throw new IllegalArgumentException("Rejected unsafe isolation image override");
             }
         }
         if (spec.hiddenFixturesDir() != null && spec.stage() != ExecutionStage.HIDDEN_TESTS) {

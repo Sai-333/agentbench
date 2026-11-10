@@ -78,6 +78,19 @@ public class AgentInvocationService {
             String taskPrompt,
             String visibleContextJson,
             String referencePatchHint) {
+        return invokeForEvaluation(
+                agent, evaluationId, taskId, taskPrompt, visibleContextJson, referencePatchHint, null);
+    }
+
+    @Transactional
+    public AgentInvocationResult invokeForEvaluation(
+            Agent agent,
+            UUID evaluationId,
+            UUID taskId,
+            String taskPrompt,
+            String visibleContextJson,
+            String referencePatchHint,
+            String workspacePath) {
         if (!agent.enabled()) {
             throw new ApiException(HttpStatus.BAD_REQUEST, "AGENT_DISABLED", "Agent is disabled");
         }
@@ -117,7 +130,8 @@ public class AgentInvocationService {
                     referencePatchHint,
                     apiKey,
                     timeout,
-                    attempt
+                    attempt,
+                    workspacePath
             );
 
             log.info("Agent invoke start evaluation={} agent={} provider={} attempt={}/{}",
@@ -169,10 +183,18 @@ public class AgentInvocationService {
             return Map.of("ok", true, "provider", provider.adapterType(), "detail", "Fake provider ready");
         }
         if ("CODING_CLI".equals(provider.adapterType())) {
+            JsonNode config = readConfig(agent.configJson());
+            boolean fixture = config.hasNonNull("patch");
+            String binary = config.path("binary").asText(config.path("command").asText("coding-agent"));
             return Map.of(
                     "ok", true,
                     "provider", provider.adapterType(),
-                    "detail", "CLI adapter registered (process isolation deferred); fixture patch mode available"
+                    "detail", fixture
+                            ? "CODING_CLI fixture-patch mode ready (no isolator spawn)"
+                            : "CODING_CLI registered; isolator path uses binary/argv '" + binary
+                            + "' (requires workspace + RuntimeIsolator; live CLI binary optional)",
+                    "fixturePatch", fixture,
+                    "isolation", "runtime-isolator"
             );
         }
         String apiKey = resolveApiKey(agent);

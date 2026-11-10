@@ -21,6 +21,7 @@ Executing untrusted patches requires isolation. Firecracker/gVisor offer stronge
 - **Local mode:** `mode=local` forces host-process isolation for CI without a daemon (not a security boundary).
 - **Firecracker:** not implemented. Prefer gVisor; revisit microVMs only if runsc cannot meet a future hostile multi-tenant bar.
 - Document residual shared-kernel risk for Docker-only in the threat model; do not claim certified hostile multi-tenant safety.
+- **CODING_CLI** agent invocations use the same `RuntimeIsolator` path (`ExecutionStage.AGENT`) with optional per-agent image override — never a raw host shell (see `docs/AGENTS_CODING_CLI.md`).
 
 ## Configuration
 

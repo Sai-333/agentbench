@@ -91,7 +91,7 @@ public class GvisorRuntimeIsolator implements RuntimeIsolator {
         meta.put("runtime", RUNTIME_NAME);
         meta.put("dockerRuntime", properties.getGvisorRuntime());
         meta.put("stage", spec.stage().name());
-        meta.put("image", properties.resolvedImageRef());
+        meta.put("image", dockerIsolator.resolveImage(spec));
         meta.put("network", spec.networkEnabled() ? "allowlist-or-bridge" : "none");
         meta.put("privileged", false);
         meta.put("dockerSockMounted", false);
@@ -103,7 +103,7 @@ public class GvisorRuntimeIsolator implements RuntimeIsolator {
         meta.put("command", redactCommand(cmd));
 
         log.info("Starting gVisor (runsc) docker run name={} stage={} image={} runtime={}",
-                spec.runName(), spec.stage(), properties.resolvedImageRef(), properties.getGvisorRuntime());
+                spec.runName(), spec.stage(), dockerIsolator.resolveImage(spec), properties.getGvisorRuntime());
 
         HostCommandExecutor.Result result = commands.run(cmd, spec.timeout());
         boolean timedOut = result.timedOut();

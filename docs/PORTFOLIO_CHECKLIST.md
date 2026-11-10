@@ -12,7 +12,7 @@
 | OIDC Google/GitHub beside local JWT | `AuthProvider` SPI; `docs/AUTH_OIDC.md`; WireMock IdP tests |
 | Versioned benchmarks + hidden suites + RBAC | M3 |
 | Durable evaluation state machine + outbox | M4 |
-| Provider-independent agents (Fake / OpenAI-compat / HTTP / CLI stub) | M5 |
+| Provider-independent agents (Fake / OpenAI-compat / HTTP / CODING_CLI) | M5 + isolator-backed CODING_CLI (`docs/AGENTS_CODING_CLI.md`) |
 | Scoring + visible F2P/P2P/P2F/F2F; hidden post-only pass rate | M6 |
 | Hardened Docker `RuntimeIsolator` + quality tools | M7 |
 | Opt-in gVisor (`runsc`) behind `RuntimeIsolator` | `mode=gvisor` → `docker --runtime=runsc`; fail-fast without runsc; ADR-004; Mac stays Docker |
@@ -30,6 +30,7 @@
 | S3-compatible artifact store (MinIO / AWS SDK v2) | `ArtifactStorage` + Compose `--profile s3`; `ARTIFACT_STORAGE=s3\|local` |
 | Postgres RLS defense-in-depth | Flyway V12; `agentbench_app` + session GUC; `PostgresRlsIsolationTest`; `docs/POSTGRES_RLS.md` |
 | Demo screenshots + short walkthrough recording | Project store `media/demo/` (login, org/projects, benchmarks, evaluation detail, analytics, public leaderboard) |
+| CODING_CLI via RuntimeIsolator | `CodingCliAgentProvider`; config/image/argv; isolator invoke; timeouts; patch capture; `docs/AGENTS_CODING_CLI.md`; residual = Docker/gVisor (not hostile multi-tenant SaaS) |
 
 ## Deferred / not claimed
 
@@ -42,7 +43,7 @@
 | Measured **production** throughput / capacity numbers | **Not claimed** — only attached local Compose laptop smoke exists |
 | Live public hosted demo on Oracle Always Free | **Guide-ready** (`docs/DEPLOYMENT_ORACLE_ALWAYS_FREE.md`) — **not actually hosted** until Sai’s VM + SSH apply the runbook |
 | Sonar as scoring authority | **Not claimed** — stub only |
-| Full CODING_CLI production isolation | Skeleton only |
+| Full hostile multi-tenant CODING_CLI / untrusted public CLI images | **Not claimed** — isolator-backed CODING_CLI landed; residual matches RuntimeIsolator; no Firecracker |
 | mTLS between services | **Deferred** — NetworkPolicies are L3/L4 only |
 | WORM audit storage | **Deferred** — audit log exists; not WORM |
 | Auto-updating public boards / signed embeds / CDN caching | **Not claimed** — live query of published slug only |

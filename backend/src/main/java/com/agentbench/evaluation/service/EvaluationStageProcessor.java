@@ -241,7 +241,8 @@ public class EvaluationStageProcessor {
                         evaluation.taskId(),
                         task.path("prompt").asText(""),
                         visibleContext,
-                        referenceHint
+                        referenceHint,
+                        evaluation.workspaceUri()
                 );
                 storePatch(evaluation, result.patchContent(), limits.maxPatchBytes());
             }
