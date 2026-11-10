@@ -379,6 +379,28 @@ export type PublicLeaderboardResponse = {
   page: PageMeta
 }
 
+export type PublicComment = {
+  id: string
+  body: string
+  displayName: string
+  authenticatedAuthor: boolean
+  createdAt: string
+}
+
+export type PublicCommentListResponse = {
+  publicSlug: string
+  comments: PublicComment[]
+  page: PageMeta
+}
+
+export type PublicVoteSummaryResponse = {
+  publicSlug: string
+  upCount: number
+  downCount: number
+  score: number
+  myVote: number | null
+}
+
 export type ComparisonResponse = {
   benchmarkVersionId: string
   scoringProfileKey: string

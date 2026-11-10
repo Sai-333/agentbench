@@ -150,6 +150,7 @@ Shared-kernel breakout residual risk remains on the default path. Prefer **`agen
 | Artifact secret scan is pattern-based only | Not full DLP; tune `additional-patterns` / use `QUARANTINE` for stricter demos; binary non-text skipped |
 | Flake quarantine is operator/config declared | Not an automatic ML flake classifier; confirmation gate default off for demo speed |
 | Public boards opt-in only | Google/GitHub OIDC + multi-IdP SAML SP (optional SP signing) available; public leaderboards require OWNER/ADMIN publish + sanitized payload; embeds need HMAC token + expiry |
+| Public board comments/votes abuse residual | Published boards only; size limits + in-process IP rate limits + OWNER/ADMIN soft-delete; not distributed WAF/CAPTCHA/ML moderation; anonymous fingerprint is client-supplied |
 
 ---
 
