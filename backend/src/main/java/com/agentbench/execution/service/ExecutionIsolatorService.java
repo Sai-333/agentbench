@@ -16,11 +16,12 @@ import java.util.Map;
 import java.util.UUID;
 
 /**
- * Facade selecting gVisor, Docker, or local fallback per {@code agentbench.execution.mode}.
+ * Facade selecting Firecracker, gVisor, Docker, or local fallback per
+ * {@code agentbench.execution.mode}.
  *
- * <p>Policy: {@code gvisor} is fail-fast (clear error if runsc/Docker unavailable).
- * {@code docker} may fall back to local when the daemon is unreachable. {@code local} forces
- * host-process isolation (CI only).
+ * <p>Policy: {@code firecracker} and {@code gvisor} are fail-fast (clear error if tooling
+ * unavailable). {@code docker} may fall back to local when the daemon is unreachable.
+ * {@code local} forces host-process isolation (CI only).
  */
 @Service
 public class ExecutionIsolatorService {
@@ -29,21 +30,31 @@ public class ExecutionIsolatorService {
 
     private final DockerRuntimeIsolator dockerIsolator;
     private final GvisorRuntimeIsolator gvisorIsolator;
+    private final FirecrackerRuntimeIsolator firecrackerIsolator;
     private final LocalRuntimeIsolator localIsolator;
     private final ExecutionProperties properties;
 
     public ExecutionIsolatorService(
             DockerRuntimeIsolator dockerIsolator,
             GvisorRuntimeIsolator gvisorIsolator,
+            FirecrackerRuntimeIsolator firecrackerIsolator,
             LocalRuntimeIsolator localIsolator,
             ExecutionProperties properties) {
         this.dockerIsolator = dockerIsolator;
         this.gvisorIsolator = gvisorIsolator;
+        this.firecrackerIsolator = firecrackerIsolator;
         this.localIsolator = localIsolator;
         this.properties = properties;
     }
 
     public RuntimeIsolator activeIsolator() {
+        if (properties.isFirecrackerMode()) {
+            if (!firecrackerIsolator.available()) {
+                throw new IllegalStateException(FirecrackerRuntimeIsolator.unavailableMessage());
+            }
+            log.info("Using Firecracker RuntimeIsolator (wrapper={})", properties.getFirecrackerWrapper());
+            return firecrackerIsolator;
+        }
         if (properties.isGvisorMode()) {
             if (!gvisorIsolator.available()) {
                 throw new IllegalStateException(GvisorRuntimeIsolator.unavailableMessage());
@@ -136,6 +147,10 @@ public class ExecutionIsolatorService {
         dockerIsolator.cleanup(prefix + "-visible_tests");
         dockerIsolator.cleanup(prefix + "-hidden_tests");
         dockerIsolator.cleanup(prefix + "-quality");
+        firecrackerIsolator.cleanup(prefix + "-agent");
+        firecrackerIsolator.cleanup(prefix + "-visible_tests");
+        firecrackerIsolator.cleanup(prefix + "-hidden_tests");
+        firecrackerIsolator.cleanup(prefix + "-quality");
     }
 
     public ExecutionProperties properties() {

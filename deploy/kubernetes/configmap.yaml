@@ -19,7 +19,7 @@ data:
   SPRING_RABBITMQ_USERNAME: "agentbench"
   AGENTBENCH_ARTIFACTS_ROOT: "/var/agentbench/artifacts"
   ARTIFACT_STORAGE: "local"
-  # docker (default) | gvisor (requires runsc on nodes) | local (CI only)
+  # docker (default) | gvisor (requires runsc) | firecracker (requires KVM+wrapper) | local (CI only)
   AGENTBENCH_EXECUTION_MODE: "docker"
   AGENTBENCH_DOCKER_ENABLED: "true"
   AGENTBENCH_GVISOR_RUNTIME: "runsc"

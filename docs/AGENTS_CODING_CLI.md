@@ -7,7 +7,7 @@ Default demos stay on **FAKE**. Use CODING_CLI when you want an isolator-backed 
 
 ## Enable / register
 
-1. Ensure the worker can reach the isolator backend (`AGENTBENCH_EXECUTION_MODE=docker|gvisor|local`).
+1. Ensure the worker can reach the isolator backend (`AGENTBENCH_EXECUTION_MODE=docker|gvisor|firecracker|local`).
 2. Create an agent with `adapterType: CODING_CLI`.
 3. Configure either:
    - **Fixture mode (CI / demos):** `config.patch` = unified diff → no process spawn.
@@ -95,6 +95,6 @@ Patch capture order: `patchFile` contents → unified diff / fenced diff on stdo
 ## Residual risks (honest)
 
 - Isolation equals the active `RuntimeIsolator` (Docker shared-kernel residual by default;
-  prefer `AGENTBENCH_EXECUTION_MODE=gvisor` on Linux with `runsc`).
-- **Not claimed:** certified hostile multi-tenant SaaS / Firecracker / arbitrary untrusted public CLI images without ops review.
+  prefer `AGENTBENCH_EXECUTION_MODE=gvisor` on Linux with `runsc`, or `firecracker` on Linux+KVM).
+- **Not claimed:** certified hostile multi-tenant SaaS / arbitrary untrusted public CLI images without ops review.
 - Live coding-agent binaries are **not** required in CI; unit tests mock the isolator; optional Docker smoke uses `sh` in the stock runner image and is skipped when Docker is absent.

@@ -1,8 +1,8 @@
 package com.agentbench.execution.domain;
 
 /**
- * Isolation SPI — Docker (default), optional gVisor/runsc, local CI fallback (ADR-004).
- * Evaluation code must not bind to Docker API types. Firecracker is not implemented.
+ * Isolation SPI — Docker (default), optional gVisor/runsc, optional Firecracker microVM,
+ * local CI fallback (ADR-004). Evaluation code must not bind to Docker API types.
  */
 public interface RuntimeIsolator {
 

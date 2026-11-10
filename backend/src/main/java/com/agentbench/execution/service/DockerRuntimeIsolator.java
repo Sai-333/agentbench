@@ -32,7 +32,7 @@ import java.util.concurrent.TimeUnit;
  *
  * <p><strong>Residual risk:</strong> shared-kernel Docker breakout. Not production-safe for
  * arbitrary untrusted workloads — prefer {@code agentbench.execution.mode=gvisor} on Linux
- * hosts with runsc (ADR-004). Firecracker is not implemented.
+ * hosts with runsc, or {@code mode=firecracker} on Linux+KVM (ADR-004).
  */
 @Component
 public class DockerRuntimeIsolator implements RuntimeIsolator {

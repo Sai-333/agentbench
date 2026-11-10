@@ -38,6 +38,11 @@ data:
   AGENTBENCH_DOCKER_ENABLED: {{ .Values.config.dockerEnabled | quote }}
   AGENTBENCH_GVISOR_RUNTIME: {{ .Values.config.gvisorRuntime | quote }}
   AGENTBENCH_RUNSC_BINARY: {{ .Values.config.runscBinary | quote }}
+  AGENTBENCH_FIRECRACKER_WRAPPER: {{ .Values.config.firecrackerWrapper | quote }}
+  AGENTBENCH_FIRECRACKER_BINARY: {{ .Values.config.firecrackerBinary | quote }}
+  AGENTBENCH_JAILER_BINARY: {{ .Values.config.jailerBinary | quote }}
+  AGENTBENCH_FIRECRACKER_USE_JAILER: {{ .Values.config.firecrackerUseJailer | quote }}
+  AGENTBENCH_KVM_DEVICE: {{ .Values.config.kvmDevice | quote }}
   AGENTBENCH_GITHUB_VALIDATION_ENABLED: {{ .Values.config.githubValidationEnabled | quote }}
   AGENTBENCH_OIDC_GOOGLE_ENABLED: {{ .Values.config.oidcGoogleEnabled | quote }}
   AGENTBENCH_OIDC_GITHUB_ENABLED: {{ .Values.config.oidcGithubEnabled | quote }}
