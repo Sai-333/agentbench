@@ -135,4 +135,4 @@ Flyway `V21__public_leaderboard_comments_votes.sql`:
 - Distributed / multi-replica rate limiting or full anti-spam / CAPTCHA / ML moderation
 - Per-entry (agent/task row) votes or star ratings
 - Comments/votes on **org-private** (unpublished) boards
-- Full service-mesh mTLS / AMQPS / AWS Object Lock WORM / Oracle Always Free hosting
+- Full service-mesh mTLS / AMQPS / live AWS Compliance Object Lock demo bucket / Oracle Always Free hosting

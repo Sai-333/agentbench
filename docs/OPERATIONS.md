@@ -73,7 +73,7 @@ Addresses non-reproducible baseline / flaky tests that would otherwise falsely p
 
 **Confirmation gate:** when enabled (platform or `evalConfig.requireBaselineConfirmation`), baseline repeats until confirmation count; any unstable **non-quarantined** case fails with `BASELINE_UNCONFIRMED` and sets `test_runs.baseline_confirmed = false`. Pass sets `baseline_confirmed = true`.
 
-**Not claimed:** automatic historical ML flake discovery; per-suite adaptive thresholds; Oracle/Firecracker/Object Lock.
+**Not claimed:** automatic historical ML flake discovery; per-suite adaptive thresholds; Oracle/Firecracker live hosts.
 
 ## Artifact retention / cleanup (TTL + GC)
 
@@ -106,7 +106,7 @@ Addresses secret exfiltration via patches / env dumps / logs persisted as artifa
 - **QUARANTINE**: refuse persist; throw `ArtifactSecretQuarantinedException` (message has pattern ids + counts only — never the secret).
 - Audit rows in `platform.artifact_secret_findings` (Flyway V18): `storage_key`, `pattern_ids`, `finding_count`, `action` — **no matched substrings**.
 
-**Not claimed:** full DLP / ML classifiers; scanning of binary non-text blobs; S3 Object Lock / bucket lifecycle; per-org TTL or per-org scan policy overrides.
+**Not claimed:** full DLP / ML classifiers; scanning of binary non-text blobs; S3 bucket lifecycle rules; per-org TTL or per-org scan policy overrides. Optional S3 Object Lock is a separate opt-in path (`docs/AUDIT_WORM.md`) — default Compose MinIO is not lock-enabled.
 
 Manual GC trigger is the Spring bean `ArtifactRetentionService#sweep` (no public HTTP endpoint in v1).
 

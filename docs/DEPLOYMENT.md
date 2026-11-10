@@ -64,8 +64,13 @@ docker compose --profile s3 ps minio   # should be healthy
 | `AGENTBENCH_ARTIFACT_SWEEP_MS` | GC interval ms (default 3600000) |
 | `AGENTBENCH_ARTIFACT_MAX_OBJECT_BYTES` | hard ceiling rejected at `store()` |
 | `AGENTBENCH_ARTIFACT_MAX_LOG_BYTES` | truncate log/report payloads before persist |
+| `AGENTBENCH_S3_OBJECT_LOCK_ENABLED` | Opt-in S3 Object Lock (default `false`; needs Object Lock bucket) |
+| `AGENTBENCH_S3_OBJECT_LOCK_MODE` | `COMPLIANCE` (default) or `GOVERNANCE` |
+| `AGENTBENCH_S3_OBJECT_LOCK_RETENTION_DAYS` | Retain-until days (default `2555`) |
+| `AGENTBENCH_S3_OBJECT_LOCK_ARTIFACTS` | Lock artifact puts / refuse overwrite+delete (default `false`) |
+| `AGENTBENCH_S3_OBJECT_LOCK_AUDIT_EXPORT` | Export worm audit rows to S3 with lock (default `true` when lock enabled) |
 
-Retention GC: scheduled job purges expired patch blobs + DB metadata (`purged_at`), clears aged invocation URIs, then age-sweeps orphan objects via the active `ArtifactStorage` (filesystem walk or S3 list/delete) and always TTL-sweeps local `workspaces/` when using S3. Audit rows land in `platform.artifact_cleanup_runs`. Secret scan (R7) redacts or quarantines common secret patterns at persist; findings audit to `platform.artifact_secret_findings` without storing raw secrets. Flake quarantine / baseline confirmation (R5): see `docs/SCORING_METHODOLOGY.md` / `docs/OPERATIONS.md`. Console: http://localhost:9001.
+Retention GC: scheduled job purges expired patch blobs + DB metadata (`purged_at`), clears aged invocation URIs, then age-sweeps orphan objects via the active `ArtifactStorage` (filesystem walk or S3 list/delete) and always TTL-sweeps local `workspaces/` when using S3. Audit rows land in `platform.artifact_cleanup_runs`. Secret scan (R7) redacts or quarantines common secret patterns at persist; findings audit to `platform.artifact_secret_findings` without storing raw secrets. Flake quarantine / baseline confirmation (R5): see `docs/SCORING_METHODOLOGY.md` / `docs/OPERATIONS.md`. Optional Object Lock: default Compose MinIO bucket is **not** lock-enabled — see `docs/AUDIT_WORM.md`. Console: http://localhost:9001.
 
 ### Production-ish overlay
 
@@ -136,7 +141,7 @@ helm uninstall agentbench -n agentbench
 
 **Dependency strategy:** default is **external** Postgres / Redis / RabbitMQ (`config.*` hosts). Optional `dependencies.*.enabled` spins single-replica lab Deployments only — not HA, not operators. Prefer `secrets.existingSecret` in real clusters.
 
-**Honest limits:** not certified multi-tenant SaaS; NetworkPolicies are included (opt-out); optional east-west mTLS is opt-in (§3d); optional Operator/CRD packaging is separate (§3e). Postgres WORM/append-only audit landed (`docs/AUDIT_WORM.md`) — not AWS Object Lock. See `deploy/helm/agentbench/README.md` and §3c–§3e.
+**Honest limits:** not certified multi-tenant SaaS; NetworkPolicies are included (opt-out); optional east-west mTLS is opt-in (§3d); optional Operator/CRD packaging is separate (§3e). Postgres WORM/append-only audit is the default; optional S3 Object Lock knobs exist but stay off unless you supply an Object Lock-enabled bucket (`docs/AUDIT_WORM.md`). See `deploy/helm/agentbench/README.md` and §3c–§3e.
 
 ## 3c. NetworkPolicies
 
@@ -175,7 +180,7 @@ helm upgrade agentbench deploy/helm/agentbench -n agentbench \
 kubectl apply -k deploy/kubernetes/
 ```
 
-**Residual risk (honest):** NetworkPolicy is L3/L4 only — not identity-aware authz between services. Pair with optional mTLS (§3d) for encryption in transit on HTTP surfaces. Audit WORM is Postgres-side (triggers + hash chain), not Object Lock — see `docs/AUDIT_WORM.md`. `allowExternalDataPlane` / `allowWorldHttps` intentionally permit broad destinations on known ports so external managed services and OIDC/S3/LLM calls work; operators should replace those with CIDR/`namespaceSelector` rules via `networkPolicy.egress.extra` and `networkPolicy.ingress.from` before hostile multi-tenant use. Evaluation containers still use Docker `--network none` (or gVisor) independently of these cluster policies.
+**Residual risk (honest):** NetworkPolicy is L3/L4 only — not identity-aware authz between services. Pair with optional mTLS (§3d) for encryption in transit on HTTP surfaces. Audit WORM defaults to Postgres-side (triggers + hash chain); Object Lock is opt-in and off in default Compose/Helm — see `docs/AUDIT_WORM.md`. `allowExternalDataPlane` / `allowWorldHttps` intentionally permit broad destinations on known ports so external managed services and OIDC/S3/LLM calls work; operators should replace those with CIDR/`namespaceSelector` rules via `networkPolicy.egress.extra` and `networkPolicy.ingress.from` before hostile multi-tenant use. Evaluation containers still use Docker `--network none` (or gVisor) independently of these cluster policies.
 
 ## 3d. Optional mTLS (Helm / Kubernetes)
 

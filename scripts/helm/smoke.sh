@@ -33,6 +33,10 @@ echo "${DEFAULT_OUT}" | grep -q 'AGENTBENCH_ARTIFACT_SECRET_SCAN_ENABLED' \
   || { echo "expected AGENTBENCH_ARTIFACT_SECRET_SCAN_ENABLED in ConfigMap" >&2; exit 1; }
 echo "${DEFAULT_OUT}" | grep -q 'AGENTBENCH_ARTIFACT_SECRET_SCAN_MODE' \
   || { echo "expected AGENTBENCH_ARTIFACT_SECRET_SCAN_MODE in ConfigMap" >&2; exit 1; }
+echo "${DEFAULT_OUT}" | grep -q 'AGENTBENCH_S3_OBJECT_LOCK_ENABLED' \
+  || { echo "expected AGENTBENCH_S3_OBJECT_LOCK_ENABLED in ConfigMap" >&2; exit 1; }
+echo "${DEFAULT_OUT}" | grep -q 'AGENTBENCH_S3_OBJECT_LOCK_MODE' \
+  || { echo "expected AGENTBENCH_S3_OBJECT_LOCK_MODE in ConfigMap" >&2; exit 1; }
 echo "${DEFAULT_OUT}" | grep -q 'AGENTBENCH_EVAL_BASELINE_CONFIRMATION_ENABLED' \
   || { echo "expected AGENTBENCH_EVAL_BASELINE_CONFIRMATION_ENABLED in ConfigMap" >&2; exit 1; }
 echo "${DEFAULT_OUT}" | grep -q 'AGENTBENCH_EVAL_BASELINE_CONFIRMATION_RUNS' \

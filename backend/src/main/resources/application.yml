@@ -100,6 +100,19 @@ agentbench:
       path-style: ${AGENTBENCH_S3_PATH_STYLE:true}
       key-prefix: ${AGENTBENCH_S3_KEY_PREFIX:}
       create-bucket: ${AGENTBENCH_S3_CREATE_BUCKET:true}
+      # Opt-in S3 Object Lock (does not replace Postgres WORM). Requires Object Lock bucket.
+      # Default Compose MinIO profile does NOT enable Object Lock — see docs/AUDIT_WORM.md.
+      object-lock:
+        enabled: ${AGENTBENCH_S3_OBJECT_LOCK_ENABLED:false}
+        mode: ${AGENTBENCH_S3_OBJECT_LOCK_MODE:COMPLIANCE}
+        retention-days: ${AGENTBENCH_S3_OBJECT_LOCK_RETENTION_DAYS:2555}
+        apply-to-artifacts: ${AGENTBENCH_S3_OBJECT_LOCK_ARTIFACTS:false}
+        apply-to-audit-export: ${AGENTBENCH_S3_OBJECT_LOCK_AUDIT_EXPORT:true}
+        require-bucket-object-lock: ${AGENTBENCH_S3_OBJECT_LOCK_REQUIRE_BUCKET:true}
+        audit-bucket: ${AGENTBENCH_S3_OBJECT_LOCK_AUDIT_BUCKET:}
+        audit-key-prefix: ${AGENTBENCH_S3_OBJECT_LOCK_AUDIT_PREFIX:audit/worm/}
+        audit-export-interval-ms: ${AGENTBENCH_S3_OBJECT_LOCK_AUDIT_EXPORT_MS:60000}
+        audit-export-batch-size: ${AGENTBENCH_S3_OBJECT_LOCK_AUDIT_BATCH:200}
     retention:
       enabled: ${AGENTBENCH_ARTIFACT_RETENTION_ENABLED:true}
       days: ${AGENTBENCH_ARTIFACT_RETENTION_DAYS:14}
