@@ -8,9 +8,11 @@ import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
 import software.amazon.awssdk.services.s3.model.GetObjectRequest;
+import software.amazon.awssdk.services.s3.model.HeadObjectRequest;
 import software.amazon.awssdk.services.s3.model.ListObjectsV2Request;
 import software.amazon.awssdk.services.s3.model.NoSuchKeyException;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
+import software.amazon.awssdk.services.s3.model.S3Exception;
 import software.amazon.awssdk.services.s3.model.S3Object;
 
 import java.io.InputStream;
@@ -22,6 +24,10 @@ import java.util.Optional;
  * Active when {@code agentbench.artifacts.storage=s3}.
  *
  * <p>Storage URIs use the form {@code s3://{bucket}/{key}}.
+ *
+ * <p>When {@code agentbench.artifacts.s3.object-lock} protects artifacts, puts include
+ * Object Lock retention, existing keys are refused (no overwrite), and delete/sweep are
+ * refused while retention applies at the application layer.
  */
 @Component
 @ConditionalOnProperty(name = "agentbench.artifacts.storage", havingValue = "s3")
@@ -34,6 +40,7 @@ public class S3CompatibleArtifactStorage implements ArtifactStorage {
     private final String bucket;
     private final String keyPrefix;
     private final long maxObjectBytes;
+    private final S3ObjectLockProperties objectLock;
 
     public S3CompatibleArtifactStorage(S3Client artifactS3Client, ArtifactStorageProperties properties) {
         this.s3Client = artifactS3Client;
@@ -46,14 +53,18 @@ public class S3CompatibleArtifactStorage implements ArtifactStorage {
             this.keyPrefix = normalized.isEmpty() ? "" : normalized + "/";
         }
         this.maxObjectBytes = properties.getMaxObjectBytes();
-        log.info("S3-compatible artifact storage ready bucket={} prefix={} pathStyle={} maxObjectBytes={}",
-                bucket, keyPrefix, properties.getS3().isPathStyle(), maxObjectBytes);
+        this.objectLock = properties.getS3().getObjectLock();
+        log.info("S3-compatible artifact storage ready bucket={} prefix={} pathStyle={} maxObjectBytes={} objectLockArtifacts={}",
+                bucket, keyPrefix, properties.getS3().isPathStyle(), maxObjectBytes, objectLock.protectsArtifacts());
     }
 
     @Override
     public String store(String key, InputStream content, long contentLength, String contentType) {
         enforceSize(contentLength);
         String objectKey = toObjectKey(key);
+        if (objectLock.protectsArtifacts()) {
+            rejectIfExists(objectKey);
+        }
         PutObjectRequest.Builder put = PutObjectRequest.builder()
                 .bucket(bucket)
                 .key(objectKey);
@@ -62,6 +73,9 @@ public class S3CompatibleArtifactStorage implements ArtifactStorage {
         }
         if (contentLength >= 0) {
             put.contentLength(contentLength);
+        }
+        if (objectLock.protectsArtifacts()) {
+            S3ObjectLockSupport.applyRetention(put, objectLock, Instant.now());
         }
         try {
             s3Client.putObject(put.build(), RequestBody.fromInputStream(content, contentLength));
@@ -81,7 +95,7 @@ public class S3CompatibleArtifactStorage implements ArtifactStorage {
                     .build()));
         } catch (NoSuchKeyException missing) {
             return Optional.empty();
-        } catch (software.amazon.awssdk.services.s3.model.S3Exception ex) {
+        } catch (S3Exception ex) {
             if (ex.statusCode() == 404) {
                 return Optional.empty();
             }
@@ -91,6 +105,12 @@ public class S3CompatibleArtifactStorage implements ArtifactStorage {
 
     @Override
     public void delete(String storageUri) {
+        if (objectLock.protectsArtifacts()) {
+            throw new ObjectLockProtectedException(
+                    "Refusing delete of S3 artifact under Object Lock retention: " + storageUri
+                            + " (mode=" + objectLock.getMode()
+                            + ", retentionDays=" + objectLock.getRetentionDays() + ")");
+        }
         ObjectRef ref = parseUri(storageUri);
         try {
             s3Client.deleteObject(DeleteObjectRequest.builder()
@@ -104,6 +124,10 @@ public class S3CompatibleArtifactStorage implements ArtifactStorage {
 
     @Override
     public SweepResult sweepOlderThan(Instant cutoff) {
+        if (objectLock.protectsArtifacts()) {
+            log.info("Skipping S3 orphan sweep while Object Lock protects artifacts (cutoff={})", cutoff);
+            return SweepResult.empty();
+        }
         int deleted = 0;
         long freed = 0L;
         String continuation = null;
@@ -136,6 +160,26 @@ public class S3CompatibleArtifactStorage implements ArtifactStorage {
             continuation = Boolean.TRUE.equals(page.isTruncated()) ? page.nextContinuationToken() : null;
         } while (continuation != null);
         return new SweepResult(deleted, freed);
+    }
+
+    private void rejectIfExists(String objectKey) {
+        try {
+            s3Client.headObject(HeadObjectRequest.builder()
+                    .bucket(bucket)
+                    .key(objectKey)
+                    .build());
+            throw new ObjectLockProtectedException(
+                    "Refusing overwrite of existing S3 object under Object Lock: s3://" + bucket + "/" + objectKey);
+        } catch (ObjectLockProtectedException protectedEx) {
+            throw protectedEx;
+        } catch (NoSuchKeyException missing) {
+            // ok — key free
+        } catch (S3Exception ex) {
+            if (ex.statusCode() == 404) {
+                return;
+            }
+            throw new IllegalStateException("Failed HeadObject before Object Lock put key=" + objectKey, ex);
+        }
     }
 
     private void enforceSize(long contentLength) {

@@ -77,6 +77,12 @@ public class ArtifactStorageProperties {
         /** Create the bucket on startup when missing (local MinIO convenience). */
         private boolean createBucket = true;
 
+        /**
+         * Opt-in S3 Object Lock (governance/compliance retention). Default off.
+         * See {@link S3ObjectLockProperties} and {@code docs/AUDIT_WORM.md}.
+         */
+        private final S3ObjectLockProperties objectLock = new S3ObjectLockProperties();
+
         public String getEndpoint() {
             return endpoint;
         }
@@ -139,6 +145,10 @@ public class ArtifactStorageProperties {
 
         public void setCreateBucket(boolean createBucket) {
             this.createBucket = createBucket;
+        }
+
+        public S3ObjectLockProperties getObjectLock() {
+            return objectLock;
         }
     }
 }

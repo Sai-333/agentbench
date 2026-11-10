@@ -53,7 +53,7 @@
 |---|---|---|---|
 | **Spoofing** | Stolen JWT / agent callback token | Short-lived JWT; optional Google/GitHub OIDC + multi-IdP SAML SP (optional AuthnRequest signing); rotate agent secrets; TLS at edge; optional Helm east-west mTLS (`mtls.enabled`) | Mesh / AMQPS |
 | **Tampering** | Mutate sealed patch mid-run | Content digest; seal flag; immutable storage | Signed artifacts |
-| **Repudiation** | Deny hidden-test access | Audit log for suite reads & state transitions; Postgres WORM triggers + hash chain (`docs/AUDIT_WORM.md`) | S3 Object Lock export |
+| **Repudiation** | Deny hidden-test access | Audit log for suite reads & state transitions; Postgres WORM triggers + hash chain; optional S3 Object Lock export (`docs/AUDIT_WORM.md`) | Live Compliance bucket + legal hold ops |
 | **Info disclosure** | Hidden tests in agent prompt / logs | Separate stages; DTO filtering; `SecretRedactor`; RBAC | Dedicated hidden runner pool |
 | **DoS** | Fork bomb / disk fill in container | Docker CPU/mem/pids/ulimit; timeouts; org quotas; DLQ | cgroup v2 + fair share |
 | **Elevation** | Escape to host via Docker | No docker.sock in workload; non-root; dropped caps; read-only root FS; optional `mode=gvisor` (`--runtime=runsc`) or `mode=firecracker` (Linux+KVM) | Certified multi-tenant SaaS bar |
@@ -145,7 +145,7 @@ Shared-kernel breakout residual risk remains on the default path. Prefer **`agen
 | Author malice within own org | Org trust boundary; cannot fully prevent |
 | Local isolator fallback | Used when Docker unavailable (CI); not a security boundary |
 | K8s NetworkPolicy / mTLS residual | NetworkPolicies ship (L3/L4); optional Helm mTLS for HTTP (API/worker/frontend proxy) — not a mesh, not AMQPS; default `clientAuth=want`; Mac Compose plaintext |
-| WORM residual (not Object Lock) | Append-only triggers + hash chain on audit tables; app role cannot UPDATE/DELETE; superuser can still disable triggers; AWS Object Lock not wired |
+| WORM residual | Append-only triggers + hash chain on audit tables; app role cannot UPDATE/DELETE; superuser can still disable triggers; S3 Object Lock is opt-in (default off; needs Object Lock-enabled bucket — default Compose MinIO is not) |
 | AES secret-key rotation not automated | Dual-key re-encrypt before rotating encryption keys |
 | Artifact secret scan is pattern-based only | Not full DLP; tune `additional-patterns` / use `QUARANTINE` for stricter demos; binary non-text skipped |
 | Flake quarantine is operator/config declared | Not an automatic ML flake classifier; confirmation gate default off for demo speed |

@@ -1,9 +1,10 @@
 # WORM / append-only audit storage
 
-**Status:** Landed (Flyway `V15__worm_audit_storage.sql`)  
-**Local path:** PostgreSQL triggers + privilege revoke + per-org SHA-256 hash chain. Works in Compose / Testcontainers without AWS.
+**Status:** Postgres path landed (Flyway `V15__worm_audit_storage.sql`). Optional S3 Object Lock layer landed (Flyway `V22__worm_audit_s3_export_state.sql` + `agentbench.artifacts.s3.object-lock`).  
+**Local path:** PostgreSQL triggers + privilege revoke + per-org SHA-256 hash chain. Works in Compose / Testcontainers without AWS.  
+**Object Lock path:** Opt-in; default off. Requires `ARTIFACT_STORAGE=s3` and a bucket created with Object Lock enabled.
 
-## What shipped
+## What shipped (Postgres — always on)
 
 | Control | Where |
 |---|---|
@@ -24,26 +25,64 @@ wormAuditService.append(orgId, "suite.read", actor, "benchmark_suite", suiteId, 
 
 Inserts must run with `app.current_org_id` set (HTTP filter / `RlsContext`) so FORCE RLS allows the row.
 
-## Honest residual (not claimed)
+## Optional S3 Object Lock layer
 
-- **Not AWS S3 Object Lock / Compliance mode.** No object-store WORM path is wired in this PR.
-- **Not a legal hold / regulated WORM appliance.** A Postgres superuser (Compose `POSTGRES_USER` / Flyway role) can `DISABLE TRIGGER`, `TRUNCATE`, or drop the table.
-- **Org hard-delete** that would cascade into append-only children will fail while deny-delete triggers are enabled — treat audit history as durable.
-- **`agents.agent_invocations`** remains a mutable lifecycle table (INSERT then UPDATE on completion), not WORM.
+Layers an **off-box** evidence store on top of Postgres. Does **not** replace Postgres WORM.
+
+| Knob | Env | Default | Meaning |
+|---|---|---|---|
+| enabled | `AGENTBENCH_S3_OBJECT_LOCK_ENABLED` | `false` | Master switch |
+| mode | `AGENTBENCH_S3_OBJECT_LOCK_MODE` | `COMPLIANCE` | `GOVERNANCE` or `COMPLIANCE` |
+| retention-days | `AGENTBENCH_S3_OBJECT_LOCK_RETENTION_DAYS` | `2555` | Retain-until = now + days |
+| apply-to-artifacts | `AGENTBENCH_S3_OBJECT_LOCK_ARTIFACTS` | `false` | Put artifacts with Object Lock; refuse overwrite/delete/sweep |
+| apply-to-audit-export | `AGENTBENCH_S3_OBJECT_LOCK_AUDIT_EXPORT` | `true` | Export worm rows to S3 with Object Lock |
+| require-bucket-object-lock | `AGENTBENCH_S3_OBJECT_LOCK_REQUIRE_BUCKET` | `true` | Fail-fast `GetObjectLockConfiguration` at startup |
+| audit-bucket | `AGENTBENCH_S3_OBJECT_LOCK_AUDIT_BUCKET` | _(artifact bucket)_ | Optional dedicated audit bucket |
+| audit-key-prefix | `AGENTBENCH_S3_OBJECT_LOCK_AUDIT_PREFIX` | `audit/worm/` | Key prefix for exported JSON |
+| audit-export-interval-ms | `AGENTBENCH_S3_OBJECT_LOCK_AUDIT_EXPORT_MS` | `60000` | Export poll interval |
+| audit-export-batch-size | `AGENTBENCH_S3_OBJECT_LOCK_AUDIT_BATCH` | `200` | Max rows per poll |
+
+### Behavior when enabled
+
+1. **Fail-fast config** — `ARTIFACT_STORAGE=s3`, valid mode, `retention-days > 0`, and at least one of apply-to-artifacts / apply-to-audit-export.
+2. **Bucket probe** (when `require-bucket-object-lock=true`) — startup calls `GetObjectLockConfiguration` and refuses to boot unless Object Lock is `ENABLED`.
+3. **Artifacts** (when `apply-to-artifacts=true`) — `PutObject` includes `objectLockMode` + `objectLockRetainUntilDate`; existing keys refused (`HeadObject`); `delete` / orphan sweep refused at the app layer while protection is on.
+4. **Audit export** (when `apply-to-audit-export=true`) — `WormAuditS3ExportService` copies new `worm_audit_events` rows to `s3://{bucket}/{prefix}events/{id}.json` with retention headers. Watermark in `platform.worm_audit_s3_export_state` (mutable ops state — **not** WORM evidence). Worm table stays append-only (no UPDATE of export flags on locked rows).
+
+### Enabling on AWS
+
+1. Create a versioned bucket with Object Lock enabled at creation time.
+2. Set `ARTIFACT_STORAGE=s3` and `AGENTBENCH_S3_*` credentials/endpoint/region.
+3. Set `AGENTBENCH_S3_OBJECT_LOCK_ENABLED=true` (and mode/retention as needed).
+4. Keep `require-bucket-object-lock=true` for an honest Compliance claim.
+
+### Compose / MinIO honesty
+
+- Default `docker compose --profile s3` creates a **normal** MinIO bucket (`mc mb` **without** `--with-lock`). Object Lock stays **off**.
+- MinIO can support Object Lock on some builds when the bucket is created with Object Lock (`mc mb --with-lock` / `ObjectLockEnabledForBucket=true`). Feature parity with AWS **Compliance** mode is **not** asserted for the default Compose profile.
+- Do **not** set `AGENTBENCH_S3_OBJECT_LOCK_ENABLED=true` against the default Compose MinIO bucket — startup fail-fast will reject it when `require-bucket-object-lock=true`.
+
+### Tests (evidence for the optional path)
+
+| Test | What it proves |
+|---|---|
+| `S3ObjectLockArtifactStorageTest` | Put carries COMPLIANCE/GOVERNANCE + retain-until; overwrite/delete/sweep refused |
+| `S3ObjectLockSupportTest` / `S3ObjectLockValidatorTest` | Config fail-fast; bucket probe required when configured |
+| `WormAuditS3ExportServiceTest` | Export puts JSON under audit prefix with Object Lock headers + watermark advance |
+
+These are SDK/Mockito unit tests (no live AWS Compliance bucket in CI). Claiming a **deployed** Compliance-mode store still requires an Object Lock-enabled bucket in the target environment.
+
+## Honest residual (still not claimed without ops evidence)
+
+- **Postgres path alone is not AWS Object Lock.** Superuser can still `DISABLE TRIGGER` / `TRUNCATE` on the DB side.
+- **Default Compose / Helm leave Object Lock off.** Enabling knobs without an Object Lock bucket is refused (or, if `require-bucket-object-lock=false`, explicitly **not** a Compliance claim).
+- **MinIO ≠ certified AWS Compliance** unless you verify your MinIO version and bucket lock settings yourself.
+- **Artifact TTL/GC** cannot delete Object-Locked artifact objects while `apply-to-artifacts=true`; metadata purge may still clear URIs while bytes remain until retention expires.
+- **`agents.agent_invocations`** remains a mutable lifecycle table, not WORM.
 - Hash chain detects payload tampering when verification runs; it does not by itself stop a superuser who also rewrites hashes.
-
-## Layering S3 Object Lock later
-
-Optional hardening for hostile multi-tenant / compliance:
-
-1. Export `platform.worm_audit_events` (or a CDC stream) to an S3 prefix as immutable objects (`event_id` key).
-2. Enable **S3 Object Lock** in **Compliance** mode on that bucket/prefix (governance mode is weaker).
-3. Keep Postgres as the online query store; treat the Object Lock bucket as the off-box evidence store.
-4. Do **not** claim Object Lock until the export job + bucket settings are actually deployed and tested.
-
-MinIO can approximate Object Lock in some deployments; confirm your MinIO version/features before claiming parity with AWS Compliance mode.
 
 ## Ops notes
 
 - Flyway continues to use the bootstrap superuser; the app JDBC user must stay `agentbench_app` (`NOSUPERUSER`, `NOBYPASSRLS`).
-- See also `docs/POSTGRES_RLS.md` and `docs/SECURITY_THREAT_MODEL.md`.
+- Helm: `config.s3ObjectLock*` → ConfigMap (`AGENTBENCH_S3_OBJECT_LOCK_*`); default `"false"`.
+- See also `docs/POSTGRES_RLS.md`, `docs/DEPLOYMENT.md`, and `docs/SECURITY_THREAT_MODEL.md`.

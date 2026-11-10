@@ -70,33 +70,54 @@ public class ArtifactStorageConfig {
                 .serviceConfiguration(serviceConfig)
                 .build();
 
-        ensureBucket(client, s3);
+        if (s3.getObjectLock().isEnabled()) {
+            S3ObjectLockSupport.validateEnabledConfig(properties);
+        }
+        ensureBucket(client, s3.getBucket(), s3.isCreateBucket(), s3.getObjectLock());
+        if (s3.getObjectLock().exportsAudit()) {
+            String auditBucket = S3ObjectLockSupport.resolveAuditBucket(properties);
+            if (!auditBucket.equals(s3.getBucket())) {
+                ensureBucket(client, auditBucket, s3.isCreateBucket(), s3.getObjectLock());
+            }
+        }
         return client;
     }
 
-    private static void ensureBucket(S3Client client, ArtifactStorageProperties.S3 s3) {
-        String bucket = s3.getBucket();
+    private static void ensureBucket(
+            S3Client client,
+            String bucket,
+            boolean createBucket,
+            S3ObjectLockProperties objectLock) {
         try {
             client.headBucket(HeadBucketRequest.builder().bucket(bucket).build());
             log.info("S3 artifact bucket ready: {}", bucket);
         } catch (NoSuchBucketException missing) {
-            if (!s3.isCreateBucket()) {
+            if (!createBucket) {
                 throw new IllegalStateException("S3 bucket missing and create-bucket=false: " + bucket, missing);
             }
-            try {
-                client.createBucket(CreateBucketRequest.builder().bucket(bucket).build());
-                log.info("Created S3 artifact bucket: {}", bucket);
-            } catch (S3Exception ex) {
-                throw new IllegalStateException("Failed to create S3 artifact bucket: " + bucket, ex);
-            }
+            createBucket(client, bucket, objectLock);
         } catch (S3Exception ex) {
             // MinIO may return 404 without NoSuchBucketException mapping in some versions.
-            if (ex.statusCode() == 404 && s3.isCreateBucket()) {
-                client.createBucket(CreateBucketRequest.builder().bucket(bucket).build());
-                log.info("Created S3 artifact bucket after 404 head: {}", bucket);
+            if (ex.statusCode() == 404 && createBucket) {
+                createBucket(client, bucket, objectLock);
                 return;
             }
             throw new IllegalStateException("Failed to access S3 artifact bucket: " + bucket, ex);
+        }
+    }
+
+    private static void createBucket(S3Client client, String bucket, S3ObjectLockProperties objectLock) {
+        try {
+            CreateBucketRequest.Builder create = CreateBucketRequest.builder().bucket(bucket);
+            // Object Lock can only be enabled at bucket creation (AWS + MinIO).
+            if (objectLock != null && objectLock.isEnabled()) {
+                create.objectLockEnabledForBucket(true);
+            }
+            client.createBucket(create.build());
+            log.info("Created S3 bucket: {} objectLock={}", bucket,
+                    objectLock != null && objectLock.isEnabled());
+        } catch (S3Exception ex) {
+            throw new IllegalStateException("Failed to create S3 bucket: " + bucket, ex);
         }
     }
 }

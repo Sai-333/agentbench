@@ -13,7 +13,7 @@ Packages the raw Kubernetes manifests under `deploy/kubernetes/` as a values-dri
 | Certified multi-tenant SaaS | **Not claimed** |
 | NetworkPolicies | **Yes** — default-deny + allow-needed (`networkPolicy.enabled`, default true) |
 | mTLS between services | **Optional** — `mtls.enabled` (default off); cert-manager Certificates **or** openssl Secrets; Spring Boot PEM SSL; not a service mesh |
-| WORM audit | **App/DB concern** — Postgres append-only + hash chain (`docs/AUDIT_WORM.md`); chart does not configure S3 Object Lock |
+| WORM audit | **Postgres append-only + hash chain** by default (`docs/AUDIT_WORM.md`); optional S3 Object Lock knobs via `config.s3ObjectLock*` (default off; needs Object Lock-enabled bucket) |
 | In-cluster Postgres/Redis/Rabbit | **Optional lab/demo only** — single replica, non-HA |
 
 ## NetworkPolicies

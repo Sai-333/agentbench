@@ -41,6 +41,16 @@ data:
   AGENTBENCH_ARTIFACT_MAX_OBJECT_BYTES: {{ .Values.config.artifactMaxObjectBytes | quote }}
   AGENTBENCH_ARTIFACT_SECRET_SCAN_ENABLED: {{ .Values.config.artifactSecretScanEnabled | quote }}
   AGENTBENCH_ARTIFACT_SECRET_SCAN_MODE: {{ .Values.config.artifactSecretScanMode | quote }}
+  AGENTBENCH_S3_OBJECT_LOCK_ENABLED: {{ .Values.config.s3ObjectLockEnabled | quote }}
+  AGENTBENCH_S3_OBJECT_LOCK_MODE: {{ .Values.config.s3ObjectLockMode | quote }}
+  AGENTBENCH_S3_OBJECT_LOCK_RETENTION_DAYS: {{ .Values.config.s3ObjectLockRetentionDays | quote }}
+  AGENTBENCH_S3_OBJECT_LOCK_ARTIFACTS: {{ .Values.config.s3ObjectLockArtifacts | quote }}
+  AGENTBENCH_S3_OBJECT_LOCK_AUDIT_EXPORT: {{ .Values.config.s3ObjectLockAuditExport | quote }}
+  AGENTBENCH_S3_OBJECT_LOCK_REQUIRE_BUCKET: {{ .Values.config.s3ObjectLockRequireBucket | quote }}
+  AGENTBENCH_S3_OBJECT_LOCK_AUDIT_BUCKET: {{ .Values.config.s3ObjectLockAuditBucket | quote }}
+  AGENTBENCH_S3_OBJECT_LOCK_AUDIT_PREFIX: {{ .Values.config.s3ObjectLockAuditPrefix | quote }}
+  AGENTBENCH_S3_OBJECT_LOCK_AUDIT_EXPORT_MS: {{ .Values.config.s3ObjectLockAuditExportMs | quote }}
+  AGENTBENCH_S3_OBJECT_LOCK_AUDIT_BATCH: {{ .Values.config.s3ObjectLockAuditBatch | quote }}
   AGENTBENCH_EVAL_FLAKY_REPEAT_RUNS: {{ .Values.config.evalFlakyRepeatRuns | quote }}
   AGENTBENCH_EVAL_BASELINE_CONFIRMATION_ENABLED: {{ .Values.config.evalBaselineConfirmationEnabled | quote }}
   AGENTBENCH_EVAL_BASELINE_CONFIRMATION_RUNS: {{ .Values.config.evalBaselineConfirmationRuns | quote }}
