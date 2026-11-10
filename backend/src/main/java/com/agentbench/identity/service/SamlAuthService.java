@@ -6,6 +6,7 @@ import com.agentbench.identity.auth.SamlAuthnRequestFactory;
 import com.agentbench.identity.auth.SamlProperties;
 import com.agentbench.identity.auth.SamlRegistrationFactory;
 import com.agentbench.identity.auth.SamlResponseProcessor;
+import com.agentbench.identity.auth.SamlSpSigningCredentials;
 import com.agentbench.identity.auth.SamlUserProfile;
 import com.agentbench.identity.domain.SamlIdentityProvider;
 import com.agentbench.identity.infra.OidcLoginStateRepository;
@@ -32,6 +33,7 @@ public class SamlAuthService {
     private final SamlRegistrationFactory registrationFactory;
     private final SamlAuthnRequestFactory authnRequestFactory;
     private final SamlResponseProcessor responseProcessor;
+    private final SamlSpSigningCredentials signingCredentials;
     private final OidcLoginStateRepository loginStateRepository;
     private final AuthService authService;
     private final SamlIdpAdminService idpAdminService;
@@ -42,6 +44,7 @@ public class SamlAuthService {
             SamlRegistrationFactory registrationFactory,
             SamlAuthnRequestFactory authnRequestFactory,
             SamlResponseProcessor responseProcessor,
+            SamlSpSigningCredentials signingCredentials,
             OidcLoginStateRepository loginStateRepository,
             AuthService authService,
             SamlIdpAdminService idpAdminService) {
@@ -50,6 +53,7 @@ public class SamlAuthService {
         this.registrationFactory = registrationFactory;
         this.authnRequestFactory = authnRequestFactory;
         this.responseProcessor = responseProcessor;
+        this.signingCredentials = signingCredentials;
         this.loginStateRepository = loginStateRepository;
         this.authService = authService;
         this.idpAdminService = idpAdminService;
@@ -62,6 +66,14 @@ public class SamlAuthService {
         boolean hasDb = !idpAdminService.listEnabledForLogin().isEmpty();
         if (!hasDb && !properties.isEnvIdpConfigured()) {
             throw ApiException.validation("Auth provider not configured: saml");
+        }
+        requireSigningConfiguredIfEnabled();
+    }
+
+    private void requireSigningConfiguredIfEnabled() {
+        if (properties.getSigning().isEnabled() && signingCredentials.optionalCredential().isEmpty()) {
+            throw ApiException.validation(
+                    "SAML SP signing is enabled but private key / certificate could not be loaded");
         }
     }
 
@@ -187,23 +199,39 @@ public class SamlAuthService {
     }
 
     /**
-     * Minimal SP metadata for IdP registration (EntityDescriptor with ACS).
+     * SP metadata for IdP registration (EntityDescriptor with ACS; signing cert when configured).
      */
     public String spMetadataXml() {
         requireEnabled();
+        if (properties.getSigning().isEnabled() && signingCredentials.optionalCredential().isEmpty()) {
+            throw ApiException.validation(
+                    "SAML SP signing is enabled but private key / certificate could not be loaded");
+        }
         String entityId = xmlEscape(properties.getEntityId().trim());
         String acs = xmlEscape(properties.getAcsUrl().trim());
+        boolean signed = signingCredentials.isActive();
+        String keyDescriptor = signingCredentials.certificateDerBase64()
+                .map(cert -> """
+                          <md:KeyDescriptor use="signing">
+                            <ds:KeyInfo xmlns:ds="http://www.w3.org/2000/09/xmldsig#">
+                              <ds:X509Data>
+                                <ds:X509Certificate>%s</ds:X509Certificate>
+                              </ds:X509Data>
+                            </ds:KeyInfo>
+                          </md:KeyDescriptor>
+                        """.formatted(cert))
+                .orElse("");
         return """
                 <?xml version="1.0" encoding="UTF-8"?>
                 <md:EntityDescriptor xmlns:md="urn:oasis:names:tc:SAML:2.0:metadata" entityID="%s">
-                  <md:SPSSODescriptor AuthnRequestsSigned="false" WantAssertionsSigned="true"
+                  <md:SPSSODescriptor AuthnRequestsSigned="%s" WantAssertionsSigned="true"
                       protocolSupportEnumeration="urn:oasis:names:tc:SAML:2.0:protocol">
-                    <md:NameIDFormat>urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress</md:NameIDFormat>
+                %s    <md:NameIDFormat>urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress</md:NameIDFormat>
                     <md:AssertionConsumerService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST"
                         Location="%s" index="0" isDefault="true"/>
                   </md:SPSSODescriptor>
                 </md:EntityDescriptor>
-                """.formatted(entityId, acs);
+                """.formatted(entityId, signed, keyDescriptor, acs);
     }
 
     static URI buildSuccessRedirect(String base, AuthDtos.TokenResponse tokens) {

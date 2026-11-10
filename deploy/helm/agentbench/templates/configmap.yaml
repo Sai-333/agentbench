@@ -49,6 +49,7 @@ data:
   AGENTBENCH_OIDC_SUCCESS_REDIRECT_URL: {{ .Values.config.oidcSuccessRedirectUrl | quote }}
   AGENTBENCH_SAML_ENABLED: {{ .Values.config.samlEnabled | quote }}
   AGENTBENCH_SAML_SUCCESS_REDIRECT_URL: {{ .Values.config.samlSuccessRedirectUrl | quote }}
+  AGENTBENCH_SAML_SIGNING_ENABLED: {{ .Values.config.samlSigningEnabled | quote }}
   AGENTBENCH_SHUTDOWN_TIMEOUT: {{ .Values.config.shutdownTimeout | quote }}
   LOGGING_STRUCTURED_FORMAT_CONSOLE: {{ .Values.config.structuredLogging | quote }}
   MANAGEMENT_ENDPOINT_HEALTH_PROBES_ENABLED: {{ .Values.config.healthProbesEnabled | quote }}

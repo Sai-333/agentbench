@@ -24,6 +24,11 @@ public class SamlProperties {
     /** Browser landing page after ACS (tokens in URL fragment). */
     private String successRedirectUrl = "http://localhost:3000/";
     private AttributeMapping attributeMapping = new AttributeMapping();
+    /**
+     * Optional SP signing credential for HTTP-Redirect AuthnRequests + SP metadata.
+     * Default off so local Compose demos stay unsigned.
+     */
+    private Signing signing = new Signing();
 
     /** SP is ready to accept IdP configs (env or DB) when enabled with entity + ACS. */
     public boolean isSpReady() {
@@ -117,6 +122,83 @@ public class SamlProperties {
 
     public void setAttributeMapping(AttributeMapping attributeMapping) {
         this.attributeMapping = attributeMapping;
+    }
+
+    public Signing getSigning() {
+        return signing;
+    }
+
+    public void setSigning(Signing signing) {
+        this.signing = signing;
+    }
+
+    /**
+     * Platform-level SP signing keys (one SP entity → one credential for all IdPs).
+     * Provide PEM content via env or PEM file paths. When {@code enabled=false} (default),
+     * AuthnRequests stay unsigned even if key material is present.
+     */
+    public static class Signing {
+        private boolean enabled;
+        /** Inline PEM private key ({@code BEGIN PRIVATE KEY} / {@code BEGIN RSA PRIVATE KEY}). */
+        private String privateKey = "";
+        /** Filesystem path to PEM private key (preferred in Compose/K8s mounts). */
+        private String privateKeyPath = "";
+        /** Inline PEM X.509 certificate. */
+        private String certificate = "";
+        /** Filesystem path to PEM X.509 certificate. */
+        private String certificatePath = "";
+
+        public boolean isEnabled() {
+            return enabled;
+        }
+
+        public void setEnabled(boolean enabled) {
+            this.enabled = enabled;
+        }
+
+        public String getPrivateKey() {
+            return privateKey;
+        }
+
+        public void setPrivateKey(String privateKey) {
+            this.privateKey = privateKey;
+        }
+
+        public String getPrivateKeyPath() {
+            return privateKeyPath;
+        }
+
+        public void setPrivateKeyPath(String privateKeyPath) {
+            this.privateKeyPath = privateKeyPath;
+        }
+
+        public String getCertificate() {
+            return certificate;
+        }
+
+        public void setCertificate(String certificate) {
+            this.certificate = certificate;
+        }
+
+        public String getCertificatePath() {
+            return certificatePath;
+        }
+
+        public void setCertificatePath(String certificatePath) {
+            this.certificatePath = certificatePath;
+        }
+
+        public boolean hasKeyMaterialConfigured() {
+            return hasText(privateKey) || hasText(privateKeyPath);
+        }
+
+        public boolean hasCertificateConfigured() {
+            return hasText(certificate) || hasText(certificatePath);
+        }
+
+        private static boolean hasText(String value) {
+            return value != null && !value.isBlank();
+        }
     }
 
     public static class AttributeMapping {

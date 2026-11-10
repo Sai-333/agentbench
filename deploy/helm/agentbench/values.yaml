@@ -110,9 +110,10 @@ config:
   oidcGoogleEnabled: "false"
   oidcGithubEnabled: "false"
   oidcSuccessRedirectUrl: "http://localhost:3000/"
-  # SAML 2.0 SP (default off). Extra IdP metadata / attribute map via config.extra — docs/AUTH_SAML.md
+  # SAML 2.0 SP (default off). Extra IdP metadata / attribute map / signing PEMs via config.extra or secrets — docs/AUTH_SAML.md
   samlEnabled: "false"
   samlSuccessRedirectUrl: "http://localhost:3000/"
+  samlSigningEnabled: "false"
   shutdownTimeout: "30s"
   structuredLogging: "logstash"
   healthProbesEnabled: "true"
