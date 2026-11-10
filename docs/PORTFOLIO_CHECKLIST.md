@@ -11,7 +11,8 @@
 | JWT local auth, orgs/RBAC, projects | M2 APIs + tests |
 | OIDC Google/GitHub beside local JWT | `AuthProvider` SPI; `docs/AUTH_OIDC.md`; WireMock IdP tests |
 | SAML 2.0 SP enterprise SSO (config-driven) | `docs/AUTH_SAML.md`; Spring Security SAML2/OpenSAML; WireMock metadata + signed assertion tests; default off |
-| Multi-IdP SAML admin UI / APIs (org-scoped) | Flyway V16 `saml_identity_providers`; OWNER/ADMIN CRUD; login lists enabled IdPs; env IdP fallback when DB empty; `SamlMultiIdpAdminIntegrationTest`; `docs/AUTH_SAML.md` — **residual:** unsigned AuthnRequests |
+| Multi-IdP SAML admin UI / APIs (org-scoped) | Flyway V16 `saml_identity_providers`; OWNER/ADMIN CRUD; login lists enabled IdPs; env IdP fallback when DB empty; `SamlMultiIdpAdminIntegrationTest`; `docs/AUTH_SAML.md` |
+| Signed SAML AuthnRequests / SP signing keys | Optional platform PEM/env (`AGENTBENCH_SAML_SIGNING_*`, default off); HTTP-Redirect `SigAlg`/`Signature`; SP metadata cert + `AuthnRequestsSigned`; `SamlSpSigningIntegrationTest` + `SamlAuthnRequestFactoryTest`; `docs/AUTH_SAML.md` |
 | Versioned benchmarks + hidden suites + RBAC | M3 |
 | Durable evaluation state machine + outbox | M4 |
 | Provider-independent agents (Fake / OpenAI-compat / HTTP / CODING_CLI) | M5 + isolator-backed CODING_CLI (`docs/AGENTS_CODING_CLI.md`) |
@@ -45,7 +46,6 @@
 | Item | Status |
 |---|---|
 | Firecracker on non-KVM / Mac Compose | **Residual** — Firecracker opt-in landed; live microVM needs Linux+KVM; Mac Compose stays Docker |
-| Signed SAML AuthnRequests / SP signing keys | **Residual** — multi-IdP admin UI landed; AuthnRequests remain unsigned (IdP must allow) |
 | Certified multi-cloud / multi-tenant SaaS Helm | **Not claimed** — Operators/CRDs packaging landed (`deploy/operator/`); no certification / multi-cloud SaaS claim |
 | Certified hostile multi-tenant SaaS security | **Not claimed** — Docker residual risk; gVisor/Firecracker opt-in stronger but not a formal certification |
 | Measured **production** throughput / capacity numbers | **Not claimed** — only attached local Compose laptop smoke exists |

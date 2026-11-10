@@ -176,6 +176,13 @@ agentbench:
     attribute-mapping:
       email: ${AGENTBENCH_SAML_ATTR_EMAIL:email}
       display-name: ${AGENTBENCH_SAML_ATTR_DISPLAY_NAME:displayName}
+    # Optional SP signing for HTTP-Redirect AuthnRequests (default off — demos stay unsigned).
+    signing:
+      enabled: ${AGENTBENCH_SAML_SIGNING_ENABLED:false}
+      private-key: ${AGENTBENCH_SAML_SIGNING_PRIVATE_KEY:}
+      private-key-path: ${AGENTBENCH_SAML_SIGNING_PRIVATE_KEY_PATH:}
+      certificate: ${AGENTBENCH_SAML_SIGNING_CERTIFICATE:}
+      certificate-path: ${AGENTBENCH_SAML_SIGNING_CERTIFICATE_PATH:}
   secrets:
     # Base64-encoded 32-byte AES key. Default is for local/Compose only.
     encryption-key: ${AGENTBENCH_SECRETS_ENCRYPTION_KEY:MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=}

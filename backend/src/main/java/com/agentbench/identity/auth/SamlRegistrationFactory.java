@@ -3,6 +3,7 @@ package com.agentbench.identity.auth;
 import com.agentbench.platform.error.ApiException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.security.saml2.core.Saml2X509Credential;
 import org.springframework.security.saml2.provider.service.registration.RelyingPartyRegistration;
 import org.springframework.security.saml2.provider.service.registration.RelyingPartyRegistrations;
 import org.springframework.security.saml2.provider.service.registration.Saml2MessageBinding;
@@ -11,11 +12,13 @@ import org.springframework.stereotype.Component;
 import java.io.ByteArrayInputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Builds {@link RelyingPartyRegistration} instances from IdP metadata URL or inline XML.
- * AuthnRequests are unsigned by default (IdP must allow that — common enterprise setting).
+ * AuthnRequests are unsigned by default; when platform SP signing credentials are configured,
+ * registrations carry a signing credential and {@code authnRequestsSigned=true}.
  * Cache is keyed by registration id so multi-IdP configs stay independent.
  */
 @Component
@@ -24,10 +27,12 @@ public class SamlRegistrationFactory {
     private static final Logger log = LoggerFactory.getLogger(SamlRegistrationFactory.class);
 
     private final SamlProperties properties;
+    private final SamlSpSigningCredentials signingCredentials;
     private final ConcurrentHashMap<String, RelyingPartyRegistration> cache = new ConcurrentHashMap<>();
 
-    public SamlRegistrationFactory(SamlProperties properties) {
+    public SamlRegistrationFactory(SamlProperties properties, SamlSpSigningCredentials signingCredentials) {
         this.properties = properties;
+        this.signingCredentials = signingCredentials;
     }
 
     public RelyingPartyRegistration requireRegistration() {
@@ -81,12 +86,24 @@ public class SamlRegistrationFactory {
                     registrationId, properties.getEntityId());
             builder = RelyingPartyRegistrations.fromMetadataLocation(Objects.requireNonNull(metadataUrl).trim());
         }
+        Optional<Saml2X509Credential> signing = signingCredentials.optionalCredential();
+        boolean signRequests = signing.isPresent();
+        if (signRequests) {
+            builder.signingX509Credentials(creds -> creds.add(signing.get()))
+                    .authnRequestsSigned(true);
+        }
         return builder
                 .registrationId(registrationId)
                 .entityId(properties.getEntityId().trim())
                 .assertionConsumerServiceLocation(properties.getAcsUrl().trim())
                 .assertionConsumerServiceBinding(Saml2MessageBinding.POST)
-                .assertingPartyDetails(party -> party.wantAuthnRequestsSigned(false))
+                // Prefer IdP metadata WantAuthnRequestsSigned when we can sign; otherwise force false
+                // so unsigned local demos work against IdPs that advertise wanting signatures.
+                .assertingPartyDetails(party -> {
+                    if (!signRequests) {
+                        party.wantAuthnRequestsSigned(false);
+                    }
+                })
                 .build();
     }
 }

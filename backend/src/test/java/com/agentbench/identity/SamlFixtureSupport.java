@@ -60,13 +60,17 @@ final class SamlFixtureSupport {
 
     record IdpKeys(KeyPair keyPair, X509Certificate certificate, String entityId) {
         String metadataXml(String ssoUrl) {
+            return metadataXml(ssoUrl, false);
+        }
+
+        String metadataXml(String ssoUrl, boolean wantAuthnRequestsSigned) {
             try {
                 String certB64 = Base64.getEncoder().encodeToString(certificate.getEncoded());
                 return """
                         <?xml version="1.0" encoding="UTF-8"?>
                         <md:EntityDescriptor xmlns:md="urn:oasis:names:tc:SAML:2.0:metadata" entityID="%s">
                           <md:IDPSSODescriptor protocolSupportEnumeration="urn:oasis:names:tc:SAML:2.0:protocol"
-                              WantAuthnRequestsSigned="false">
+                              WantAuthnRequestsSigned="%s">
                             <md:KeyDescriptor use="signing">
                               <ds:KeyInfo xmlns:ds="http://www.w3.org/2000/09/xmldsig#">
                                 <ds:X509Data>
@@ -81,9 +85,34 @@ final class SamlFixtureSupport {
                                 Location="%s"/>
                           </md:IDPSSODescriptor>
                         </md:EntityDescriptor>
-                        """.formatted(entityId, certB64, ssoUrl, ssoUrl);
+                        """.formatted(entityId, wantAuthnRequestsSigned, certB64, ssoUrl, ssoUrl);
             } catch (Exception ex) {
                 throw new IllegalStateException("Failed to encode IdP certificate", ex);
+            }
+        }
+    }
+
+    /** SP signing keypair + self-signed cert for AuthnRequest redirect signature fixtures. */
+    record SpKeys(KeyPair keyPair, X509Certificate certificate) {
+        String privateKeyPem() {
+            try {
+                return "-----BEGIN PRIVATE KEY-----\n"
+                        + Base64.getMimeEncoder(64, "\n".getBytes(StandardCharsets.UTF_8))
+                        .encodeToString(keyPair.getPrivate().getEncoded())
+                        + "\n-----END PRIVATE KEY-----\n";
+            } catch (Exception ex) {
+                throw new IllegalStateException("Failed to encode SP private key", ex);
+            }
+        }
+
+        String certificatePem() {
+            try {
+                return "-----BEGIN CERTIFICATE-----\n"
+                        + Base64.getMimeEncoder(64, "\n".getBytes(StandardCharsets.UTF_8))
+                        .encodeToString(certificate.getEncoded())
+                        + "\n-----END CERTIFICATE-----\n";
+            } catch (Exception ex) {
+                throw new IllegalStateException("Failed to encode SP certificate", ex);
             }
         }
     }
@@ -100,6 +129,18 @@ final class SamlFixtureSupport {
             return new IdpKeys(keyPair, certificate, entityId);
         } catch (Exception ex) {
             throw new IllegalStateException("Failed to generate IdP keys", ex);
+        }
+    }
+
+    static SpKeys generateSp(String cn) {
+        try {
+            KeyPairGenerator generator = KeyPairGenerator.getInstance("RSA");
+            generator.initialize(2048);
+            KeyPair keyPair = generator.generateKeyPair();
+            X509Certificate certificate = selfSigned(keyPair, cn);
+            return new SpKeys(keyPair, certificate);
+        } catch (Exception ex) {
+            throw new IllegalStateException("Failed to generate SP keys", ex);
         }
     }
 
