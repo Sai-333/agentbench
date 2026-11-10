@@ -73,7 +73,19 @@ springdoc:
 
 agentbench:
   artifacts:
+    # local (default demos) | s3 (MinIO / AWS S3-compatible). Env: ARTIFACT_STORAGE or AGENTBENCH_ARTIFACT_STORAGE.
+    storage: ${ARTIFACT_STORAGE:${AGENTBENCH_ARTIFACT_STORAGE:local}}
     root: ${AGENTBENCH_ARTIFACTS_ROOT:/var/agentbench/artifacts}
+    max-object-bytes: ${AGENTBENCH_ARTIFACT_MAX_OBJECT_BYTES:20971520}
+    s3:
+      endpoint: ${AGENTBENCH_S3_ENDPOINT:}
+      bucket: ${AGENTBENCH_S3_BUCKET:agentbench-artifacts}
+      region: ${AGENTBENCH_S3_REGION:us-east-1}
+      access-key: ${AGENTBENCH_S3_ACCESS_KEY:}
+      secret-key: ${AGENTBENCH_S3_SECRET_KEY:}
+      path-style: ${AGENTBENCH_S3_PATH_STYLE:true}
+      key-prefix: ${AGENTBENCH_S3_KEY_PREFIX:}
+      create-bucket: ${AGENTBENCH_S3_CREATE_BUCKET:true}
     retention:
       enabled: ${AGENTBENCH_ARTIFACT_RETENTION_ENABLED:true}
       days: ${AGENTBENCH_ARTIFACT_RETENTION_DAYS:14}

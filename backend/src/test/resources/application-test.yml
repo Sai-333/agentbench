@@ -29,7 +29,9 @@ management:
 
 agentbench:
   artifacts:
+    storage: local
     root: ${java.io.tmpdir}/agentbench-test-artifacts
+    max-object-bytes: 20971520
     retention:
       enabled: false
   execution:

@@ -12,6 +12,8 @@ cp .env.example .env
 docker compose up -d --build
 ```
 
+Default artifact backend is **local filesystem** (`ARTIFACT_STORAGE=local`) on the `artifacts_data` volume.
+
 Verify:
 
 ```bash
@@ -20,6 +22,31 @@ curl -sf http://localhost:8080/actuator/health/readiness
 curl -sf http://localhost:8080/api/v1/info
 curl -sf http://localhost:3000/ | head
 ```
+
+### S3-compatible artifacts (MinIO profile)
+
+Local filesystem remains the simple-demo default. To store blobs in MinIO:
+
+```bash
+cp .env.example .env
+# ARTIFACT_STORAGE=s3
+# AGENTBENCH_S3_* already default to the Compose MinIO service
+ARTIFACT_STORAGE=s3 docker compose --profile s3 up -d --build
+docker compose --profile s3 ps minio   # should be healthy
+```
+
+| Variable | Purpose |
+|---|---|
+| `ARTIFACT_STORAGE` | `local` (default) or `s3` |
+| `AGENTBENCH_S3_ENDPOINT` | e.g. `http://minio:9000` in Compose |
+| `AGENTBENCH_S3_BUCKET` | default `agentbench-artifacts` |
+| `AGENTBENCH_S3_ACCESS_KEY` / `SECRET_KEY` | MinIO root user/password |
+| `AGENTBENCH_S3_PATH_STYLE` | `true` for MinIO |
+| `AGENTBENCH_S3_CREATE_BUCKET` | create bucket on API/worker startup |
+| `AGENTBENCH_ARTIFACT_RETENTION_DAYS` | TTL sweep (blobs + local workspaces) |
+| `AGENTBENCH_ARTIFACT_MAX_OBJECT_BYTES` | hard ceiling rejected at `store()` |
+
+Retention cleanup: scheduled sweep deletes expired objects via the active `ArtifactStorage` (filesystem walk or S3 list/delete) and always TTL-sweeps local `workspaces/` when using S3. Audit rows land in `platform.artifact_cleanup_runs`. Console: http://localhost:9001.
 
 ### Production-ish overlay
 
