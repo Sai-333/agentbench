@@ -15,6 +15,12 @@ helm lint "${CHART}"
 
 echo "==> helm template (defaults)"
 DEFAULT_OUT="$(helm template agentbench "${CHART}" --namespace agentbench)"
+echo "${DEFAULT_OUT}" | grep -q 'AGENTBENCH_PYTHON_RUNNER_IMAGE' \
+  || { echo "expected AGENTBENCH_PYTHON_RUNNER_IMAGE in ConfigMap" >&2; exit 1; }
+echo "${DEFAULT_OUT}" | grep -q 'AGENTBENCH_NODE_RUNNER_IMAGE' \
+  || { echo "expected AGENTBENCH_NODE_RUNNER_IMAGE in ConfigMap" >&2; exit 1; }
+echo "${DEFAULT_OUT}" | grep -q 'AGENTBENCH_JAVA_RUNNER_IMAGE' \
+  || { echo "expected AGENTBENCH_JAVA_RUNNER_IMAGE in ConfigMap" >&2; exit 1; }
 echo "${DEFAULT_OUT}" | grep -q 'kind: NetworkPolicy' \
   || { echo "expected NetworkPolicy resources when networkPolicy.enabled=true" >&2; exit 1; }
 echo "${DEFAULT_OUT}" | grep -q 'agentbench-default-deny\|-default-deny' \

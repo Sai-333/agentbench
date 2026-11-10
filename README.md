@@ -64,6 +64,7 @@ Single-host Ampere A1 runbook (VM shape, ports, Docker, secrets, health checks, 
 | Local runtime | Docker Compose (+ `docker-compose.prod.yml`) |
 | Artifacts | `ArtifactStorage`: local volume (default) or S3-compatible (`ARTIFACT_STORAGE=s3`, Compose `--profile s3` / MinIO) |
 | Eval isolation | Hardened Docker via `RuntimeIsolator` (default); optional `mode=gvisor` (`docker --runtime=runsc`) or `mode=firecracker` (Linux+KVM); local CI fallback |
+| Suite runners | Fixture-v1 + Maven/JUnit, pytest, Jest via `SuiteToolchainRunner` + isolator (`docs/RUNNERS.md`); hidden stays post-only |
 | K8s | Templates under `deploy/kubernetes/` (incl. NetworkPolicies); Helm chart `deploy/helm/agentbench/` (optional `mtls.*`); optional Operator/CRD `deploy/operator/` (`AgentBenchInstance`); not certified multi-cloud SaaS; not a service mesh |
 
 ## Architecture
@@ -92,7 +93,7 @@ Roles (org-scoped): `OWNER`, `ADMIN`, `DEVELOPER`, `VIEWER`.
 | Ops | Backup / migrate / upgrade / DLQ snippets in `docs/OPERATIONS.md` |
 | Portfolio | Honest done vs deferred checklist |
 
-**Explicit non-claims:** gVisor and Firecracker are **opt-in** (Linux+runsc / Linux+KVM; not Mac Compose default; not a certified hostile multi-tenant claim). Firecracker still needs a KVM host + guest assets (`scripts/firecracker/`). SAML SP login is optional (`docs/AUTH_SAML.md`) with org-scoped multi-IdP admin (OWNER/ADMIN) and optional SP AuthnRequest signing (default off). Postgres RLS is defense-in-depth beside app-layer org filters (`docs/POSTGRES_RLS.md`). Public leaderboards are **opt-in** (OWNER/ADMIN publish; org-private default) with optional HMAC-signed embeds + Cache-Control (`docs/PUBLIC_LEADERBOARDS.md`) — no managed CDN or anonymous writes claimed. Google/GitHub OIDC is optional beside local JWT (see `docs/AUTH_OIDC.md`). **CODING_CLI** is isolator-backed (`docs/AGENTS_CODING_CLI.md`) — not a certified hostile multi-tenant CLI sandbox. Optional Sonar is **not** the sole scoring authority (`docs/QUALITY_SONAR.md`).
+**Explicit non-claims:** gVisor and Firecracker are **opt-in** (Linux+runsc / Linux+KVM; not Mac Compose default; not a certified hostile multi-tenant claim). Firecracker still needs a KVM host + guest assets (`scripts/firecracker/`). SAML SP login is optional (`docs/AUTH_SAML.md`) with org-scoped multi-IdP admin (OWNER/ADMIN) and optional SP AuthnRequest signing (default off). Postgres RLS is defense-in-depth beside app-layer org filters (`docs/POSTGRES_RLS.md`). Public leaderboards are **opt-in** (OWNER/ADMIN publish; org-private default) with optional HMAC-signed embeds + Cache-Control (`docs/PUBLIC_LEADERBOARDS.md`) — no managed CDN or anonymous writes claimed. Google/GitHub OIDC is optional beside local JWT (see `docs/AUTH_OIDC.md`). **CODING_CLI** is isolator-backed (`docs/AGENTS_CODING_CLI.md`) — not a certified hostile multi-tenant CLI sandbox. Optional Sonar is **not** the sole scoring authority (`docs/QUALITY_SONAR.md`). Python/Node runner images must be built/pulled on the worker (`deploy/runners/`, `docs/RUNNERS.md`) before those frameworks run under Docker — not a claim that every Compose boot includes them.
 
 ### Optional MinIO artifact store
 

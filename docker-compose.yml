@@ -182,6 +182,9 @@ services:
       AGENTBENCH_DOCKER_ENABLED: ${AGENTBENCH_DOCKER_ENABLED:-true}
       AGENTBENCH_RUNNER_IMAGE: ${AGENTBENCH_RUNNER_IMAGE:-eclipse-temurin:21-jre-alpine}
       AGENTBENCH_RUNNER_IMAGE_DIGEST: ${AGENTBENCH_RUNNER_IMAGE_DIGEST:-}
+      AGENTBENCH_JAVA_RUNNER_IMAGE: ${AGENTBENCH_JAVA_RUNNER_IMAGE:-maven:3.9.9-eclipse-temurin-21-alpine}
+      AGENTBENCH_PYTHON_RUNNER_IMAGE: ${AGENTBENCH_PYTHON_RUNNER_IMAGE:-agentbench/runner-python:3.12}
+      AGENTBENCH_NODE_RUNNER_IMAGE: ${AGENTBENCH_NODE_RUNNER_IMAGE:-agentbench/runner-node:22}
       AGENTBENCH_ARTIFACT_RETENTION_DAYS: ${AGENTBENCH_ARTIFACT_RETENTION_DAYS:-14}
       AGENTBENCH_SONAR_ENABLED: ${AGENTBENCH_SONAR_ENABLED:-false}
       AGENTBENCH_SONAR_BASE_URL: ${AGENTBENCH_SONAR_BASE_URL:-}
@@ -216,6 +219,26 @@ services:
     restart: unless-stopped
     security_opt:
       - no-new-privileges:true
+
+  # Optional language suite runner images (build once; worker pulls by tag).
+  #   docker compose --profile build-runners build
+  runner-python:
+    profiles: ["build-runners"]
+    image: agentbench/runner-python:3.12
+    build:
+      context: ./deploy/runners/python
+      dockerfile: Dockerfile
+    command: ["pytest", "--version"]
+    restart: "no"
+
+  runner-node:
+    profiles: ["build-runners"]
+    image: agentbench/runner-node:22
+    build:
+      context: ./deploy/runners/node
+      dockerfile: Dockerfile
+    command: ["jest", "--version"]
+    restart: "no"
 
   frontend:
     build:

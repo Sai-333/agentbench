@@ -25,6 +25,7 @@ Executing untrusted patches requires isolation. Firecracker/gVisor offer stronge
 - **Local mode:** `mode=local` forces host-process isolation for CI without a daemon (not a security boundary).
 - Document residual shared-kernel risk for Docker-only in the threat model; do not claim certified hostile multi-tenant safety. Firecracker opt-in is stronger isolation but **not** a certified multi-tenant SaaS bar.
 - **CODING_CLI** agent invocations use the same `RuntimeIsolator` path (`ExecutionStage.AGENT`) with optional per-agent image override — never a raw host shell (see `docs/AGENTS_CODING_CLI.md`).
+- **Suite toolchains** (Maven/JUnit, pytest, Jest) use the same isolator for `VISIBLE_TESTS` / `HIDDEN_TESTS` with per-language image overrides (`docs/RUNNERS.md`).
 
 ## Configuration
 

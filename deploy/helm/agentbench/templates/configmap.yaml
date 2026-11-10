@@ -43,6 +43,10 @@ data:
   AGENTBENCH_JAILER_BINARY: {{ .Values.config.jailerBinary | quote }}
   AGENTBENCH_FIRECRACKER_USE_JAILER: {{ .Values.config.firecrackerUseJailer | quote }}
   AGENTBENCH_KVM_DEVICE: {{ .Values.config.kvmDevice | quote }}
+  AGENTBENCH_RUNNER_IMAGE: {{ .Values.config.runnerImage | quote }}
+  AGENTBENCH_JAVA_RUNNER_IMAGE: {{ .Values.config.javaRunnerImage | quote }}
+  AGENTBENCH_PYTHON_RUNNER_IMAGE: {{ .Values.config.pythonRunnerImage | quote }}
+  AGENTBENCH_NODE_RUNNER_IMAGE: {{ .Values.config.nodeRunnerImage | quote }}
   AGENTBENCH_GITHUB_VALIDATION_ENABLED: {{ .Values.config.githubValidationEnabled | quote }}
   AGENTBENCH_OIDC_GOOGLE_ENABLED: {{ .Values.config.oidcGoogleEnabled | quote }}
   AGENTBENCH_OIDC_GITHUB_ENABLED: {{ .Values.config.oidcGithubEnabled | quote }}

@@ -18,7 +18,8 @@ import java.util.Map;
 
 /**
  * Fixture-backed suite runner for CI: evaluates file checks against a workspace.
- * Docker/JUnit runners plug in later via the same result model.
+ * Isolator-backed Maven/pytest/Jest toolchains share the same {@link CaseOutcome} model
+ * via {@link com.agentbench.execution.runner.SuiteToolchainRunner}.
  */
 @Service
 public class FixtureSuiteRunner {
