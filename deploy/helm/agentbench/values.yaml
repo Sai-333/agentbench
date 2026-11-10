@@ -124,6 +124,9 @@ config:
   javaRunnerImage: "maven:3.9.9-eclipse-temurin-21-alpine"
   pythonRunnerImage: "agentbench/runner-python:3.12"
   nodeRunnerImage: "agentbench/runner-node:22"
+  # Optional language quality scanners (default off). docs/QUALITY_LANGUAGE.md
+  qualityPythonEnabled: "false"
+  qualityNodeEnabled: "false"
   githubValidationEnabled: "false"
   oidcGoogleEnabled: "false"
   oidcGithubEnabled: "false"

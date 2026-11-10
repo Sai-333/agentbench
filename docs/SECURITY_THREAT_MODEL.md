@@ -128,6 +128,7 @@ Shared-kernel breakout residual risk remains on the default path. Prefer **`agen
 
 - Tools: **Checkstyle + SpotBugs + PMD** (XML when present; builtin Java heuristics otherwise) — primary local path.
 - **Sonar** is optional (workspace issues JSON import or Web API fetch when `AGENTBENCH_SONAR_ENABLED=true`); default off; never invents scores; not sole scoring authority. See `docs/QUALITY_SONAR.md`.
+- **Python (ruff)** and **Node (eslint)** are optional opt-in scanners (report import → `RuntimeIsolator` → builtin heuristics); default off; never sole scoring authority. See `docs/QUALITY_LANGUAGE.md`.
 - Findings split into **newly introduced** vs **pre-existing** (fingerprint diff baseline↔post).
 - `code_quality` metric uses a real normalized score only when tools produce results; otherwise `stub=true` and raw=0.
 

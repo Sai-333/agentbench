@@ -11,6 +11,6 @@ public enum ExecutionStage {
     VISIBLE_TESTS,
     /** Hidden suite after patch seal — fixtures mounted only for this stage. */
     HIDDEN_TESTS,
-    /** Static analysis (Checkstyle / SpotBugs / PMD). */
+    /** Static analysis (Checkstyle / SpotBugs / PMD; optional Sonar / ruff / eslint). */
     QUALITY
 }

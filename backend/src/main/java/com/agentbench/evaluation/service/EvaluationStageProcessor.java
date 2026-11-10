@@ -559,8 +559,8 @@ public class EvaluationStageProcessor {
     }
 
     /**
-     * Checkstyle + SpotBugs + PMD (XML or builtin heuristics), plus optional Sonar when enabled.
-     * Separates new vs pre-existing; never invents quality scores.
+     * Checkstyle + SpotBugs + PMD (XML or builtin heuristics), plus optional Sonar / ruff / eslint
+     * when enabled. Separates new vs pre-existing; never invents quality scores.
      */
     private void analyzeQuality(Evaluation evaluation, JsonNode task) {
         if (!evaluationRepository.findQualityReports(evaluation.id()).isEmpty()) {
@@ -578,7 +578,7 @@ public class EvaluationStageProcessor {
         }
 
         QualityAnalysisService.AggregatedQuality aggregated =
-                qualityAnalysisService.analyze(baseline, patched);
+                qualityAnalysisService.analyze(evaluation.id(), baseline, patched);
         String metricsJson = artifactRetentionService.truncateForStorage(aggregated.metricsJson());
 
         evaluationRepository.insertQualityReport(new QualityReport(

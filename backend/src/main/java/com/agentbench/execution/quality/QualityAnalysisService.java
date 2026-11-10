@@ -17,31 +17,49 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 
 /**
  * Runs Checkstyle + SpotBugs + PMD analysis (XML when present, else builtin heuristics),
- * optionally merges Sonar findings when configured, separates pre-existing vs newly introduced
- * findings, and computes an honest normalized score.
+ * optionally merges Sonar / Python (ruff) / Node (eslint) findings when configured,
+ * separates pre-existing vs newly introduced findings, and computes an honest normalized score.
  *
- * <p>Checkstyle / SpotBugs / PMD remain the primary local tools. Sonar is optional and never
- * claimed as the sole scoring authority.
+ * <p>Checkstyle / SpotBugs / PMD remain the primary local tools. Sonar and language scanners
+ * are optional and never claimed as the sole scoring authority.
  */
 @Service
 public class QualityAnalysisService {
 
     private final ObjectMapper objectMapper;
     private final SonarQualityAnalyzer sonarQualityAnalyzer;
+    private final PythonQualityAnalyzer pythonQualityAnalyzer;
+    private final NodeQualityAnalyzer nodeQualityAnalyzer;
 
-    public QualityAnalysisService(ObjectMapper objectMapper, SonarQualityAnalyzer sonarQualityAnalyzer) {
+    public QualityAnalysisService(
+            ObjectMapper objectMapper,
+            SonarQualityAnalyzer sonarQualityAnalyzer,
+            PythonQualityAnalyzer pythonQualityAnalyzer,
+            NodeQualityAnalyzer nodeQualityAnalyzer) {
         this.objectMapper = objectMapper;
         this.sonarQualityAnalyzer = sonarQualityAnalyzer == null
                 ? SonarQualityAnalyzer.disabled()
                 : sonarQualityAnalyzer;
+        this.pythonQualityAnalyzer = pythonQualityAnalyzer == null
+                ? PythonQualityAnalyzer.disabled()
+                : pythonQualityAnalyzer;
+        this.nodeQualityAnalyzer = nodeQualityAnalyzer == null
+                ? NodeQualityAnalyzer.disabled()
+                : nodeQualityAnalyzer;
     }
 
+    /** Convenience for unit tests / callers without an evaluation id (no isolator invoke). */
     public AggregatedQuality analyze(Path baselineWorkspace, Path patchedWorkspace) {
-        List<QualityToolReport> baselineReports = collectReports(baselineWorkspace);
-        List<QualityToolReport> postReports = collectReports(patchedWorkspace);
+        return analyze(null, baselineWorkspace, patchedWorkspace);
+    }
+
+    public AggregatedQuality analyze(UUID evaluationId, Path baselineWorkspace, Path patchedWorkspace) {
+        List<QualityToolReport> baselineReports = collectReports(evaluationId, baselineWorkspace);
+        List<QualityToolReport> postReports = collectReports(evaluationId, patchedWorkspace);
 
         Map<String, Set<String>> baselineByTool = fingerprintsByTool(baselineReports);
         Map<String, List<QualityFinding>> newByTool = new LinkedHashMap<>();
@@ -49,8 +67,12 @@ public class QualityAnalysisService {
         Map<String, List<QualityFinding>> allPostByTool = new LinkedHashMap<>();
 
         QualityToolReport sonarPost = null;
+        QualityToolReport ruffPost = null;
+        QualityToolReport eslintPost = null;
         boolean anyReal = false;
         boolean sonarReal = false;
+        boolean ruffReal = false;
+        boolean eslintReal = false;
         for (QualityToolReport report : postReports) {
             if (SonarIssuesParser.TOOL.equals(report.tool())) {
                 sonarPost = report;
@@ -59,6 +81,18 @@ public class QualityAnalysisService {
                     continue;
                 }
                 sonarReal = true;
+            }
+            if (RuffReportParser.TOOL.equals(report.tool())) {
+                ruffPost = report;
+                if (!report.stub()) {
+                    ruffReal = true;
+                }
+            }
+            if (EslintReportParser.TOOL.equals(report.tool())) {
+                eslintPost = report;
+                if (!report.stub()) {
+                    eslintReal = true;
+                }
             }
             if (!report.stub()) {
                 anyReal = true;
@@ -81,12 +115,18 @@ public class QualityAnalysisService {
         if (sonarPost == null) {
             sonarPost = QualityToolReport.stub(SonarIssuesParser.TOOL, "sonar_missing");
         }
+        if (ruffPost == null) {
+            ruffPost = QualityToolReport.stub(RuffReportParser.TOOL, "ruff_missing");
+        }
+        if (eslintPost == null) {
+            eslintPost = QualityToolReport.stub(EslintReportParser.TOOL, "eslint_missing");
+        }
 
         int newCount = newByTool.values().stream().mapToInt(List::size).sum();
         int preCount = preExistingByTool.values().stream().mapToInt(List::size).sum();
         int postCount = allPostByTool.values().stream().mapToInt(List::size).sum();
         int baselineCount = baselineReports.stream()
-                .filter(r -> !SonarIssuesParser.TOOL.equals(r.tool()) || !r.stub())
+                .filter(r -> !isOptionalStubExcluded(r))
                 .mapToInt(r -> r.findings().size())
                 .sum();
 
@@ -111,6 +151,10 @@ public class QualityAnalysisService {
         metrics.put("baselineFindingCount", baselineCount);
         metrics.put("sonarEnabled", sonarQualityAnalyzer.isEnabled());
         metrics.put("sonarContributed", sonarReal);
+        metrics.put("pythonEnabled", pythonQualityAnalyzer.isEnabled());
+        metrics.put("pythonContributed", ruffReal);
+        metrics.put("nodeEnabled", nodeQualityAnalyzer.isEnabled());
+        metrics.put("nodeContributed", eslintReal);
         if (normalized != null) {
             metrics.put("normalizedScore", normalized);
         } else {
@@ -122,10 +166,16 @@ public class QualityAnalysisService {
                 sonarPost,
                 newByTool.getOrDefault(SonarIssuesParser.TOOL, List.of()),
                 preExistingByTool.getOrDefault(SonarIssuesParser.TOOL, List.of())));
+        metrics.set("ruff", toolNode(
+                ruffPost,
+                newByTool.getOrDefault(RuffReportParser.TOOL, List.of()),
+                preExistingByTool.getOrDefault(RuffReportParser.TOOL, List.of())));
+        metrics.set("eslint", toolNode(
+                eslintPost,
+                newByTool.getOrDefault(EslintReportParser.TOOL, List.of()),
+                preExistingByTool.getOrDefault(EslintReportParser.TOOL, List.of())));
 
-        String toolLabel = sonarReal
-                ? "checkstyle+spotbugs+pmd+sonar"
-                : "checkstyle+spotbugs+pmd";
+        String toolLabel = buildToolLabel(sonarReal, ruffReal, eslintReal);
 
         return new AggregatedQuality(
                 toolLabel,
@@ -139,15 +189,21 @@ public class QualityAnalysisService {
 
     /**
      * Prefer XML reports under conventional paths; otherwise run builtin heuristics.
-     * Sonar is optional (report import or API) and disabled by default.
+     * Sonar / Python / Node are optional and disabled by default.
      */
     public List<QualityToolReport> collectReports(Path workspace) {
+        return collectReports(null, workspace);
+    }
+
+    public List<QualityToolReport> collectReports(UUID evaluationId, Path workspace) {
         List<QualityToolReport> reports = new ArrayList<>();
         if (workspace == null || !Files.isDirectory(workspace)) {
             reports.add(QualityToolReport.stub("checkstyle", "workspace_missing"));
             reports.add(QualityToolReport.stub("pmd", "workspace_missing"));
             reports.add(QualityToolReport.stub("spotbugs", "workspace_missing"));
             reports.add(sonarQualityAnalyzer.analyze(workspace));
+            reports.add(pythonQualityAnalyzer.analyze(evaluationId, workspace));
+            reports.add(nodeQualityAnalyzer.analyze(evaluationId, workspace));
             return reports;
         }
 
@@ -192,7 +248,32 @@ public class QualityAnalysisService {
             }
         }
         reports.add(sonarQualityAnalyzer.analyze(workspace));
+        reports.add(pythonQualityAnalyzer.analyze(evaluationId, workspace));
+        reports.add(nodeQualityAnalyzer.analyze(evaluationId, workspace));
         return reports;
+    }
+
+    private static boolean isOptionalStubExcluded(QualityToolReport report) {
+        if (report == null || !report.stub()) {
+            return false;
+        }
+        return SonarIssuesParser.TOOL.equals(report.tool())
+                || RuffReportParser.TOOL.equals(report.tool())
+                || EslintReportParser.TOOL.equals(report.tool());
+    }
+
+    private static String buildToolLabel(boolean sonarReal, boolean ruffReal, boolean eslintReal) {
+        StringBuilder label = new StringBuilder("checkstyle+spotbugs+pmd");
+        if (sonarReal) {
+            label.append("+sonar");
+        }
+        if (ruffReal) {
+            label.append("+ruff");
+        }
+        if (eslintReal) {
+            label.append("+eslint");
+        }
+        return label.toString();
     }
 
     private ArrayNode toToolArray(
@@ -202,8 +283,9 @@ public class QualityAnalysisService {
         ArrayNode array = objectMapper.createArrayNode();
         for (QualityToolReport report : postReports) {
             if (SonarIssuesParser.TOOL.equals(report.tool())) {
-                continue;
+                continue; // dedicated metrics.sonar node
             }
+            // ruff/eslint stay in tools[] and also have dedicated nodes.
             array.add(toolNode(
                     report,
                     newByTool.getOrDefault(report.tool(), List.of()),

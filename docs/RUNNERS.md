@@ -49,5 +49,6 @@ Java uses the public Maven Temurin image by default (no custom Dockerfile requir
 
 - Docker-only isolation is **not** certified hostile multi-tenant SaaS security
 - Custom python/node images must be built/pulled on the worker host before those frameworks run under Docker mode
-- Quality analysis (Checkstyle/SpotBugs/PMD) remains Java-oriented; no Python/Node quality scanners in this milestone
+- Optional Python (ruff) / Node (eslint) quality scanners are separate from suite runners — default off; see `docs/QUALITY_LANGUAGE.md`. Checkstyle/SpotBugs/PMD remain primary for Java.
+- Runner images also ship ruff (python) and eslint (node) for the quality-stage isolator path when language scanners are enabled
 - Artifact TTL/GC and secret scanning: `docs/OPERATIONS.md`. Flake quarantine / baseline confirmation gates: `docs/SCORING_METHODOLOGY.md` (runners stay unaware — quarantine is applied at ingest/scoring).
