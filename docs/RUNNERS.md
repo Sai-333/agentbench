@@ -50,4 +50,4 @@ Java uses the public Maven Temurin image by default (no custom Dockerfile requir
 - Docker-only isolation is **not** certified hostile multi-tenant SaaS security
 - Custom python/node images must be built/pulled on the worker host before those frameworks run under Docker mode
 - Quality analysis (Checkstyle/SpotBugs/PMD) remains Java-oriented; no Python/Node quality scanners in this milestone
-- Artifact TTL/GC, secret scanning, and flake quarantine are out of scope here
+- Secret scanning and flake quarantine are out of scope here (artifact TTL/GC is a separate ops feature — see `docs/OPERATIONS.md`)

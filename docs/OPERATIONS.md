@@ -59,19 +59,26 @@ See **[POSTGRES_RLS.md](./POSTGRES_RLS.md)** for full caveats. Short version:
 
 - If `requireTargetFailAtBaseline` (default true) and no target FAIL is observed, evaluation ends `FAILED` / `BASELINE_NOT_REPRODUCIBLE` (no agent retry).
 
-## Artifact retention / cleanup
+## Artifact retention / cleanup (TTL + GC)
+
+Addresses disk exhaustion risk from large patches/logs (threat-model R9) alongside size ceilings.
 
 | Knob | Default | Effect |
 |---|---|---|
 | `AGENTBENCH_ARTIFACT_RETENTION_ENABLED` | `true` | When false, sweeps record `SKIPPED` and delete nothing |
-| `AGENTBENCH_ARTIFACT_RETENTION_DAYS` | `14` | Objects / workspace files older than this are deleted |
+| `AGENTBENCH_ARTIFACT_RETENTION_DAYS` | `14` | TTL: blobs / workspace files / patch metadata older than this are purged |
 | `AGENTBENCH_ARTIFACT_MAX_LOG_BYTES` | `20 MiB` | Truncate log/report payloads before persist |
 | `AGENTBENCH_ARTIFACT_MAX_OBJECT_BYTES` | `20 MiB` | `ArtifactStorage.store` rejects larger `contentLength` |
-| `AGENTBENCH_ARTIFACT_SWEEP_MS` | `3600000` | Scheduled sweep interval |
+| `AGENTBENCH_ARTIFACT_SWEEP_MS` | `3600000` | Scheduled GC interval (`fixedDelay`) |
 
-- **local:** sweep walks `AGENTBENCH_ARTIFACTS_ROOT` (blobs + workspaces).
-- **s3:** sweep lists/deletes aged objects in the configured bucket (optional key prefix) and separately TTL-sweeps local `workspaces/`.
-- Each run inserts into `platform.artifact_cleanup_runs` (`deleted_files`, `freed_bytes`, `status`, `message`).
+Each GC sweep (Spring `@Scheduled` on API + worker):
+
+1. **DB metadata (RLS bypass):** select `evaluations.patch_artifacts` with `collected_at < cutoff` and `purged_at IS NULL` (batch ≤ 500); delete the blob via active `ArtifactStorage`; set `purged_at` and clear `storage_uri`. Clear terminal `agents.agent_invocations.patch_storage_uri` older than the cutoff.
+2. **Orphan blobs:** age-sweep via `ArtifactStorage.sweepOlderThan` — **local** walks `AGENTBENCH_ARTIFACTS_ROOT`; **s3** lists/deletes aged objects (optional key prefix).
+3. **Workspaces:** when `ARTIFACT_STORAGE=s3`, also TTL-sweeps local `workspaces/` under the artifacts root.
+4. Audit row in `platform.artifact_cleanup_runs` (`deleted_files`, `freed_bytes`, `deleted_metadata`, `status`, `message`).
+
+**Not claimed:** lifecycle policies on the bucket itself (S3 Object Lock / bucket expiry rules); secret scanning of artifact contents; per-org TTL overrides.
 
 Manual trigger is the Spring bean `ArtifactRetentionService#sweep` (no public HTTP endpoint in v1).
 

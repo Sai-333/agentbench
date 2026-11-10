@@ -80,7 +80,8 @@ public final class EvaluationDtos {
             String format,
             int byteSize,
             Instant collectedAt,
-            boolean sealed
+            boolean sealed,
+            Instant purgedAt
     ) {
     }
 

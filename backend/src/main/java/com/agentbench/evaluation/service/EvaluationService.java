@@ -176,7 +176,7 @@ public class EvaluationService {
                 runResponses,
                 patch == null ? null : new EvaluationDtos.PatchResponse(
                         patch.id(), patch.contentDigest(), patch.format(), patch.byteSize(),
-                        patch.collectedAt(), patch.sealed()),
+                        patch.collectedAt(), patch.sealed(), patch.purgedAt()),
                 invocations,
                 buildScoreResponse(evaluationId),
                 buildQualityReports(evaluationId)

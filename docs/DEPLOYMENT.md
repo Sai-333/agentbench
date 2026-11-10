@@ -57,10 +57,13 @@ docker compose --profile s3 ps minio   # should be healthy
 | `AGENTBENCH_S3_ACCESS_KEY` / `SECRET_KEY` | MinIO root user/password |
 | `AGENTBENCH_S3_PATH_STYLE` | `true` for MinIO |
 | `AGENTBENCH_S3_CREATE_BUCKET` | create bucket on API/worker startup |
-| `AGENTBENCH_ARTIFACT_RETENTION_DAYS` | TTL sweep (blobs + local workspaces) |
+| `AGENTBENCH_ARTIFACT_RETENTION_ENABLED` | TTL/GC on (`true`) or `SKIPPED` |
+| `AGENTBENCH_ARTIFACT_RETENTION_DAYS` | TTL for blobs, workspaces, and patch DB metadata (default 14) |
+| `AGENTBENCH_ARTIFACT_SWEEP_MS` | GC interval ms (default 3600000) |
 | `AGENTBENCH_ARTIFACT_MAX_OBJECT_BYTES` | hard ceiling rejected at `store()` |
+| `AGENTBENCH_ARTIFACT_MAX_LOG_BYTES` | truncate log/report payloads before persist |
 
-Retention cleanup: scheduled sweep deletes expired objects via the active `ArtifactStorage` (filesystem walk or S3 list/delete) and always TTL-sweeps local `workspaces/` when using S3. Audit rows land in `platform.artifact_cleanup_runs`. Console: http://localhost:9001.
+Retention GC: scheduled job purges expired patch blobs + DB metadata (`purged_at`), clears aged invocation URIs, then age-sweeps orphan objects via the active `ArtifactStorage` (filesystem walk or S3 list/delete) and always TTL-sweeps local `workspaces/` when using S3. Audit rows land in `platform.artifact_cleanup_runs`. Ops detail: `docs/OPERATIONS.md`. Console: http://localhost:9001.
 
 ### Production-ish overlay
 
