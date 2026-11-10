@@ -13,6 +13,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
@@ -74,6 +75,7 @@ public class CodingCliAgentProvider implements CodingAgentCliAdapter, AgentProvi
     private final int defaultTimeoutSec;
     private final boolean networkEnabledByDefault;
 
+    @Autowired
     public CodingCliAgentProvider(
             ObjectMapper objectMapper,
             ExecutionIsolatorService isolatorService,

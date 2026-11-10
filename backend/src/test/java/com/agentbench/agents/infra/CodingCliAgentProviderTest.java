@@ -231,8 +231,41 @@ class CodingCliAgentProviderTest {
     }
 
     @Test
-    @EnabledIf("dockerAvailable")
-    void dockerIsolatorSmokeWritesPatchWithoutHostCodingBinary() throws Exception {
+    void localIsolatorIntegrationWritesPatchWithoutHostCodingBinary() throws Exception {
+        // Real LocalRuntimeIsolator + stock /bin/sh — no Docker image pull, no coding-agent binary.
+        ExecutionProperties props = new ExecutionProperties();
+        props.setMode("local");
+        props.setDockerEnabled(false);
+        ExecutionIsolatorService service = new ExecutionIsolatorService(
+                new DockerRuntimeIsolator(props),
+                new GvisorRuntimeIsolator(props, new DockerRuntimeIsolator(props),
+                        (c, t) -> com.agentbench.execution.service.HostCommandExecutor.Result.failedToStart("n/a")),
+                new LocalRuntimeIsolator(),
+                props
+        );
+        CodingCliAgentProvider live = new CodingCliAgentProvider(objectMapper, service);
+
+        Path workspace = Files.createDirectories(temp.resolve("local-ws"));
+        Files.writeString(workspace.resolve("README.md"), "hello\n");
+
+        String config = """
+                {
+                  "argv": ["sh", "-c", "printf 'diff --git a/README.md b/README.md\\n--- a/README.md\\n+++ b/README.md\\n@@ -1 +1,2 @@\\n hello\\n+from-local\\n' > .agentbench/patch.diff"],
+                  "model": "local-smoke"
+                }
+                """;
+        Agent agent = agent(config);
+        AgentInvocationResult result = live.invoke(request(agent, workspace.toString()));
+        assertEquals(AgentInvocationStatus.SUCCEEDED, result.status(), () -> String.valueOf(result));
+        assertNotNull(result.patchContent());
+        assertTrue(result.patchContent().contains("from-local"));
+        assertEquals("isolator", result.metadata().get("mode"));
+        assertEquals(LocalRuntimeIsolator.RUNTIME_NAME, result.metadata().get("isolation"));
+    }
+
+    @Test
+    @EnabledIf("dockerImageReady")
+    void dockerIsolatorSmokeWritesPatchWhenImagePresent() throws Exception {
         ExecutionProperties props = new ExecutionProperties();
         props.setMode("docker");
         props.setDockerEnabled(true);
@@ -252,7 +285,6 @@ class CodingCliAgentProviderTest {
         Path workspace = Files.createDirectories(temp.resolve("docker-ws"));
         Files.writeString(workspace.resolve("README.md"), "hello\n");
 
-        // Use the stock runner image + shell — no coding-agent binary required on host or image.
         String config = """
                 {
                   "argv": ["sh", "-c", "printf 'diff --git a/README.md b/README.md\\n--- a/README.md\\n+++ b/README.md\\n@@ -1 +1,2 @@\\n hello\\n+from-docker\\n' > .agentbench/patch.diff"],
@@ -267,13 +299,19 @@ class CodingCliAgentProviderTest {
         assertEquals("isolator", result.metadata().get("mode"));
     }
 
-    static boolean dockerAvailable() {
+    /** True only when Docker daemon is up AND the runner image is already local (no pull). */
+    static boolean dockerImageReady() {
         try {
-            Process p = new ProcessBuilder("docker", "version", "--format", "{{.Server.Version}}")
+            Process version = new ProcessBuilder("docker", "version", "--format", "{{.Server.Version}}")
                     .redirectErrorStream(true)
                     .start();
-            boolean finished = p.waitFor(5, java.util.concurrent.TimeUnit.SECONDS);
-            return finished && p.exitValue() == 0;
+            if (!version.waitFor(5, java.util.concurrent.TimeUnit.SECONDS) || version.exitValue() != 0) {
+                return false;
+            }
+            Process inspect = new ProcessBuilder("docker", "image", "inspect", "eclipse-temurin:21-jre-alpine")
+                    .redirectErrorStream(true)
+                    .start();
+            return inspect.waitFor(5, java.util.concurrent.TimeUnit.SECONDS) && inspect.exitValue() == 0;
         } catch (Exception ex) {
             return false;
         }
