@@ -152,6 +152,35 @@ ingress:
   #     - agentbench.local
 
 # ---------------------------------------------------------------------------
+# NetworkPolicies (default-deny + allow-needed)
+# Requires a NetworkPolicy-enforcing CNI. Not mTLS / not WORM.
+# Disable with --set networkPolicy.enabled=false
+# ---------------------------------------------------------------------------
+networkPolicy:
+  enabled: true
+  # Empty selectors = DNS egress to any namespace (typical CoreDNS).
+  # Example tighten: dnsNamespaceSelector: { kubernetes.io/metadata.name: kube-system }
+  dnsNamespaceSelector: null
+  dnsPodSelector: null
+  ingress:
+    # Empty = allow app-port ingress from any source (Ingress controllers,
+    # kube-proxy, port-forward). Restrict when the Ingress namespace is known:
+    # from:
+    #   - namespaceSelector:
+    #       matchLabels:
+    #         kubernetes.io/metadata.name: ingress-nginx
+    from: []
+  egress:
+    # When true, backend/worker may reach Postgres/Redis/Rabbit on 5432/6379/5672
+    # at any destination (external managed services). Set false when using only
+    # in-cluster dependencies.*.enabled and tighten further with extra rules.
+    allowExternalDataPlane: true
+    # OIDC IdPs, S3/MinIO, LLM HTTPS/HTTP (excludes link-local).
+    allowWorldHttps: true
+    # Additional egress rules merged into backend + worker policies.
+    extra: []
+
+# ---------------------------------------------------------------------------
 # Dependency strategy
 #
 # Default: EXTERNAL — provision Postgres 16, Redis 7, RabbitMQ 3.x yourself

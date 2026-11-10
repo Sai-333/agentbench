@@ -141,7 +141,8 @@ Shared-kernel breakout residual risk remains on the default path. Prefer **`agen
 | LLM provider stores prompts | Prefer self-hosted or enterprise no-retention contracts |
 | Author malice within own org | Org trust boundary; cannot fully prevent |
 | Local isolator fallback | Used when Docker unavailable (CI); not a security boundary |
-| K8s templates lack NetworkPolicy/mTLS | Operator must add before hostile multi-tenant |
+| K8s NetworkPolicy residual / mTLS absent | NetworkPolicies ship (default-deny + allow-needed); still L3/L4 only — tighten CIDRs before hostile multi-tenant; mTLS deferred |
+| WORM audit absent | Audit events exist; not write-once / tamper-evident storage |
 | AES secret-key rotation not automated | Dual-key re-encrypt before rotating encryption keys |
 | Enterprise SAML absent; public boards opt-in only | Google/GitHub OIDC optional; public leaderboards require OWNER/ADMIN publish + sanitized payload |
 

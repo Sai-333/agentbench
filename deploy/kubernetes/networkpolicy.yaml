@@ -1,0 +1,150 @@
+# AgentBench NetworkPolicies — default-deny + allow-needed for API/worker/frontend.
+# Requires a CNI that enforces NetworkPolicy (Calico, Cilium, Antrea, etc.).
+# Not mTLS and not WORM audit. See docs/DEPLOYMENT.md §3c.
+#
+# Apply with the rest of the kustomize bundle:
+#   kubectl apply -k deploy/kubernetes/
+#
+# To disable: remove this file from kustomization.yaml resources.
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: agentbench-default-deny
+  namespace: agentbench
+  labels:
+    app.kubernetes.io/name: agentbench
+    app.kubernetes.io/component: network-policy
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: agentbench
+  policyTypes:
+    - Ingress
+    - Egress
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: agentbench-allow-dns
+  namespace: agentbench
+  labels:
+    app.kubernetes.io/name: agentbench
+    app.kubernetes.io/component: network-policy
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: agentbench
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - namespaceSelector: {}
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: agentbench-backend
+  namespace: agentbench
+  labels:
+    app.kubernetes.io/name: agentbench
+    app.kubernetes.io/component: backend
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: agentbench
+      app.kubernetes.io/component: backend
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # HTTP from Ingress / same-cluster peers / port-forward (any source on app port).
+    - ports:
+        - protocol: TCP
+          port: 8080
+  egress:
+    # External (or same-cluster) Postgres / Redis / Rabbit on well-known ports.
+    - ports:
+        - protocol: TCP
+          port: 5432
+        - protocol: TCP
+          port: 6379
+        - protocol: TCP
+          port: 5672
+    # OIDC / S3 / LLM HTTPS (and HTTP for lab MinIO endpoints).
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - 169.254.0.0/16
+      ports:
+        - protocol: TCP
+          port: 443
+        - protocol: TCP
+          port: 80
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: agentbench-worker
+  namespace: agentbench
+  labels:
+    app.kubernetes.io/name: agentbench
+    app.kubernetes.io/component: worker
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: agentbench
+      app.kubernetes.io/component: worker
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - ports:
+        - protocol: TCP
+          port: 8081
+  egress:
+    - ports:
+        - protocol: TCP
+          port: 5432
+        - protocol: TCP
+          port: 6379
+        - protocol: TCP
+          port: 5672
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - 169.254.0.0/16
+      ports:
+        - protocol: TCP
+          port: 443
+        - protocol: TCP
+          port: 80
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: agentbench-frontend
+  namespace: agentbench
+  labels:
+    app.kubernetes.io/name: agentbench
+    app.kubernetes.io/component: frontend
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: agentbench
+      app.kubernetes.io/component: frontend
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - ports:
+        - protocol: TCP
+          port: 8080
+  # Static UI: DNS only (agentbench-allow-dns). No data-plane egress.

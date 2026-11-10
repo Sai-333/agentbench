@@ -13,9 +13,11 @@ Dependency strategy:
 Default is EXTERNAL Postgres/Redis/Rabbit — set config.* hosts or enable
 dependencies.*.enabled for lab/demo only (non-HA, not operators).
 
-Honest limits: not certified multi-tenant SaaS; no CRDs/operators;
-NetworkPolicies are out of scope for this chart. Prefer Docker Compose on Mac
-for day-to-day local work.
+NetworkPolicies: enabled={{ .Values.networkPolicy.enabled }}
+  (default-deny + allow-needed; requires enforcing CNI; not mTLS / not WORM)
+
+Honest limits: not certified multi-tenant SaaS; no CRDs/operators.
+Prefer Docker Compose on Mac for day-to-day local work.
 
 Upgrade:  helm upgrade {{ .Release.Name }} deploy/helm/agentbench -n {{ include "agentbench.namespace" . }}
 Uninstall: helm uninstall {{ .Release.Name }} -n {{ include "agentbench.namespace" . }}

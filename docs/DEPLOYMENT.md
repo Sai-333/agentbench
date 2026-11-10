@@ -96,6 +96,7 @@ Manifests live under `deploy/kubernetes/`:
 | `backend-deployment.yaml` | API Deployment + Service + probes |
 | `worker-deployment.yaml` | Worker profile Deployment + Service |
 | `frontend-deployment.yaml` | Static UI Deployment + Service |
+| `networkpolicy.yaml` | Default-deny + allow-needed NetworkPolicies (§3c) |
 | `kustomization.yaml` | Simple kustomize bundle |
 
 ```bash
@@ -103,11 +104,11 @@ Manifests live under `deploy/kubernetes/`:
 kubectl apply -k deploy/kubernetes/
 ```
 
-Out of scope for these templates: managed Postgres/Redis/Rabbit operators, NetworkPolicies, HPA, PDB, cluster-wide gVisor RuntimeClass objects (workers can still set `AGENTBENCH_EXECUTION_MODE=gvisor` when nodes already expose the `runsc` Docker/containerd runtime).
+Out of scope for these templates: managed Postgres/Redis/Rabbit operators, HPA, PDB, cluster-wide gVisor RuntimeClass objects (workers can still set `AGENTBENCH_EXECUTION_MODE=gvisor` when nodes already expose the `runsc` Docker/containerd runtime). NetworkPolicies ship in `networkpolicy.yaml` (see §3c).
 
 ## 3b. Helm chart (preferred K8s packaging)
 
-Chart path: `deploy/helm/agentbench/`. Wraps the same API / worker / frontend resources with values-driven images, replicas, resources, optional Ingress, and the same secret pattern. **Mac Docker Compose remains the primary local path.**
+Chart path: `deploy/helm/agentbench/`. Wraps the same API / worker / frontend resources with values-driven images, replicas, resources, optional Ingress, NetworkPolicies, and the same secret pattern. **Mac Docker Compose remains the primary local path.**
 
 ```bash
 # Lint / template smoke (no cluster):
@@ -126,7 +127,46 @@ helm uninstall agentbench -n agentbench
 
 **Dependency strategy:** default is **external** Postgres / Redis / RabbitMQ (`config.*` hosts). Optional `dependencies.*.enabled` spins single-replica lab Deployments only — not HA, not operators. Prefer `secrets.existingSecret` in real clusters.
 
-**Honest limits:** not certified multi-tenant SaaS; no CRDs/operators; NetworkPolicies are a later PR. See `deploy/helm/agentbench/README.md`.
+**Honest limits:** not certified multi-tenant SaaS; no CRDs/operators; NetworkPolicies are included (opt-out); mTLS and WORM audit remain deferred. See `deploy/helm/agentbench/README.md` and §3c.
+
+## 3c. NetworkPolicies
+
+Default-deny + allow-needed policies cover API (backend), worker, frontend, and optional in-cluster data-plane pods. They require a CNI that **enforces** NetworkPolicy (Calico, Cilium, Antrea, etc.). On CNIs without enforcement, objects apply but do nothing.
+
+| Direction | Allowed | Denied / residual |
+|---|---|---|
+| Namespace default | — | All ingress/egress for `app.kubernetes.io/name=agentbench` pods until an allow policy matches |
+| DNS | UDP/TCP 53 to cluster DNS | — |
+| Backend ingress | TCP 8080 (any source by default; tighten `networkPolicy.ingress.from`) | Other ports |
+| Worker ingress | TCP 8081 | Other ports |
+| Frontend ingress | TCP 8080 | Other ports; no data-plane egress |
+| Backend/worker egress | Postgres 5432, Redis 6379, RabbitMQ 5672; HTTP/HTTPS 80/443 (excl. link-local) | Arbitrary non-HTTP ports; lateral to unrelated pods except via those ports |
+| In-cluster Postgres/Redis/Rabbit | Ingress only from backend + worker on data ports | Ingress from other pods; egress from data-plane pods (default-deny) |
+
+**Enable / disable**
+
+```bash
+# Helm — on by default
+helm upgrade --install agentbench deploy/helm/agentbench -n agentbench \
+  --set networkPolicy.enabled=true
+
+# Helm — disable
+helm upgrade agentbench deploy/helm/agentbench -n agentbench \
+  --set networkPolicy.enabled=false
+
+# Tighter lab stack (in-cluster deps only; no open data-plane ports)
+helm upgrade agentbench deploy/helm/agentbench -n agentbench \
+  --set dependencies.postgres.enabled=true \
+  --set dependencies.redis.enabled=true \
+  --set dependencies.rabbitmq.enabled=true \
+  --set networkPolicy.egress.allowExternalDataPlane=false
+
+# Raw manifests — included in kustomization; drop networkpolicy.yaml from
+# deploy/kubernetes/kustomization.yaml resources to skip.
+kubectl apply -k deploy/kubernetes/
+```
+
+**Residual risk (honest):** NetworkPolicy is L3/L4 only — not mTLS, not identity-aware authz between services, not WORM audit. `allowExternalDataPlane` / `allowWorldHttps` intentionally permit broad destinations on known ports so external managed services and OIDC/S3/LLM calls work; operators should replace those with CIDR/`namespaceSelector` rules via `networkPolicy.egress.extra` and `networkPolicy.ingress.from` before hostile multi-tenant use. Evaluation containers still use Docker `--network none` (or gVisor) independently of these cluster policies.
 
 ## 4. Graceful shutdown
 

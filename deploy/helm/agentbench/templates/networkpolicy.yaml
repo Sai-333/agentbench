@@ -1,0 +1,348 @@
+{{- if .Values.networkPolicy.enabled }}
+{{- /*
+  Default-deny for all release pods, then component allow-lists.
+  Requires a CNI that enforces NetworkPolicy (Calico, Cilium, etc.).
+  Not mTLS and not a WORM audit trail — see docs/DEPLOYMENT.md §3c.
+*/ -}}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "agentbench.fullname" . }}-default-deny
+  namespace: {{ include "agentbench.namespace" . }}
+  labels:
+    {{- include "agentbench.labels" . | nindent 4 }}
+    app.kubernetes.io/component: network-policy
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "agentbench.selectorLabels" . | nindent 6 }}
+  policyTypes:
+    - Ingress
+    - Egress
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "agentbench.fullname" . }}-allow-dns
+  namespace: {{ include "agentbench.namespace" . }}
+  labels:
+    {{- include "agentbench.labels" . | nindent 4 }}
+    app.kubernetes.io/component: network-policy
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "agentbench.selectorLabels" . | nindent 6 }}
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        {{- if .Values.networkPolicy.dnsNamespaceSelector }}
+        - namespaceSelector:
+            {{- toYaml .Values.networkPolicy.dnsNamespaceSelector | nindent 12 }}
+          {{- if .Values.networkPolicy.dnsPodSelector }}
+          podSelector:
+            {{- toYaml .Values.networkPolicy.dnsPodSelector | nindent 12 }}
+          {{- end }}
+        {{- else }}
+        - namespaceSelector: {}
+        {{- end }}
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+---
+{{- if .Values.backend.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "agentbench.fullname" . }}-backend
+  namespace: {{ include "agentbench.namespace" . }}
+  labels:
+    {{- include "agentbench.labels" . | nindent 4 }}
+    app.kubernetes.io/component: backend
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "agentbench.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: backend
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # HTTP from Ingress controllers / same-namespace peers / port-forward.
+    # Restrict further via networkPolicy.ingress.from when known.
+    - ports:
+        - protocol: TCP
+          port: 8080
+      {{- with .Values.networkPolicy.ingress.from }}
+      from:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+  egress:
+    {{- if .Values.dependencies.postgres.enabled }}
+    - to:
+        - podSelector:
+            matchLabels:
+              {{- include "agentbench.selectorLabels" . | nindent 14 }}
+              app.kubernetes.io/component: postgres
+      ports:
+        - protocol: TCP
+          port: 5432
+    {{- end }}
+    {{- if .Values.dependencies.redis.enabled }}
+    - to:
+        - podSelector:
+            matchLabels:
+              {{- include "agentbench.selectorLabels" . | nindent 14 }}
+              app.kubernetes.io/component: redis
+      ports:
+        - protocol: TCP
+          port: 6379
+    {{- end }}
+    {{- if .Values.dependencies.rabbitmq.enabled }}
+    - to:
+        - podSelector:
+            matchLabels:
+              {{- include "agentbench.selectorLabels" . | nindent 14 }}
+              app.kubernetes.io/component: rabbitmq
+      ports:
+        - protocol: TCP
+          port: 5672
+    {{- end }}
+    {{- if .Values.networkPolicy.egress.allowExternalDataPlane }}
+    # External managed Postgres / Redis / Rabbit (any destination on data ports).
+    # Tighten with egress.extra + allowExternalDataPlane=false when CIDRs are known.
+    - ports:
+        - protocol: TCP
+          port: 5432
+        - protocol: TCP
+          port: 6379
+        - protocol: TCP
+          port: 5672
+    {{- end }}
+    {{- if .Values.networkPolicy.egress.allowWorldHttps }}
+    # OIDC IdPs, S3/MinIO, LLM provider APIs (HTTP/HTTPS).
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - 169.254.0.0/16
+      ports:
+        - protocol: TCP
+          port: 443
+        - protocol: TCP
+          port: 80
+    {{- end }}
+    {{- with .Values.networkPolicy.egress.extra }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+---
+{{- end }}
+{{- if .Values.worker.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "agentbench.fullname" . }}-worker
+  namespace: {{ include "agentbench.namespace" . }}
+  labels:
+    {{- include "agentbench.labels" . | nindent 4 }}
+    app.kubernetes.io/component: worker
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "agentbench.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: worker
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # Health probes / optional internal callers on the worker HTTP port.
+    - ports:
+        - protocol: TCP
+          port: 8081
+      {{- with .Values.networkPolicy.ingress.from }}
+      from:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+  egress:
+    {{- if .Values.dependencies.postgres.enabled }}
+    - to:
+        - podSelector:
+            matchLabels:
+              {{- include "agentbench.selectorLabels" . | nindent 14 }}
+              app.kubernetes.io/component: postgres
+      ports:
+        - protocol: TCP
+          port: 5432
+    {{- end }}
+    {{- if .Values.dependencies.redis.enabled }}
+    - to:
+        - podSelector:
+            matchLabels:
+              {{- include "agentbench.selectorLabels" . | nindent 14 }}
+              app.kubernetes.io/component: redis
+      ports:
+        - protocol: TCP
+          port: 6379
+    {{- end }}
+    {{- if .Values.dependencies.rabbitmq.enabled }}
+    - to:
+        - podSelector:
+            matchLabels:
+              {{- include "agentbench.selectorLabels" . | nindent 14 }}
+              app.kubernetes.io/component: rabbitmq
+      ports:
+        - protocol: TCP
+          port: 5672
+    {{- end }}
+    {{- if .Values.networkPolicy.egress.allowExternalDataPlane }}
+    - ports:
+        - protocol: TCP
+          port: 5432
+        - protocol: TCP
+          port: 6379
+        - protocol: TCP
+          port: 5672
+    {{- end }}
+    {{- if .Values.networkPolicy.egress.allowWorldHttps }}
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - 169.254.0.0/16
+      ports:
+        - protocol: TCP
+          port: 443
+        - protocol: TCP
+          port: 80
+    {{- end }}
+    {{- with .Values.networkPolicy.egress.extra }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+---
+{{- end }}
+{{- if .Values.frontend.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "agentbench.fullname" . }}-frontend
+  namespace: {{ include "agentbench.namespace" . }}
+  labels:
+    {{- include "agentbench.labels" . | nindent 4 }}
+    app.kubernetes.io/component: frontend
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "agentbench.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: frontend
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - ports:
+        - protocol: TCP
+          port: 8080
+      {{- with .Values.networkPolicy.ingress.from }}
+      from:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+  # Static UI: DNS only (handled by allow-dns). No data-plane egress.
+---
+{{- end }}
+{{- if .Values.dependencies.postgres.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "agentbench.fullname" . }}-postgres
+  namespace: {{ include "agentbench.namespace" . }}
+  labels:
+    {{- include "agentbench.labels" . | nindent 4 }}
+    app.kubernetes.io/component: postgres
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "agentbench.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: postgres
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              {{- include "agentbench.selectorLabels" . | nindent 14 }}
+              app.kubernetes.io/component: backend
+        - podSelector:
+            matchLabels:
+              {{- include "agentbench.selectorLabels" . | nindent 14 }}
+              app.kubernetes.io/component: worker
+      ports:
+        - protocol: TCP
+          port: 5432
+---
+{{- end }}
+{{- if .Values.dependencies.redis.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "agentbench.fullname" . }}-redis
+  namespace: {{ include "agentbench.namespace" . }}
+  labels:
+    {{- include "agentbench.labels" . | nindent 4 }}
+    app.kubernetes.io/component: redis
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "agentbench.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: redis
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              {{- include "agentbench.selectorLabels" . | nindent 14 }}
+              app.kubernetes.io/component: backend
+        - podSelector:
+            matchLabels:
+              {{- include "agentbench.selectorLabels" . | nindent 14 }}
+              app.kubernetes.io/component: worker
+      ports:
+        - protocol: TCP
+          port: 6379
+---
+{{- end }}
+{{- if .Values.dependencies.rabbitmq.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "agentbench.fullname" . }}-rabbitmq
+  namespace: {{ include "agentbench.namespace" . }}
+  labels:
+    {{- include "agentbench.labels" . | nindent 4 }}
+    app.kubernetes.io/component: rabbitmq
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "agentbench.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: rabbitmq
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              {{- include "agentbench.selectorLabels" . | nindent 14 }}
+              app.kubernetes.io/component: backend
+        - podSelector:
+            matchLabels:
+              {{- include "agentbench.selectorLabels" . | nindent 14 }}
+              app.kubernetes.io/component: worker
+      ports:
+        - protocol: TCP
+          port: 5672
+{{- end }}
+{{- end }}

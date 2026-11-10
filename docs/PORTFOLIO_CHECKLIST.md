@@ -1,6 +1,6 @@
 # AgentBench — Portfolio checklist (honest)
 
-**As of post-M9 public leaderboards + OIDC auth + S3-compatible artifact storage + Postgres RLS + measured local k6 smoke + opt-in gVisor + Helm chart.** Marked items are evidenced in `main` / this repo. Deferred items are explicit non-claims.
+**As of post-M9 public leaderboards + OIDC auth + S3-compatible artifact storage + Postgres RLS + measured local k6 smoke + opt-in gVisor + Helm chart + NetworkPolicies.** Marked items are evidenced in `main` / this repo. Deferred items are explicit non-claims.
 
 ## Done (M0–M9 + deferred follow-ups landed)
 
@@ -22,6 +22,7 @@
 | Graceful shutdown + prod-ish Compose overlay | `application.yml`, `docker-compose.prod.yml` |
 | Kubernetes templates (deploy/svc/config/secrets) | `deploy/kubernetes/` |
 | Helm chart (API/worker/frontend; not operators/CRDs) | `deploy/helm/agentbench/`; `scripts/helm/smoke.sh`; CI `helm` job; `docs/DEPLOYMENT.md` §3b |
+| Kubernetes NetworkPolicies (default-deny + allow-needed) | `deploy/kubernetes/networkpolicy.yaml`; Helm `networkPolicy.*` (default on); `docs/DEPLOYMENT.md` §3c; smoke asserts render/disable |
 | Ops runbook snippets + load-test **plan** + k6 smoke script | `docs/OPERATIONS.md`, `docs/PERFORMANCE.md` |
 | Measured **local Compose** k6 smoke (laptop; not production) | `docs/PERFORMANCE.md` dated 2026-11-10 section; `deploy/loadtest/results/measured-2026-11-10-*` |
 | Threat model + portfolio honesty | this file + threat model |
@@ -41,7 +42,8 @@
 | Live public hosted demo on Oracle Always Free | **Guide-ready** (`docs/DEPLOYMENT_ORACLE_ALWAYS_FREE.md`) — **not actually hosted** until Sai’s VM + SSH apply the runbook |
 | Sonar as scoring authority | **Not claimed** — stub only |
 | Full CODING_CLI production isolation | Skeleton only |
-| NetworkPolicies / mTLS / WORM audit | Draft / later |
+| mTLS between services | **Deferred** — NetworkPolicies are L3/L4 only |
+| WORM audit storage | **Deferred** — audit log exists; not WORM |
 | PDF report stack | JSON/CSV only |
 | Auto-updating public boards / signed embeds / CDN caching | **Not claimed** — live query of published slug only |
 | Anonymous write / vote / comment on public boards | **Not claimed** — read-only public GET |
