@@ -92,6 +92,25 @@ public final class AnalyticsDtos {
     ) {
     }
 
+    public record MintEmbedTokenRequest(Long ttlSeconds) {
+    }
+
+    /**
+     * OWNER/ADMIN mint response: HMAC token + ready-to-paste iframe / script snippets.
+     */
+    public record MintEmbedTokenResponse(
+            String token,
+            String publicSlug,
+            Instant issuedAt,
+            Instant expiresAt,
+            long ttlSeconds,
+            String embedJsonPath,
+            String embedHtmlPath,
+            String iframeSnippet,
+            String scriptSnippet
+    ) {
+    }
+
     /**
      * Sanitized public leaderboard payload — no org/agent/evaluation UUIDs, secrets,
      * hidden fixtures, tokens/cost, or private repo metadata.

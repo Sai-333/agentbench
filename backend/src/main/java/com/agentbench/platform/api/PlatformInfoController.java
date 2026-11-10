@@ -26,7 +26,7 @@ public class PlatformInfoController {
                 "apiBase", ApiPaths.API_V1,
                 "orgScopedApiBase", "/api/v1/orgs/{orgId}/...",
                 "auth", "JWT bearer (local email/password + optional Google/GitHub OIDC)",
-                "analytics", "org-private overview/leaderboard/comparisons/costs/exports (json/csv/pdf); opt-in public leaderboards",
+                "analytics", "org-private overview/leaderboard/comparisons/costs/exports (json/csv/pdf); opt-in public leaderboards + signed embeds",
                 "readiness", "production-minded Compose/K8s path; Docker isolation not hostile multi-tenant"
         );
     }

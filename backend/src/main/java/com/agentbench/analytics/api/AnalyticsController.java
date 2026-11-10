@@ -92,6 +92,15 @@ public class AnalyticsController {
         return analyticsService.unpublishLeaderboard(orgId, versionId);
     }
 
+    @PostMapping("/benchmark-versions/{versionId}/leaderboard/embed-token")
+    @Operation(summary = "Mint a signed HMAC embed token for a published leaderboard (OWNER/ADMIN)")
+    public AnalyticsDtos.MintEmbedTokenResponse mintEmbedToken(
+            @PathVariable UUID orgId,
+            @PathVariable UUID versionId,
+            @RequestBody(required = false) AnalyticsDtos.MintEmbedTokenRequest request) {
+        return analyticsService.mintEmbedToken(orgId, versionId, request);
+    }
+
     @GetMapping(value = "/benchmark-versions/{versionId}/leaderboard/export", produces = {
             "text/csv", MediaType.APPLICATION_JSON_VALUE, MediaType.APPLICATION_PDF_VALUE
     })

@@ -49,6 +49,7 @@ public class AnalyticsService {
     private final OrgAccessService orgAccessService;
     private final EvaluationService evaluationService;
     private final ReportExportService reportExportService;
+    private final EmbedTokenService embedTokenService;
     private final HealthEndpoint healthEndpoint;
     private final ObjectMapper objectMapper;
 
@@ -58,6 +59,7 @@ public class AnalyticsService {
             OrgAccessService orgAccessService,
             EvaluationService evaluationService,
             ReportExportService reportExportService,
+            EmbedTokenService embedTokenService,
             HealthEndpoint healthEndpoint,
             ObjectMapper objectMapper) {
         this.analyticsRepository = analyticsRepository;
@@ -65,6 +67,7 @@ public class AnalyticsService {
         this.orgAccessService = orgAccessService;
         this.evaluationService = evaluationService;
         this.reportExportService = reportExportService;
+        this.embedTokenService = embedTokenService;
         this.healthEndpoint = healthEndpoint;
         this.objectMapper = objectMapper;
     }
@@ -351,6 +354,71 @@ public class AnalyticsService {
         LeaderboardPublication pub = publicLeaderboardRepository.findActiveBySlug(slug)
                 .orElseThrow(() -> ApiException.notFound("Public leaderboard not found"));
         return RlsContext.callWithOrg(pub.orgId(), () -> buildPublicLeaderboard(pub, page, size));
+    }
+
+    /**
+     * Mint a signed embed token for a currently published board (OWNER/ADMIN).
+     */
+    @Transactional(readOnly = true)
+    public AnalyticsDtos.MintEmbedTokenResponse mintEmbedToken(
+            UUID orgId,
+            UUID benchmarkVersionId,
+            AnalyticsDtos.MintEmbedTokenRequest request) {
+        orgAccessService.requireMembership(orgId, OrgRole.ADMIN);
+        requireVersion(orgId, benchmarkVersionId);
+        LeaderboardPublication pub = publicLeaderboardRepository.findByOrgAndVersion(orgId, benchmarkVersionId)
+                .filter(LeaderboardPublication::isActive)
+                .orElseThrow(() -> ApiException.validation(
+                        "Leaderboard must be published before minting an embed token"));
+        Long ttl = request == null ? null : request.ttlSeconds();
+        EmbedTokenService.MintedToken minted = embedTokenService.mint(pub.publicSlug(), ttl);
+        String jsonPath = "/api/v1/public/leaderboards/" + minted.publicSlug()
+                + "/embed?token=" + minted.token();
+        String htmlPath = jsonPath + "&format=html";
+        String iframeSnippet = "<iframe src=\"" + htmlPath
+                + "\" title=\"" + escapeAttr(pub.title())
+                + "\" loading=\"lazy\" style=\"width:100%;min-height:420px;border:0;\"></iframe>";
+        String scriptSnippet = "<script>\n"
+                + "fetch('" + jsonPath + "').then(r=>r.json()).then(board=>{\n"
+                + "  /* render board.entries — sanitized public payload */\n"
+                + "  console.log(board.title, board.entries);\n"
+                + "});\n"
+                + "</script>";
+        return new AnalyticsDtos.MintEmbedTokenResponse(
+                minted.token(),
+                minted.publicSlug(),
+                minted.issuedAt(),
+                minted.expiresAt(),
+                minted.ttlSeconds(),
+                jsonPath,
+                htmlPath,
+                iframeSnippet,
+                scriptSnippet
+        );
+    }
+
+    /**
+     * Validate embed token (signature + expiry + slug match) then return the public board.
+     */
+    @Transactional(readOnly = true)
+    public AnalyticsDtos.PublicLeaderboardResponse publicLeaderboardEmbed(
+            String publicSlug,
+            String token,
+            Integer page,
+            Integer size) {
+        String boundSlug = embedTokenService.validate(token);
+        String slug = publicSlug == null ? "" : publicSlug.trim().toLowerCase(Locale.ROOT);
+        if (!boundSlug.equals(slug)) {
+            throw ApiException.unauthorized("Embed token does not match leaderboard");
+        }
+        return publicLeaderboard(slug, page, size);
+    }
+
+    private static String escapeAttr(String raw) {
+        if (raw == null) {
+            return "AgentBench leaderboard";
+        }
+        return raw.replace("\"", "&quot;");
     }
 
     private AnalyticsDtos.PublicLeaderboardResponse buildPublicLeaderboard(
