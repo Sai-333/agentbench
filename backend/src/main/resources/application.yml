@@ -120,6 +120,10 @@ agentbench:
     kvm-device: ${AGENTBENCH_KVM_DEVICE:/dev/kvm}
     image: ${AGENTBENCH_RUNNER_IMAGE:eclipse-temurin:21-jre-alpine}
     image-digest: ${AGENTBENCH_RUNNER_IMAGE_DIGEST:}
+    # Per-language suite runner images (RuntimeIsolator imageOverride). Build python/node from deploy/runners/.
+    java-image: ${AGENTBENCH_JAVA_RUNNER_IMAGE:maven:3.9.9-eclipse-temurin-21-alpine}
+    python-image: ${AGENTBENCH_PYTHON_RUNNER_IMAGE:agentbench/runner-python:3.12}
+    node-image: ${AGENTBENCH_NODE_RUNNER_IMAGE:agentbench/runner-node:22}
     default-memory-mb: ${AGENTBENCH_EXEC_MEMORY_MB:512}
     default-cpu-limit: ${AGENTBENCH_EXEC_CPU:1.0}
     default-pids-limit: ${AGENTBENCH_EXEC_PIDS:128}

@@ -21,6 +21,7 @@ import com.agentbench.evaluation.domain.TestRun;
 import com.agentbench.evaluation.infra.EvaluationRepository;
 import com.agentbench.execution.domain.ExecutionStage;
 import com.agentbench.execution.quality.QualityAnalysisService;
+import com.agentbench.execution.runner.SuiteExecutionRequest;
 import com.agentbench.execution.service.ExecutionIsolatorService;
 import com.agentbench.execution.service.FixtureSuiteRunner;
 import com.agentbench.execution.service.PatchValidator;
@@ -299,19 +300,23 @@ public class EvaluationStageProcessor {
         JsonNode visible = findSuite(task, "VISIBLE");
         UUID suiteId = visible.hasNonNull("id") ? UUID.fromString(visible.get("id").asText()) : null;
         Instant started = Instant.now();
+        String runnerMeta = "{\"runner\":\"" + resolveRunnerLabel(visible) + "\",\"phase\":\"BASELINE\"}";
         TestRun run = new TestRun(
                 UUID.randomUUID(), evaluation.id(), evaluation.orgId(), TestPhase.BASELINE, suiteId,
-                "RUNNING", started, null, "{\"runner\":\"suite-v1\",\"phase\":\"BASELINE\"}");
+                "RUNNING", started, null, runnerMeta);
         evaluationRepository.insertTestRun(run);
 
         int repeatRuns = resolveFlakyRepeats(task);
+        SuiteExecutionRequest suiteRequest = buildSuiteRequest(
+                evaluation, task, workspace, visible, FixtureSuiteRunner.Phase.BASELINE,
+                ExecutionStage.VISIBLE_TESTS, null);
         FlakyDetectionService.FlakyAwareResult flakyAware = flakyDetectionService.runWithFlakyDetection(
                 evaluation.id(),
                 evaluation.orgId(),
                 run.id(),
                 TestPhase.BASELINE,
                 repeatRuns,
-                () -> suiteExecutionService.run(workspace, visible, FixtureSuiteRunner.Phase.BASELINE)
+                () -> suiteExecutionService.run(suiteRequest)
         );
 
         Map<String, CaseCategory> categories = classificationEngine.categoriesFromFixtureCases(
@@ -359,19 +364,23 @@ public class EvaluationStageProcessor {
         Path workspace = workspaceProvisioner.requireExisting(evaluation.workspaceUri());
         JsonNode visible = findSuite(task, "VISIBLE");
         UUID suiteId = visible.hasNonNull("id") ? UUID.fromString(visible.get("id").asText()) : null;
+        String runnerMeta = "{\"runner\":\"" + resolveRunnerLabel(visible) + "\",\"phase\":\"VISIBLE_POST\"}";
         TestRun run = new TestRun(
                 UUID.randomUUID(), evaluation.id(), evaluation.orgId(), TestPhase.VISIBLE_POST, suiteId,
-                "RUNNING", Instant.now(), null, "{\"runner\":\"suite-v1\",\"phase\":\"VISIBLE_POST\"}");
+                "RUNNING", Instant.now(), null, runnerMeta);
         evaluationRepository.insertTestRun(run);
 
         int repeatRuns = resolveFlakyRepeats(task);
+        SuiteExecutionRequest suiteRequest = buildSuiteRequest(
+                evaluation, task, workspace, visible, FixtureSuiteRunner.Phase.POST,
+                ExecutionStage.VISIBLE_TESTS, null);
         FlakyDetectionService.FlakyAwareResult flakyAware = flakyDetectionService.runWithFlakyDetection(
                 evaluation.id(),
                 evaluation.orgId(),
                 run.id(),
                 TestPhase.VISIBLE_POST,
                 repeatRuns,
-                () -> suiteExecutionService.run(workspace, visible, FixtureSuiteRunner.Phase.POST)
+                () -> suiteExecutionService.run(suiteRequest)
         );
 
         TestRun baseline = evaluationRepository.findTestRun(evaluation.id(), TestPhase.BASELINE).orElse(null);
@@ -437,7 +446,7 @@ public class EvaluationStageProcessor {
                 hidden.path("fixtureContent").asText("{}"));
 
         ObjectNode containerMeta = objectMapper.createObjectNode();
-        containerMeta.put("runner", "suite-v1");
+        containerMeta.put("runner", resolveRunnerLabel(hidden));
         containerMeta.put("phase", "HIDDEN_POST");
         containerMeta.put("agentVisible", false);
         containerMeta.put("stage", ExecutionStage.HIDDEN_TESTS.name());
@@ -445,6 +454,7 @@ public class EvaluationStageProcessor {
         containerMeta.put("hiddenFixturesSeparate", true);
         containerMeta.put("dockerSockMounted", false);
         containerMeta.put("privileged", false);
+        containerMeta.put("neverF2P", true);
 
         UUID suiteId = hidden.hasNonNull("id") ? UUID.fromString(hidden.get("id").asText()) : null;
         TestRun run = new TestRun(
@@ -454,13 +464,16 @@ public class EvaluationStageProcessor {
 
         try {
             int repeatRuns = resolveFlakyRepeats(task);
+            SuiteExecutionRequest suiteRequest = buildSuiteRequest(
+                    evaluation, task, hiddenWorkspace, hidden, FixtureSuiteRunner.Phase.POST,
+                    ExecutionStage.HIDDEN_TESTS, hiddenFixtures);
             FlakyDetectionService.FlakyAwareResult flakyAware = flakyDetectionService.runWithFlakyDetection(
                     evaluation.id(),
                     evaluation.orgId(),
                     run.id(),
                     TestPhase.HIDDEN_POST,
                     repeatRuns,
-                    () -> suiteExecutionService.run(hiddenWorkspace, hidden, FixtureSuiteRunner.Phase.POST)
+                    () -> suiteExecutionService.run(suiteRequest)
             );
 
             Map<String, CaseCategory> categories = classificationEngine.categoriesFromFixtureCases(
@@ -658,6 +671,50 @@ public class EvaluationStageProcessor {
             throw new IllegalStateException(ex);
         }
         evaluationRepository.insertOutbox(evaluation.orgId(), evaluation.id(), "evaluation.advance", payload);
+    }
+
+    private SuiteExecutionRequest buildSuiteRequest(
+            Evaluation evaluation,
+            JsonNode task,
+            Path workspace,
+            JsonNode suite,
+            FixtureSuiteRunner.Phase phase,
+            ExecutionStage stage,
+            Path hiddenFixturesDir) {
+        Integer memoryMb = task.hasNonNull("memoryMb") ? task.get("memoryMb").asInt() : null;
+        Double cpuLimit = task.hasNonNull("cpuLimit") ? task.get("cpuLimit").asDouble() : null;
+        Integer timeoutSec = task.hasNonNull("timeoutSec") ? task.get("timeoutSec").asInt() : null;
+        boolean networkEnabled = task.path("evalConfig").path("networkEnabled").asBoolean(false)
+                || suite.path("networkEnabled").asBoolean(false);
+        return new SuiteExecutionRequest(
+                evaluation.id(),
+                workspace,
+                suite,
+                phase,
+                stage,
+                hiddenFixturesDir,
+                memoryMb,
+                cpuLimit,
+                timeoutSec,
+                networkEnabled
+        );
+    }
+
+    private static String resolveRunnerLabel(JsonNode suite) {
+        String framework = suite == null ? "" : suite.path("framework").asText("").trim().toLowerCase();
+        if (framework.contains("pytest") || "python".equals(framework) || framework.contains("py.test")) {
+            return "pytest";
+        }
+        if (framework.contains("jest") || "node".equals(framework) || "nodejs".equals(framework)) {
+            return "jest";
+        }
+        if (framework.contains("junit") || framework.contains("maven") || framework.contains("surefire")) {
+            return "maven-junit";
+        }
+        if (framework.contains("fixture") || framework.isBlank()) {
+            return "suite-v1";
+        }
+        return framework.length() > 40 ? framework.substring(0, 40) : framework;
     }
 
     private static JsonNode findSuite(JsonNode task, String visibility) {

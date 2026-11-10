@@ -25,11 +25,32 @@ public class ExecutionProperties {
      */
     private String mode = "docker";
 
-    /** Allowlisted runner image reference (tag or digest). Digest preferred. */
+    /**
+     * Default allowlisted runner image (CODING_CLI / generic). Digest preferred via
+     * {@link #imageDigest}. Language toolchains prefer {@link #javaImage}, {@link #pythonImage},
+     * {@link #nodeImage} when set.
+     */
     private String image = "eclipse-temurin:21-jre-alpine";
 
     /** Optional image digest pin (sha256:...). When set, appended as image@digest. */
     private String imageDigest = "";
+
+    /**
+     * Maven / JUnit suite runner image (JDK + Maven). Env: {@code AGENTBENCH_JAVA_RUNNER_IMAGE}.
+     */
+    private String javaImage = "maven:3.9.9-eclipse-temurin-21-alpine";
+
+    /**
+     * pytest suite runner image (Python + pytest). Build from {@code deploy/runners/python}.
+     * Env: {@code AGENTBENCH_PYTHON_RUNNER_IMAGE}.
+     */
+    private String pythonImage = "agentbench/runner-python:3.12";
+
+    /**
+     * Jest suite runner image (Node + jest + jest-junit). Build from {@code deploy/runners/node}.
+     * Env: {@code AGENTBENCH_NODE_RUNNER_IMAGE}.
+     */
+    private String nodeImage = "agentbench/runner-node:22";
 
     private int defaultMemoryMb = 512;
     private double defaultCpuLimit = 1.0;
@@ -96,6 +117,30 @@ public class ExecutionProperties {
 
     public void setImageDigest(String imageDigest) {
         this.imageDigest = imageDigest;
+    }
+
+    public String getJavaImage() {
+        return javaImage;
+    }
+
+    public void setJavaImage(String javaImage) {
+        this.javaImage = javaImage;
+    }
+
+    public String getPythonImage() {
+        return pythonImage;
+    }
+
+    public void setPythonImage(String pythonImage) {
+        this.pythonImage = pythonImage;
+    }
+
+    public String getNodeImage() {
+        return nodeImage;
+    }
+
+    public void setNodeImage(String nodeImage) {
+        this.nodeImage = nodeImage;
     }
 
     public int getDefaultMemoryMb() {
@@ -257,5 +302,27 @@ public class ExecutionProperties {
             return base + "@" + digest;
         }
         return image;
+    }
+
+    /** Image for Maven/JUnit suite runs (falls back to {@link #resolvedImageRef()} if blank). */
+    public String resolvedJavaRunnerImage() {
+        return firstNonBlank(javaImage, resolvedImageRef());
+    }
+
+    /** Image for pytest suite runs. */
+    public String resolvedPythonRunnerImage() {
+        return firstNonBlank(pythonImage, resolvedImageRef());
+    }
+
+    /** Image for Jest/Node suite runs. */
+    public String resolvedNodeRunnerImage() {
+        return firstNonBlank(nodeImage, resolvedImageRef());
+    }
+
+    private static String firstNonBlank(String primary, String fallback) {
+        if (primary != null && !primary.isBlank()) {
+            return primary.trim();
+        }
+        return fallback;
     }
 }

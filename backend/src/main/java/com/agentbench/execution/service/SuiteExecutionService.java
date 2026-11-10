@@ -1,5 +1,7 @@
 package com.agentbench.execution.service;
 
+import com.agentbench.execution.runner.SuiteExecutionRequest;
+import com.agentbench.execution.runner.SuiteToolchainRunner;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -11,25 +13,41 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Selects fixture-v1 checks or JUnit XML ingestion based on suite framework / content.
- * Docker-hosted Maven runs (M7) can drop Surefire XML under reportsDir; M6 ingests the XML.
+ * Selects fixture-v1 checks, JUnit XML ingestion, or an isolator-backed
+ * {@link SuiteToolchainRunner} (Maven/JUnit, pytest, Jest) based on suite framework / content.
+ *
+ * <p>Scoring semantics are unchanged: callers still receive {@link FixtureSuiteRunner.CaseOutcome}
+ * lists. Hidden suites must continue to use post-only classification (never F2P).
  */
 @Service
 public class SuiteExecutionService {
 
     private final FixtureSuiteRunner fixtureSuiteRunner;
     private final ObjectMapper objectMapper;
+    private final List<SuiteToolchainRunner> toolchainRunners;
 
-    public SuiteExecutionService(FixtureSuiteRunner fixtureSuiteRunner, ObjectMapper objectMapper) {
+    public SuiteExecutionService(
+            FixtureSuiteRunner fixtureSuiteRunner,
+            ObjectMapper objectMapper,
+            List<SuiteToolchainRunner> toolchainRunners) {
         this.fixtureSuiteRunner = fixtureSuiteRunner;
         this.objectMapper = objectMapper;
+        this.toolchainRunners = toolchainRunners == null ? List.of() : List.copyOf(toolchainRunners);
     }
 
+    /** Offline / legacy entry — no isolator context (fixture + pre-seeded XML only). */
     public List<FixtureSuiteRunner.CaseOutcome> run(
             Path workspace,
             JsonNode suiteNode,
             FixtureSuiteRunner.Phase phase) {
-        String framework = suiteNode.path("framework").asText("").toLowerCase();
+        return run(SuiteExecutionRequest.offline(workspace, suiteNode, phase));
+    }
+
+    public List<FixtureSuiteRunner.CaseOutcome> run(SuiteExecutionRequest request) {
+        Path workspace = request.workspace();
+        JsonNode suiteNode = request.suiteNode();
+        FixtureSuiteRunner.Phase phase = request.phase();
+        String framework = request.framework();
         JsonNode fixture = resolveFixture(suiteNode);
 
         if (fixture.hasNonNull("junitXml")) {
@@ -39,8 +57,22 @@ public class SuiteExecutionService {
         if (JUnitXmlParser.looksLikeJUnitXml(fixtureContent)) {
             return JUnitXmlParser.parseXml(fixtureContent);
         }
+
+        // Prefer toolchain runners when framework matches (Maven/pytest/Jest).
+        // Empty return means "not handled / no reports yet" → continue fallbacks.
+        for (SuiteToolchainRunner runner : toolchainRunners) {
+            if (!runner.supports(framework)) {
+                continue;
+            }
+            List<FixtureSuiteRunner.CaseOutcome> outcomes = runner.run(request);
+            if (outcomes != null && !outcomes.isEmpty()) {
+                return outcomes;
+            }
+        }
+
+        // Legacy JUnit XML ingest without isolator (pre-seeded reports / phase fields).
         if (isJUnitFramework(framework)) {
-            Path reportsDir = resolveReportsDir(workspace, suiteNode, fixture);
+            Path reportsDir = resolveReportsDir(workspace, suiteNode, fixture, "target/surefire-reports");
             if (reportsDir != null && Files.isDirectory(reportsDir)) {
                 List<FixtureSuiteRunner.CaseOutcome> fromDir = JUnitXmlParser.parseDirectory(reportsDir);
                 if (!fromDir.isEmpty()) {
@@ -100,11 +132,12 @@ public class SuiteExecutionService {
         return framework.contains("junit") || framework.contains("surefire") || framework.contains("maven");
     }
 
-    private static Path resolveReportsDir(Path workspace, JsonNode suiteNode, JsonNode fixture) {
+    private static Path resolveReportsDir(
+            Path workspace, JsonNode suiteNode, JsonNode fixture, String defaultRelative) {
         String relative = firstText(
                 suiteNode.path("reportsDir").asText(null),
                 fixture.path("reportsDir").asText(null),
-                "target/surefire-reports");
+                defaultRelative);
         if (relative == null || relative.isBlank() || relative.contains("..") || relative.startsWith("/")) {
             return null;
         }

@@ -40,6 +40,7 @@
 | Optional SonarQube/SonarCloud quality path | Default off; report import + Web API client; WireMock/fixture tests; `docs/QUALITY_SONAR.md`; Checkstyle/SpotBugs/PMD remain primary |
 | WORM / append-only audit storage | Flyway V15; deny UPDATE/DELETE triggers + `agentbench_app` INSERT/SELECT-only on `evaluation_state_transitions` + `platform.worm_audit_events`; per-org SHA-256 hash chain; dual-write from transitions; `WormAuditImmutabilityTest`; `docs/AUDIT_WORM.md` — **residual:** not AWS Object Lock / Compliance mode; superuser can disable triggers |
 | Optional mTLS between services (Helm/K8s) | Helm `mtls.*` (default off); cert-manager Certificates **or** `scripts/helm/generate-mtls-certs.sh`; Spring Boot PEM SSL on API/worker; frontend nginx HTTPS proxy overlay; `docs/DEPLOYMENT.md` §3d — **residual:** not a service mesh; not AMQPS; Mac Compose stays non-mTLS; not certified SaaS |
+| Python (pytest) + Node (Jest) suite runners | `SuiteToolchainRunner` SPI; Maven/JUnit + pytest + Jest via `RuntimeIsolator`; JUnit XML ingest; `deploy/runners/`; `docs/RUNNERS.md`; F2P semantics unchanged; hidden post-only — **residual:** custom python/node images must be built/pulled; quality scanners remain Java-oriented |
 
 ## Deferred / not claimed
 
