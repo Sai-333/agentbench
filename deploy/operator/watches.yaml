@@ -1,0 +1,9 @@
+# Helm Operator watches — maps AgentBenchInstance CRs to the app chart.
+# Spec fields on the CR become Helm values for deploy/helm/agentbench.
+#
+# Not a full Kubebuilder Go controller; uses the Operator Framework
+# helm-operator runtime (see Dockerfile). Not certified multi-cloud SaaS.
+- group: agentbench.io
+  version: v1alpha1
+  kind: AgentBenchInstance
+  chart: helm-charts/agentbench

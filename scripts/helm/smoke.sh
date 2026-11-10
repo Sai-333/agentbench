@@ -91,4 +91,7 @@ grep -q 'ca.crt' "${TMP_CERTS}/agentbench-mtls-backend.yaml" \
   || { echo "expected ca.crt in backend Secret" >&2; exit 1; }
 rm -rf "${TMP_CERTS}"
 
-echo "OK: helm lint + template smoke passed"
+echo "==> operator packaging smoke"
+"${ROOT}/scripts/operator/smoke.sh"
+
+echo "OK: helm lint + template + operator smoke passed"

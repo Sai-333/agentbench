@@ -9,7 +9,7 @@ Packages the raw Kubernetes manifests under `deploy/kubernetes/` as a values-dri
 | Claim | Reality |
 |---|---|
 | Helm chart for AgentBench apps | **Yes** — install/upgrade/uninstall |
-| Operators / CRDs | **No** — out of scope |
+| Operators / CRDs | **Separate** — see `deploy/operator/` (`AgentBenchInstance` + helm-operator) |
 | Certified multi-tenant SaaS | **Not claimed** |
 | NetworkPolicies | **Yes** — default-deny + allow-needed (`networkPolicy.enabled`, default true) |
 | mTLS between services | **Optional** — `mtls.enabled` (default off); cert-manager Certificates **or** openssl Secrets; Spring Boot PEM SSL; not a service mesh |
@@ -107,3 +107,5 @@ CI runs the same smoke job (no cluster required).
 ## Relation to raw manifests
 
 `deploy/kubernetes/` remains for `kubectl apply -k` (includes `networkpolicy.yaml`). This chart wraps the same components with Helm values (images, replicas, resources, optional ingress, NetworkPolicies, secret name). Keep both in sync when changing probes, env keys, or policy ports.
+
+For CR-driven install/reconcile of this chart, see `deploy/operator/` (`AgentBenchInstance` + helm-operator). Direct `helm upgrade --install` remains fully supported.

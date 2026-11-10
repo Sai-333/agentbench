@@ -1,0 +1,20 @@
+# AgentBench Helm-operator skeleton (Operator SDK / Kubebuilder-style marker).
+# Domain: agentbench.io
+# Layout: helm (watches.yaml → deploy/helm/agentbench)
+# Kind: AgentBenchInstance (v1alpha1)
+# This is intentionally lean — no unfinished Go manager tree.
+domain: agentbench.io
+layout:
+  - helm.sdk.operatorframework.io/v1
+projectName: agentbench-operator
+version: "3"
+plugins:
+  helm.sdk.operatorframework.io/v1: {}
+resources:
+  - api:
+      crdVersion: v1
+      namespaced: true
+    domain: agentbench.io
+    group: agentbench
+    kind: AgentBenchInstance
+    version: v1alpha1

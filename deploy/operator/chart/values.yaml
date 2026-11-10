@@ -1,0 +1,39 @@
+# AgentBench operator chart values.
+# Build the image first (from repo root):
+#   docker build -f deploy/operator/Dockerfile -t agentbench-operator:dev .
+
+nameOverride: ""
+fullnameOverride: ""
+
+image:
+  repository: agentbench-operator
+  tag: dev
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+
+replicaCount: 1
+
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}
+
+rbac:
+  create: true
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 64Mi
+  limits:
+    cpu: 500m
+    memory: 256Mi
+
+# Watch all namespaces (helm-operator default). Set to a single namespace
+# to limit which AgentBenchInstance CRs this operator reconciles.
+watchNamespace: ""
+
+nodeSelector: {}
+tolerations: []
+affinity: {}

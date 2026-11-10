@@ -1,0 +1,15 @@
+AgentBench operator installed in namespace {{ .Release.Namespace }}.
+
+1. Ensure the operator image is available:
+     docker build -f deploy/operator/Dockerfile -t {{ .Values.image.repository }}:{{ .Values.image.tag }} .
+
+2. Create a target namespace (if needed) and apply a sample CR:
+     kubectl create namespace agentbench --dry-run=client -o yaml | kubectl apply -f -
+     kubectl apply -f deploy/operator/samples/agentbenchinstance.yaml
+
+3. Watch reconcile:
+     kubectl get agentbenchinstances -A
+     kubectl get all -n agentbench
+
+Honest limits: installs/reconciles the app Helm chart via AgentBenchInstance;
+not certified multi-cloud / multi-tenant SaaS. Mac Compose remains the primary local path.
