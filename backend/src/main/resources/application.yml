@@ -168,6 +168,13 @@ agentbench:
       default-timeout-sec: ${AGENTBENCH_OPENAI_TIMEOUT_SEC:60}
     http:
       default-timeout-sec: ${AGENTBENCH_HTTP_AGENT_TIMEOUT_SEC:60}
+    coding-cli:
+      # Default binary when agent config omits binary/command/argv (must exist in runner image).
+      default-binary: ${AGENTBENCH_CODING_CLI_BINARY:coding-agent}
+      default-patch-file: ${AGENTBENCH_CODING_CLI_PATCH_FILE:.agentbench/patch.diff}
+      default-timeout-sec: ${AGENTBENCH_CODING_CLI_TIMEOUT_SEC:60}
+      # Network off by default; enable per-agent via config.networkEnabled when the CLI needs egress.
+      network-enabled-by-default: ${AGENTBENCH_CODING_CLI_NETWORK:false}
 
 logging:
   structured:

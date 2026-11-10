@@ -629,9 +629,24 @@ function App() {
     if (model) config.model = model
     if (baseUrl) config.baseUrl = baseUrl
     if (endpoint) config.endpoint = endpoint
-    if (adapterType === 'OPENAI_COMPATIBLE' || adapterType === 'HTTP') {
+    if (adapterType === 'OPENAI_COMPATIBLE' || adapterType === 'HTTP' || adapterType === 'CODING_CLI') {
       config.maxRetries = Number(form.get('maxRetries') || 2)
       config.timeoutSec = Number(form.get('timeoutSec') || 60)
+    }
+    const codingBinary = String(form.get('codingBinary') || '')
+    const codingImage = String(form.get('codingImage') || '')
+    const codingArgv = String(form.get('codingArgv') || '')
+    if (adapterType === 'CODING_CLI') {
+      if (codingBinary) config.binary = codingBinary
+      if (codingImage) config.image = codingImage
+      if (codingArgv.trim()) {
+        try {
+          const parsed = JSON.parse(codingArgv) as unknown
+          if (Array.isArray(parsed)) config.argv = parsed
+        } catch {
+          // leave argv unset when JSON is invalid; server will use binary/defaults
+        }
+      }
     }
     try {
       const created = await api<Agent>(`/api/v1/orgs/${selectedOrgId}/agents`, {
@@ -1455,7 +1470,7 @@ function App() {
                             <option value="FAKE">FAKE (deterministic CI)</option>
                             <option value="OPENAI_COMPATIBLE">OPENAI_COMPATIBLE</option>
                             <option value="HTTP">HTTP webhook</option>
-                            <option value="CODING_CLI">CODING_CLI (skeleton)</option>
+                            <option value="CODING_CLI">CODING_CLI (isolator)</option>
                           </select>
                         </label>
                         <label>
@@ -1480,6 +1495,18 @@ function App() {
                         <label>
                           HTTP endpoint
                           <input name="endpoint" placeholder="https://agent.example/invoke" />
+                        </label>
+                        <label>
+                          CODING_CLI binary
+                          <input name="codingBinary" placeholder="coding-agent" />
+                        </label>
+                        <label>
+                          CODING_CLI image (optional)
+                          <input name="codingImage" placeholder="ghcr.io/example/coding-agent:tag" />
+                        </label>
+                        <label>
+                          CODING_CLI argv JSON (optional)
+                          <input name="codingArgv" placeholder='["coding-agent","--prompt-file","{{promptFile}}"]' />
                         </label>
                         <label>
                           Max retries

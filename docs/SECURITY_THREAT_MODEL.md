@@ -80,7 +80,7 @@
 ## 6. Explicit non-claim (mandatory)
 
 **Docker-only isolation is NOT production-safe for arbitrary untrusted workloads.**  
-Shared-kernel breakout residual risk remains on the default path. Prefer **`agentbench.execution.mode=gvisor`** on Linux hosts with `runsc` for stronger user-space kernel isolation (ADR-004). gVisor is **opt-in and fail-fast** when unavailable; Mac Compose stays on Docker. **Firecracker is not implemented.** Neither Docker nor gVisor is claimed as certified hostile multi-tenant SaaS security.
+Shared-kernel breakout residual risk remains on the default path. Prefer **`agentbench.execution.mode=gvisor`** on Linux hosts with `runsc` for stronger user-space kernel isolation (ADR-004). gVisor is **opt-in and fail-fast** when unavailable; Mac Compose stays on Docker. **Firecracker is not implemented.** Neither Docker nor gVisor is claimed as certified hostile multi-tenant SaaS security. **CODING_CLI** runs inside the same isolator (not host shell); residual risk matches the active runtime — do not treat CLI agents as a stronger boundary than Docker/gVisor.
 
 ---
 

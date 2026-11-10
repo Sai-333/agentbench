@@ -74,6 +74,35 @@ public class ExecutionIsolatorService {
             Double cpuLimit,
             Integer timeoutSec,
             boolean networkEnabled) {
+        return runStage(
+                evaluationId,
+                stage,
+                workspace,
+                hiddenFixturesDir,
+                command,
+                memoryMb,
+                cpuLimit,
+                timeoutSec,
+                networkEnabled,
+                null,
+                Map.of());
+    }
+
+    /**
+     * Full isolator run with optional image override and env (used by CODING_CLI agent stage).
+     */
+    public IsolationResult runStage(
+            UUID evaluationId,
+            ExecutionStage stage,
+            Path workspace,
+            Path hiddenFixturesDir,
+            List<String> command,
+            Integer memoryMb,
+            Double cpuLimit,
+            Integer timeoutSec,
+            boolean networkEnabled,
+            String imageOverride,
+            Map<String, String> env) {
         if (stage != ExecutionStage.HIDDEN_TESTS && hiddenFixturesDir != null) {
             throw new IllegalArgumentException("Hidden fixtures only allowed for HIDDEN_TESTS stage");
         }
@@ -90,9 +119,15 @@ public class ExecutionIsolatorService {
                 properties.getDefaultPidsLimit(),
                 networkEnabled || properties.isNetworkEnabledByDefault(),
                 properties.isReadOnlyRootFs(),
-                Map.of()
+                env == null ? Map.of() : env,
+                imageOverride
         );
         return isolator.run(spec);
+    }
+
+    /** Direct run when the caller already built a hardened {@link IsolationSpec}. */
+    public IsolationResult run(IsolationSpec spec) {
+        return activeIsolator().run(spec);
     }
 
     public void cleanupEvaluation(UUID evaluationId) {

@@ -12,6 +12,7 @@ import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -92,5 +93,32 @@ class DockerRuntimeIsolatorTest {
                 Map.of()
         );
         assertThrows(IllegalArgumentException.class, () -> DockerRuntimeIsolator.assertSafeSpec(spec));
+    }
+
+    @Test
+    void imageOverrideReplacesDefaultRunnerImage() {
+        ExecutionProperties props = new ExecutionProperties();
+        props.setImage("eclipse-temurin:21-jre-alpine");
+        DockerRuntimeIsolator isolator = new DockerRuntimeIsolator(props);
+
+        IsolationSpec spec = new IsolationSpec(
+                "ab-test-agent",
+                ExecutionStage.AGENT,
+                temp,
+                null,
+                List.of("coding-agent", "--help"),
+                Duration.ofSeconds(30),
+                256,
+                0.5,
+                64,
+                false,
+                true,
+                Map.of("AGENTBENCH_PATCH_FILE", "/workspace/.agentbench/patch.diff"),
+                "ghcr.io/example/coding-agent:1.2.3"
+        );
+        List<String> cmd = isolator.buildDockerCommand(spec);
+        assertTrue(cmd.contains("ghcr.io/example/coding-agent:1.2.3"));
+        assertFalse(String.join(" ", cmd).contains("eclipse-temurin:21-jre-alpine"));
+        assertEquals("ghcr.io/example/coding-agent:1.2.3", isolator.resolveImage(spec));
     }
 }

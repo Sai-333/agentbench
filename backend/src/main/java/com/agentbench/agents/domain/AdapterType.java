@@ -12,7 +12,7 @@ public enum AdapterType {
     OPENAI_COMPATIBLE,
     /** Generic HTTP webhook-style agent endpoint. */
     HTTP,
-    /** Coding-agent CLI adapter (skeleton in M5; full isolation deferred to later milestones). */
+    /** Coding-agent CLI adapter — runs via RuntimeIsolator (Docker/gVisor/local). */
     CODING_CLI,
     /**
      * Legacy alias accepted at API boundary; persisted/normalized to {@link #OPENAI_COMPATIBLE}.
