@@ -11,8 +11,25 @@ Packages the raw Kubernetes manifests under `deploy/kubernetes/` as a values-dri
 | Helm chart for AgentBench apps | **Yes** — install/upgrade/uninstall |
 | Operators / CRDs | **No** — out of scope |
 | Certified multi-tenant SaaS | **Not claimed** |
-| NetworkPolicies / mTLS | **Not in this chart** (later) |
+| NetworkPolicies | **Yes** — default-deny + allow-needed (`networkPolicy.enabled`, default true) |
+| mTLS / WORM audit | **Not in this chart** (deferred) |
 | In-cluster Postgres/Redis/Rabbit | **Optional lab/demo only** — single replica, non-HA |
+
+## NetworkPolicies
+
+On by default. Renders default-deny for release pods, DNS egress, backend/worker/frontend allow-lists, and (when `dependencies.*.enabled`) data-plane ingress only from backend+worker.
+
+```bash
+# Explicit enable (default)
+helm upgrade --install agentbench deploy/helm/agentbench -n agentbench \
+  --set networkPolicy.enabled=true
+
+# Disable
+helm upgrade agentbench deploy/helm/agentbench -n agentbench \
+  --set networkPolicy.enabled=false
+```
+
+See `docs/DEPLOYMENT.md` §3c for the allow/deny table and residual risk (L3/L4 only; not mTLS).
 
 ## Dependency strategy
 
@@ -68,4 +85,4 @@ CI runs the same smoke job (no cluster required).
 
 ## Relation to raw manifests
 
-`deploy/kubernetes/` remains for `kubectl apply -k`. This chart wraps the same components with Helm values (images, replicas, resources, optional ingress, secret name). Keep both in sync when changing probes or env keys.
+`deploy/kubernetes/` remains for `kubectl apply -k` (includes `networkpolicy.yaml`). This chart wraps the same components with Helm values (images, replicas, resources, optional ingress, NetworkPolicies, secret name). Keep both in sync when changing probes, env keys, or policy ports.

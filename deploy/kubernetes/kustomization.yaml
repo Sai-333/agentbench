@@ -8,5 +8,6 @@ resources:
   - backend-deployment.yaml
   - worker-deployment.yaml
   - frontend-deployment.yaml
+  - networkpolicy.yaml
 commonLabels:
   app.kubernetes.io/part-of: agentbench

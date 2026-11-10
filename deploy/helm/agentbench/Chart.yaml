@@ -6,7 +6,7 @@ description: >
   not a certified multi-tenant SaaS chart. Postgres/Redis/RabbitMQ are
   external by default (or optional in-cluster demo Deployments).
 type: application
-version: 0.1.0
+version: 0.2.0
 appVersion: "0.9.0"
 keywords:
   - agentbench
