@@ -14,7 +14,12 @@ Default is EXTERNAL Postgres/Redis/Rabbit — set config.* hosts or enable
 dependencies.*.enabled for lab/demo only (non-HA, not operators).
 
 NetworkPolicies: enabled={{ .Values.networkPolicy.enabled }}
-  (default-deny + allow-needed; requires enforcing CNI; not mTLS / not WORM)
+  (default-deny + allow-needed; requires enforcing CNI; L3/L4 only)
+
+mTLS (east-west): enabled={{ .Values.mtls.enabled }}
+  cert-manager Certificates: {{ and .Values.mtls.enabled .Values.mtls.certManager.enabled }}
+  clientAuth={{ .Values.mtls.clientAuth }}
+  (optional; not a service mesh; Mac Compose stays non-mTLS)
 
 Honest limits: not certified multi-tenant SaaS; no CRDs/operators.
 Prefer Docker Compose on Mac for day-to-day local work.
@@ -22,3 +27,4 @@ Prefer Docker Compose on Mac for day-to-day local work.
 Upgrade:  helm upgrade {{ .Release.Name }} deploy/helm/agentbench -n {{ include "agentbench.namespace" . }}
 Uninstall: helm uninstall {{ .Release.Name }} -n {{ include "agentbench.namespace" . }}
 Smoke:     ./scripts/helm/smoke.sh
+mTLS openssl: ./scripts/helm/generate-mtls-certs.sh --help

@@ -12,7 +12,7 @@ Packages the raw Kubernetes manifests under `deploy/kubernetes/` as a values-dri
 | Operators / CRDs | **No** — out of scope |
 | Certified multi-tenant SaaS | **Not claimed** |
 | NetworkPolicies | **Yes** — default-deny + allow-needed (`networkPolicy.enabled`, default true) |
-| mTLS | **Not in this chart** (deferred) |
+| mTLS between services | **Optional** — `mtls.enabled` (default off); cert-manager Certificates **or** openssl Secrets; Spring Boot PEM SSL; not a service mesh |
 | WORM audit | **App/DB concern** — Postgres append-only + hash chain (`docs/AUDIT_WORM.md`); chart does not configure S3 Object Lock |
 | In-cluster Postgres/Redis/Rabbit | **Optional lab/demo only** — single replica, non-HA |
 
@@ -30,7 +30,27 @@ helm upgrade agentbench deploy/helm/agentbench -n agentbench \
   --set networkPolicy.enabled=false
 ```
 
-See `docs/DEPLOYMENT.md` §3c for the allow/deny table and residual risk (L3/L4 only; not mTLS).
+See `docs/DEPLOYMENT.md` §3c for the allow/deny table and residual risk (L3/L4 only). Pair with §3d mTLS for encryption in transit.
+
+## Optional mTLS (east-west)
+
+**Default off** — Mac Compose and the chart default stay plaintext HTTP. Enable only on Kubernetes:
+
+```bash
+# A) openssl Secrets (no cert-manager required)
+./scripts/helm/generate-mtls-certs.sh --namespace agentbench --release agentbench --apply
+helm upgrade --install agentbench deploy/helm/agentbench -n agentbench \
+  --set mtls.enabled=true
+
+# B) cert-manager (cluster must have cert-manager CRDs/controllers)
+helm upgrade --install agentbench deploy/helm/agentbench -n agentbench \
+  --set mtls.enabled=true \
+  --set mtls.certManager.enabled=true
+```
+
+What it does: mounts PEM Secrets on API/worker (`SERVER_SSL_*`), switches probes to HTTPS, and (when frontend is enabled) overlays an nginx ConfigMap that proxies `/api` to the backend Service with a client certificate.
+
+**Residual (honest):** not Istio/Linkerd; not AMQPS for RabbitMQ (API↔worker work still goes through the queue); default `clientAuth=want` so kubelet probes work without a client cert; edge Ingress TLS is separate. See `docs/DEPLOYMENT.md` §3d.
 
 ## Dependency strategy
 

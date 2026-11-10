@@ -64,7 +64,7 @@ Single-host Ampere A1 runbook (VM shape, ports, Docker, secrets, health checks, 
 | Local runtime | Docker Compose (+ `docker-compose.prod.yml`) |
 | Artifacts | `ArtifactStorage`: local volume (default) or S3-compatible (`ARTIFACT_STORAGE=s3`, Compose `--profile s3` / MinIO) |
 | Eval isolation | Hardened Docker via `RuntimeIsolator` (default); optional `mode=gvisor` (`docker --runtime=runsc`); local CI fallback |
-| K8s | Templates under `deploy/kubernetes/` (incl. NetworkPolicies); Helm chart `deploy/helm/agentbench/` (no real secrets; not operators; not mTLS) |
+| K8s | Templates under `deploy/kubernetes/` (incl. NetworkPolicies); Helm chart `deploy/helm/agentbench/` (optional `mtls.*`; no real secrets; not operators; not a service mesh) |
 
 ## Architecture
 

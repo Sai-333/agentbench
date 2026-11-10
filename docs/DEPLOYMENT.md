@@ -131,7 +131,7 @@ helm uninstall agentbench -n agentbench
 
 **Dependency strategy:** default is **external** Postgres / Redis / RabbitMQ (`config.*` hosts). Optional `dependencies.*.enabled` spins single-replica lab Deployments only — not HA, not operators. Prefer `secrets.existingSecret` in real clusters.
 
-**Honest limits:** not certified multi-tenant SaaS; no CRDs/operators; NetworkPolicies are included (opt-out); mTLS remains deferred. Postgres WORM/append-only audit landed (`docs/AUDIT_WORM.md`) — not AWS Object Lock. See `deploy/helm/agentbench/README.md` and §3c.
+**Honest limits:** not certified multi-tenant SaaS; no CRDs/operators; NetworkPolicies are included (opt-out); optional east-west mTLS is opt-in (§3d). Postgres WORM/append-only audit landed (`docs/AUDIT_WORM.md`) — not AWS Object Lock. See `deploy/helm/agentbench/README.md` and §3c–§3d.
 
 ## 3c. NetworkPolicies
 
@@ -170,7 +170,36 @@ helm upgrade agentbench deploy/helm/agentbench -n agentbench \
 kubectl apply -k deploy/kubernetes/
 ```
 
-**Residual risk (honest):** NetworkPolicy is L3/L4 only — not mTLS, not identity-aware authz between services. Audit WORM is Postgres-side (triggers + hash chain), not Object Lock — see `docs/AUDIT_WORM.md`. `allowExternalDataPlane` / `allowWorldHttps` intentionally permit broad destinations on known ports so external managed services and OIDC/S3/LLM calls work; operators should replace those with CIDR/`namespaceSelector` rules via `networkPolicy.egress.extra` and `networkPolicy.ingress.from` before hostile multi-tenant use. Evaluation containers still use Docker `--network none` (or gVisor) independently of these cluster policies.
+**Residual risk (honest):** NetworkPolicy is L3/L4 only — not identity-aware authz between services. Pair with optional mTLS (§3d) for encryption in transit on HTTP surfaces. Audit WORM is Postgres-side (triggers + hash chain), not Object Lock — see `docs/AUDIT_WORM.md`. `allowExternalDataPlane` / `allowWorldHttps` intentionally permit broad destinations on known ports so external managed services and OIDC/S3/LLM calls work; operators should replace those with CIDR/`namespaceSelector` rules via `networkPolicy.egress.extra` and `networkPolicy.ingress.from` before hostile multi-tenant use. Evaluation containers still use Docker `--network none` (or gVisor) independently of these cluster policies.
+
+## 3d. Optional mTLS (Helm / Kubernetes)
+
+East-west TLS for AgentBench **HTTP** surfaces (API + worker actuator, frontend→API nginx proxy). **Default off.** Mac Docker Compose stays non-mTLS.
+
+| Piece | Behavior when `mtls.enabled=true` |
+|---|---|
+| Spring Boot API / worker | `SERVER_SSL_*` PEM mount (`tls.crt` / `tls.key` / `ca.crt`); probes use `scheme: HTTPS` |
+| Frontend | ConfigMap overlays nginx to `proxy_pass https://…-backend` with client cert + CA verify |
+| NetworkPolicy | Frontend may egress to backend:8080 (in-cluster proxy); Ingress path-split still preferred |
+| Certs | **A)** `mtls.certManager.enabled=true` → Issuer + Certificate CRs, or **B)** `./scripts/helm/generate-mtls-certs.sh` → TLS Secrets |
+
+```bash
+# openssl path (no cert-manager; no cluster needed until --apply)
+./scripts/helm/generate-mtls-certs.sh --namespace agentbench --release agentbench --apply
+helm upgrade --install agentbench deploy/helm/agentbench -n agentbench \
+  --set mtls.enabled=true
+
+# cert-manager path (cluster must already run cert-manager)
+helm upgrade --install agentbench deploy/helm/agentbench -n agentbench \
+  --set mtls.enabled=true \
+  --set mtls.certManager.enabled=true
+```
+
+`clientAuth` defaults to `want` so kubelet `httpsGet` probes succeed without presenting a client certificate. Set `mtls.clientAuth=need` only if you also change probes (e.g. exec + curl with mounted client cert) — kubelet cannot easily attach client certs to `httpGet`.
+
+**Frontend notes:** With Ingress, route `/api` to the backend Service and `/` to the frontend (edge TLS ≠ pod mTLS). The nginx overlay matters when the UI proxies `/api` in-cluster. Browser→frontend remains HTTP unless you terminate TLS at Ingress.
+
+**Residual (honest):** This is **not** a service mesh product (no Istio/Linkerd, no automatic sidecar identity). API↔worker **evaluation traffic** is still primarily RabbitMQ (AMQP), not HTTPS — AMQPS / mesh mTLS for the broker is out of scope. Not certified multi-tenant SaaS. Chart CI only `helm lint` / `helm template` (+ openssl script dry-run); it does not spin a live cluster.
 
 ## 4. Graceful shutdown
 

@@ -43,6 +43,9 @@ spec:
           env:
             - name: AGENTBENCH_EVAL_LISTENER_ENABLED
               value: {{ .Values.backend.evalListenerEnabled | quote }}
+            {{- if .Values.mtls.enabled }}
+            {{- include "agentbench.mtls.springSslEnv" . | nindent 12 }}
+            {{- end }}
             {{- with .Values.backend.extraEnv }}
             {{- toYaml . | nindent 12 }}
             {{- end }}
@@ -50,6 +53,9 @@ spec:
             httpGet:
               path: /actuator/health/readiness
               port: http
+              {{- if .Values.mtls.enabled }}
+              scheme: HTTPS
+              {{- end }}
             initialDelaySeconds: 20
             periodSeconds: 10
             failureThreshold: 6
@@ -57,6 +63,9 @@ spec:
             httpGet:
               path: /actuator/health/liveness
               port: http
+              {{- if .Values.mtls.enabled }}
+              scheme: HTTPS
+              {{- end }}
             initialDelaySeconds: 40
             periodSeconds: 20
           lifecycle:
@@ -73,9 +82,26 @@ spec:
           volumeMounts:
             - name: artifacts
               mountPath: /var/agentbench/artifacts
+            {{- if .Values.mtls.enabled }}
+            - name: mtls
+              mountPath: {{ include "agentbench.mtls.mountPath" . }}
+              readOnly: true
+            {{- end }}
       volumes:
         - name: artifacts
           emptyDir: {}
+        {{- if .Values.mtls.enabled }}
+        - name: mtls
+          secret:
+            secretName: {{ include "agentbench.mtls.backendSecretName" . }}
+            items:
+              - key: tls.crt
+                path: tls.crt
+              - key: tls.key
+                path: tls.key
+              - key: ca.crt
+                path: ca.crt
+        {{- end }}
 ---
 apiVersion: v1
 kind: Service

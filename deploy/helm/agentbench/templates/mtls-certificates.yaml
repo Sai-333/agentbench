@@ -1,0 +1,147 @@
+{{- if and .Values.mtls.enabled .Values.mtls.certManager.enabled }}
+{{- /*
+  Optional cert-manager path. Requires cert-manager CRDs in the cluster.
+  helm template / lint works without a live cluster; apply needs cert-manager installed.
+  Alternative: ./scripts/helm/generate-mtls-certs.sh (openssl → Secrets).
+*/ -}}
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: {{ include "agentbench.fullname" . }}-mtls-selfsigned
+  namespace: {{ include "agentbench.namespace" . }}
+  labels:
+    {{- include "agentbench.labels" . | nindent 4 }}
+    app.kubernetes.io/component: mtls
+spec:
+  selfSigned: {}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: {{ include "agentbench.fullname" . }}-mtls-ca
+  namespace: {{ include "agentbench.namespace" . }}
+  labels:
+    {{- include "agentbench.labels" . | nindent 4 }}
+    app.kubernetes.io/component: mtls
+spec:
+  isCA: true
+  commonName: agentbench-mtls-ca
+  secretName: {{ include "agentbench.mtls.caSecretName" . }}
+  duration: {{ .Values.mtls.certManager.duration | quote }}
+  renewBefore: {{ .Values.mtls.certManager.renewBefore | quote }}
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+  issuerRef:
+    name: {{ include "agentbench.fullname" . }}-mtls-selfsigned
+    kind: Issuer
+    group: cert-manager.io
+---
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: {{ include "agentbench.fullname" . }}-mtls-ca
+  namespace: {{ include "agentbench.namespace" . }}
+  labels:
+    {{- include "agentbench.labels" . | nindent 4 }}
+    app.kubernetes.io/component: mtls
+spec:
+  ca:
+    secretName: {{ include "agentbench.mtls.caSecretName" . }}
+---
+{{- if .Values.backend.enabled }}
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: {{ include "agentbench.fullname" . }}-mtls-backend
+  namespace: {{ include "agentbench.namespace" . }}
+  labels:
+    {{- include "agentbench.labels" . | nindent 4 }}
+    app.kubernetes.io/component: backend
+spec:
+  secretName: {{ include "agentbench.mtls.backendSecretName" . }}
+  duration: {{ .Values.mtls.certManager.duration | quote }}
+  renewBefore: {{ .Values.mtls.certManager.renewBefore | quote }}
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+  usages:
+    - digital signature
+    - key encipherment
+    - server auth
+    - client auth
+  dnsNames:
+    - {{ include "agentbench.backend.fullname" . | quote }}
+    - {{ printf "%s.%s" (include "agentbench.backend.fullname" .) (include "agentbench.namespace" .) | quote }}
+    - {{ printf "%s.%s.svc" (include "agentbench.backend.fullname" .) (include "agentbench.namespace" .) | quote }}
+    - {{ printf "%s.%s.svc.cluster.local" (include "agentbench.backend.fullname" .) (include "agentbench.namespace" .) | quote }}
+    - localhost
+  issuerRef:
+    name: {{ include "agentbench.fullname" . }}-mtls-ca
+    kind: Issuer
+    group: cert-manager.io
+---
+{{- end }}
+{{- if .Values.worker.enabled }}
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: {{ include "agentbench.fullname" . }}-mtls-worker
+  namespace: {{ include "agentbench.namespace" . }}
+  labels:
+    {{- include "agentbench.labels" . | nindent 4 }}
+    app.kubernetes.io/component: worker
+spec:
+  secretName: {{ include "agentbench.mtls.workerSecretName" . }}
+  duration: {{ .Values.mtls.certManager.duration | quote }}
+  renewBefore: {{ .Values.mtls.certManager.renewBefore | quote }}
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+  usages:
+    - digital signature
+    - key encipherment
+    - server auth
+    - client auth
+  dnsNames:
+    - {{ include "agentbench.worker.fullname" . | quote }}
+    - {{ printf "%s.%s" (include "agentbench.worker.fullname" .) (include "agentbench.namespace" .) | quote }}
+    - {{ printf "%s.%s.svc" (include "agentbench.worker.fullname" .) (include "agentbench.namespace" .) | quote }}
+    - {{ printf "%s.%s.svc.cluster.local" (include "agentbench.worker.fullname" .) (include "agentbench.namespace" .) | quote }}
+    - localhost
+  issuerRef:
+    name: {{ include "agentbench.fullname" . }}-mtls-ca
+    kind: Issuer
+    group: cert-manager.io
+---
+{{- end }}
+{{- if .Values.frontend.enabled }}
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: {{ include "agentbench.fullname" . }}-mtls-frontend
+  namespace: {{ include "agentbench.namespace" . }}
+  labels:
+    {{- include "agentbench.labels" . | nindent 4 }}
+    app.kubernetes.io/component: frontend
+spec:
+  secretName: {{ include "agentbench.mtls.frontendSecretName" . }}
+  duration: {{ .Values.mtls.certManager.duration | quote }}
+  renewBefore: {{ .Values.mtls.certManager.renewBefore | quote }}
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+  usages:
+    - digital signature
+    - key encipherment
+    - client auth
+  dnsNames:
+    - {{ include "agentbench.frontend.fullname" . | quote }}
+    - {{ printf "%s.%s" (include "agentbench.frontend.fullname" .) (include "agentbench.namespace" .) | quote }}
+    - localhost
+  issuerRef:
+    name: {{ include "agentbench.fullname" . }}-mtls-ca
+    kind: Issuer
+    group: cert-manager.io
+{{- end }}
+{{- end }}
