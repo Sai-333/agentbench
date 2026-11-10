@@ -95,9 +95,16 @@ public class AuthController {
     }
 
     @GetMapping("/auth/saml/login")
-    @Operation(summary = "Start SAML 2.0 SP-initiated login (browser redirect to IdP)")
+    @Operation(summary = "Start SAML 2.0 SP-initiated login via env/props fallback IdP")
     public ResponseEntity<Void> samlLogin() {
         URI location = samlAuthService.beginLogin();
+        return ResponseEntity.status(HttpStatus.FOUND).header(HttpHeaders.LOCATION, location.toString()).build();
+    }
+
+    @GetMapping("/auth/saml/login/{registrationId}")
+    @Operation(summary = "Start SAML 2.0 SP-initiated login for a specific IdP registration")
+    public ResponseEntity<Void> samlLoginByRegistration(@PathVariable("registrationId") String registrationId) {
+        URI location = samlAuthService.beginLogin(registrationId);
         return ResponseEntity.status(HttpStatus.FOUND).header(HttpHeaders.LOCATION, location.toString()).build();
     }
 

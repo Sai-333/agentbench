@@ -65,6 +65,33 @@ public class OidcLoginStateRepository {
         return rows.stream().findFirst();
     }
 
+    /**
+     * Consume a SAML RelayState — provider is {@code saml} (env fallback) or {@code saml:<registrationId>}.
+     */
+    public Optional<OidcLoginState> consumeSaml(String state) {
+        Instant now = Instant.now();
+        var rows = jdbc.query("""
+                UPDATE identity.oidc_login_states
+                SET consumed_at = :now
+                WHERE state = :state
+                  AND (provider = 'saml' OR provider LIKE 'saml:%')
+                  AND consumed_at IS NULL
+                  AND expires_at > :now
+                RETURNING state, provider, nonce, redirect_to, expires_at
+                """,
+                new MapSqlParameterSource()
+                        .addValue("state", state)
+                        .addValue("now", Timestamp.from(now)),
+                (rs, rowNum) -> new OidcLoginState(
+                        rs.getString("state"),
+                        rs.getString("provider"),
+                        rs.getString("nonce"),
+                        rs.getString("redirect_to"),
+                        rs.getTimestamp("expires_at").toInstant()
+                ));
+        return rows.stream().findFirst();
+    }
+
     public int deleteExpired(Instant before) {
         return jdbc.update("""
                 DELETE FROM identity.oidc_login_states

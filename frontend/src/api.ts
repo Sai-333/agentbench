@@ -152,6 +152,20 @@ export type SecretMeta = {
   rotatedAt: string | null
 }
 
+export type SamlIdp = {
+  id: string
+  orgId: string
+  registrationId: string
+  displayName: string
+  metadataUrl: string | null
+  hasMetadataXml: boolean
+  attrEmail: string
+  attrDisplayName: string
+  enabled: boolean
+  createdAt: string
+  updatedAt: string
+}
+
 export type Evaluation = {
   id: string
   orgId: string

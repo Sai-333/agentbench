@@ -42,9 +42,20 @@ public class SamlResponseProcessor {
             RelyingPartyRegistration registration,
             String samlResponseParam,
             String authnRequestId) {
+        return process(registration, samlResponseParam, authnRequestId, properties.getAttributeMapping());
+    }
+
+    public SamlUserProfile process(
+            RelyingPartyRegistration registration,
+            String samlResponseParam,
+            String authnRequestId,
+            SamlProperties.AttributeMapping attributeMapping) {
         if (samlResponseParam == null || samlResponseParam.isBlank()) {
             throw ApiException.validation("SAMLResponse is required");
         }
+        SamlProperties.AttributeMapping mapping = attributeMapping != null
+                ? attributeMapping
+                : properties.getAttributeMapping();
         String responseXml = decodeSamlResponse(samlResponseParam.trim());
         // samlRequest body is not re-validated here; id is used for InResponseTo matching.
         Saml2RedirectAuthenticationRequest authenticationRequest = Saml2RedirectAuthenticationRequest
@@ -60,7 +71,7 @@ public class SamlResponseProcessor {
             if (!(authentication.getPrincipal() instanceof Saml2AuthenticatedPrincipal principal)) {
                 throw ApiException.unauthorized("SAML authentication failed");
             }
-            return toProfile(principal);
+            return toProfile(principal, mapping);
         } catch (Saml2AuthenticationException ex) {
             Saml2Error error = ex.getSaml2Error();
             log.warn("SAML response rejected: code={} description={}",
@@ -75,13 +86,15 @@ public class SamlResponseProcessor {
         }
     }
 
-    private SamlUserProfile toProfile(Saml2AuthenticatedPrincipal principal) {
+    private SamlUserProfile toProfile(
+            Saml2AuthenticatedPrincipal principal,
+            SamlProperties.AttributeMapping mapping) {
         String subject = principal.getName();
         if (subject == null || subject.isBlank()) {
             throw ApiException.unauthorized("SAML assertion missing NameID");
         }
-        String emailAttr = properties.getAttributeMapping().getEmail();
-        String nameAttr = properties.getAttributeMapping().getDisplayName();
+        String emailAttr = mapping.getEmail();
+        String nameAttr = mapping.getDisplayName();
         String email = firstAttribute(principal, emailAttr);
         if (email == null || email.isBlank()) {
             // Common enterprise fallback: NameID is an emailAddress format.

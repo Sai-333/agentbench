@@ -24,6 +24,7 @@ import type {
   Org,
   OverviewResponse,
   Project,
+  SamlIdp,
   SecretMeta,
   SystemHealthResponse,
   Task,
@@ -46,6 +47,7 @@ type WorkspaceTab =
   | 'benchmarks'
   | 'evaluations'
   | 'agents'
+  | 'sso'
   | 'leaderboard'
   | 'compare'
   | 'costs'
@@ -102,6 +104,8 @@ function App() {
   const [selectedTask, setSelectedTask] = useState<Task | null>(null)
   const [agents, setAgents] = useState<Agent[]>([])
   const [secrets, setSecrets] = useState<SecretMeta[]>([])
+  const [samlIdps, setSamlIdps] = useState<SamlIdp[]>([])
+  const [selectedSamlIdp, setSelectedSamlIdp] = useState<SamlIdp | null>(null)
   const [evaluations, setEvaluations] = useState<Evaluation[]>([])
   const [selectedEvaluation, setSelectedEvaluation] = useState<EvaluationDetail | null>(null)
   const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null)
@@ -185,6 +189,17 @@ function App() {
       setSecrets(secretList)
     } catch {
       setSecrets([])
+    }
+  }, [])
+
+  const loadSamlIdps = useCallback(async (orgId: string) => {
+    try {
+      const list = await api<SamlIdp[]>(`/api/v1/orgs/${orgId}/saml/idps`)
+      setSamlIdps(list)
+      setSelectedSamlIdp((prev) => list.find((i) => i.id === prev?.id) || list[0] || null)
+    } catch {
+      setSamlIdps([])
+      setSelectedSamlIdp(null)
     }
   }, [])
 
@@ -306,6 +321,7 @@ function App() {
       await loadBenchmarks(preferred)
       await loadEvaluations(preferred)
       await loadAgents(preferred)
+      await loadSamlIdps(preferred)
       await loadOverview(preferred)
       await loadCosts(preferred)
       await loadHealth(preferred)
@@ -318,6 +334,8 @@ function App() {
       setSelectedTask(null)
       setAgents([])
       setSecrets([])
+      setSamlIdps([])
+      setSelectedSamlIdp(null)
       setEvaluations([])
       setSelectedEvaluation(null)
       setSelectedAgent(null)
@@ -333,6 +351,7 @@ function App() {
     loadBenchmarks,
     loadEvaluations,
     loadAgents,
+    loadSamlIdps,
     loadOverview,
     loadCosts,
     loadHealth,
@@ -454,6 +473,8 @@ function App() {
       setSelectedTask(null)
       setAgents([])
       setSecrets([])
+      setSamlIdps([])
+      setSelectedSamlIdp(null)
       setEvaluations([])
       setSelectedEvaluation(null)
       setSelectedAgent(null)
@@ -495,6 +516,7 @@ function App() {
       await loadBenchmarks(orgId)
       await loadEvaluations(orgId)
       await loadAgents(orgId)
+      await loadSamlIdps(orgId)
       await loadOverview(orgId)
       await loadCosts(orgId)
       await loadHealth(orgId)
@@ -509,6 +531,121 @@ function App() {
       setEvaluations([])
       setAgents([])
       setSecrets([])
+      setSamlIdps([])
+      setSelectedSamlIdp(null)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function handleCreateSamlIdp(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (!selectedOrgId) return
+    setError(null)
+    setBusy(true)
+    const formEl = event.currentTarget
+    const form = new FormData(formEl)
+    const registrationId = String(form.get('registrationId') || '').trim()
+    const displayName = String(form.get('displayName') || '').trim()
+    const metadataUrl = String(form.get('metadataUrl') || '').trim()
+    const metadataXml = String(form.get('metadataXml') || '').trim()
+    const attrEmail = String(form.get('attrEmail') || 'email').trim()
+    const attrDisplayName = String(form.get('attrDisplayName') || 'displayName').trim()
+    const enabled = form.get('enabled') === 'on'
+    try {
+      const created = await api<SamlIdp>(`/api/v1/orgs/${selectedOrgId}/saml/idps`, {
+        method: 'POST',
+        body: JSON.stringify({
+          registrationId,
+          displayName,
+          metadataUrl: metadataUrl || null,
+          metadataXml: metadataXml || null,
+          attrEmail,
+          attrDisplayName,
+          enabled,
+        }),
+      })
+      resetForm(formEl)
+      await loadSamlIdps(selectedOrgId)
+      setSelectedSamlIdp(created)
+      setTab('sso')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not create SAML IdP')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function handleUpdateSamlIdp(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (!selectedOrgId || !selectedSamlIdp) return
+    setError(null)
+    setBusy(true)
+    const form = new FormData(event.currentTarget)
+    const displayName = String(form.get('displayName') || '').trim()
+    const metadataUrl = String(form.get('metadataUrl') || '').trim()
+    const metadataXml = String(form.get('metadataXml') || '').trim()
+    const attrEmail = String(form.get('attrEmail') || 'email').trim()
+    const attrDisplayName = String(form.get('attrDisplayName') || 'displayName').trim()
+    const enabled = form.get('enabled') === 'on'
+    try {
+      const updated = await api<SamlIdp>(
+        `/api/v1/orgs/${selectedOrgId}/saml/idps/${selectedSamlIdp.id}`,
+        {
+          method: 'PUT',
+          body: JSON.stringify({
+            displayName,
+            metadataUrl: metadataUrl || null,
+            metadataXml: metadataXml || null,
+            attrEmail,
+            attrDisplayName,
+            enabled,
+          }),
+        },
+      )
+      await loadSamlIdps(selectedOrgId)
+      setSelectedSamlIdp(updated)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not update SAML IdP')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function handleToggleSamlIdp(idp: SamlIdp) {
+    if (!selectedOrgId) return
+    setError(null)
+    setBusy(true)
+    try {
+      const updated = await api<SamlIdp>(`/api/v1/orgs/${selectedOrgId}/saml/idps/${idp.id}`, {
+        method: 'PUT',
+        body: JSON.stringify({
+          displayName: idp.displayName,
+          metadataUrl: null,
+          metadataXml: null,
+          attrEmail: idp.attrEmail,
+          attrDisplayName: idp.attrDisplayName,
+          enabled: !idp.enabled,
+        }),
+      })
+      await loadSamlIdps(selectedOrgId)
+      setSelectedSamlIdp(updated)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not update SAML IdP')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function handleDeleteSamlIdp(idp: SamlIdp) {
+    if (!selectedOrgId) return
+    setError(null)
+    setBusy(true)
+    try {
+      await api(`/api/v1/orgs/${selectedOrgId}/saml/idps/${idp.id}`, { method: 'DELETE' })
+      await loadSamlIdps(selectedOrgId)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not delete SAML IdP')
     } finally {
       setBusy(false)
     }
@@ -1175,6 +1312,7 @@ function App() {
   const selectedBenchmark = benchmarks.find((b) => b.id === selectedBenchmarkId)
   const selectedVersion = versions.find((v) => v.id === selectedVersionId)
   const canEdit = role === 'OWNER' || role === 'ADMIN' || role === 'DEVELOPER'
+  const canManageSso = role === 'OWNER' || role === 'ADMIN'
   const canPublishLeaderboard = role === 'OWNER' || role === 'ADMIN'
   const draftSelected = selectedVersion?.status === 'DRAFT'
 
@@ -1253,6 +1391,7 @@ function App() {
                 ['compare', 'Compare'],
                 ['costs', 'Costs'],
                 ['agents', 'Agents'],
+                ['sso', 'SSO'],
                 ['benchmarks', 'Benchmarks'],
                 ['projects', 'Projects'],
                 ['ops', 'Ops'],
@@ -1272,6 +1411,7 @@ function App() {
                   if (id === 'costs') void loadCosts(selectedOrgId)
                   if (id === 'ops') void loadHealth(selectedOrgId)
                   if (id === 'evaluations') void loadEvaluationSearch(selectedOrgId, evalPage)
+                  if (id === 'sso' && canManageSso) void loadSamlIdps(selectedOrgId)
                 }}
               >
                 {label}
@@ -1415,6 +1555,179 @@ function App() {
                   </button>
                   <OpsHealthPanel health={health} state={healthState} error={healthError} />
                 </>
+              ) : (
+                <p className="muted">Select an organization first.</p>
+              )}
+            </>
+          ) : tab === 'sso' ? (
+            <>
+              <h2>Enterprise SSO {selectedOrg ? `· ${selectedOrg.name}` : ''}</h2>
+              {selectedOrg ? (
+                canManageSso ? (
+                  <>
+                    <p className="muted small">
+                      Manage org-scoped SAML IdPs (OWNER/ADMIN). Enabled IdPs appear on the login
+                      page. SP entity ID / ACS stay in env; env single IdP is fallback when this
+                      list is empty.
+                    </p>
+                    {samlIdps.length === 0 ? (
+                      <p className="muted">No SAML IdPs configured for this organization.</p>
+                    ) : (
+                      <ul className="list">
+                        {samlIdps.map((idp) => (
+                          <li key={idp.id}>
+                            <button
+                              type="button"
+                              className={
+                                selectedSamlIdp?.id === idp.id ? 'list-item active' : 'list-item'
+                              }
+                              onClick={() => setSelectedSamlIdp(idp)}
+                            >
+                              <span>
+                                <strong>{idp.displayName}</strong>{' '}
+                                {!idp.enabled && <span className="badge">disabled</span>}
+                              </span>
+                              <span className="muted small">{idp.registrationId}</span>
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                    {selectedSamlIdp && (
+                      <div className="detail-block">
+                        <h3>{selectedSamlIdp.displayName}</h3>
+                        <p className="muted small">
+                          Login path:{' '}
+                          <code>/api/v1/auth/saml/login/{selectedSamlIdp.registrationId}</code>
+                          {selectedSamlIdp.metadataUrl
+                            ? ` · metadata URL`
+                            : selectedSamlIdp.hasMetadataXml
+                              ? ' · inline metadata XML'
+                              : ''}
+                        </p>
+                        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                          <button
+                            type="button"
+                            className="cta secondary"
+                            disabled={busy}
+                            onClick={() => void handleToggleSamlIdp(selectedSamlIdp)}
+                          >
+                            {selectedSamlIdp.enabled ? 'Disable' : 'Enable'}
+                          </button>
+                          <button
+                            type="button"
+                            className="cta secondary"
+                            disabled={busy}
+                            onClick={() => void handleDeleteSamlIdp(selectedSamlIdp)}
+                          >
+                            Delete
+                          </button>
+                        </div>
+                        <form className="form compact" onSubmit={handleUpdateSamlIdp}>
+                          <h3>Edit IdP</h3>
+                          <label>
+                            Display name
+                            <input
+                              name="displayName"
+                              required
+                              maxLength={120}
+                              defaultValue={selectedSamlIdp.displayName}
+                              key={`dn-${selectedSamlIdp.id}-${selectedSamlIdp.updatedAt}`}
+                            />
+                          </label>
+                          <label>
+                            Metadata URL
+                            <input
+                              name="metadataUrl"
+                              maxLength={2048}
+                              placeholder="https://idp.example.com/metadata"
+                              defaultValue={selectedSamlIdp.metadataUrl || ''}
+                              key={`url-${selectedSamlIdp.id}-${selectedSamlIdp.updatedAt}`}
+                            />
+                          </label>
+                          <label>
+                            Metadata XML (optional; leave blank to keep existing)
+                            <textarea name="metadataXml" rows={4} placeholder="Leave blank to keep" />
+                          </label>
+                          <label>
+                            Email attribute
+                            <input
+                              name="attrEmail"
+                              defaultValue={selectedSamlIdp.attrEmail}
+                              key={`em-${selectedSamlIdp.id}-${selectedSamlIdp.updatedAt}`}
+                            />
+                          </label>
+                          <label>
+                            Display name attribute
+                            <input
+                              name="attrDisplayName"
+                              defaultValue={selectedSamlIdp.attrDisplayName}
+                              key={`na-${selectedSamlIdp.id}-${selectedSamlIdp.updatedAt}`}
+                            />
+                          </label>
+                          <label className="checkbox">
+                            <input
+                              type="checkbox"
+                              name="enabled"
+                              defaultChecked={selectedSamlIdp.enabled}
+                              key={`en-${selectedSamlIdp.id}-${selectedSamlIdp.updatedAt}`}
+                            />{' '}
+                            Enabled
+                          </label>
+                          <button className="cta" type="submit" disabled={busy}>
+                            Save IdP
+                          </button>
+                        </form>
+                      </div>
+                    )}
+                    <form className="form compact" onSubmit={handleCreateSamlIdp}>
+                      <h3>Add SAML IdP</h3>
+                      <label>
+                        Registration id
+                        <input
+                          name="registrationId"
+                          required
+                          minLength={2}
+                          maxLength={63}
+                          pattern="[a-z0-9]+(?:-[a-z0-9]+)*"
+                          placeholder="okta-corp"
+                        />
+                      </label>
+                      <label>
+                        Display name
+                        <input name="displayName" required maxLength={120} placeholder="Okta" />
+                      </label>
+                      <label>
+                        Metadata URL
+                        <input
+                          name="metadataUrl"
+                          maxLength={2048}
+                          placeholder="https://idp.example.com/metadata"
+                        />
+                      </label>
+                      <label>
+                        Metadata XML (if no URL)
+                        <textarea name="metadataXml" rows={4} placeholder="Inline IdP metadata XML" />
+                      </label>
+                      <label>
+                        Email attribute
+                        <input name="attrEmail" defaultValue="email" />
+                      </label>
+                      <label>
+                        Display name attribute
+                        <input name="attrDisplayName" defaultValue="displayName" />
+                      </label>
+                      <label className="checkbox">
+                        <input type="checkbox" name="enabled" defaultChecked /> Enabled
+                      </label>
+                      <button className="cta" type="submit" disabled={busy}>
+                        Add IdP
+                      </button>
+                    </form>
+                  </>
+                ) : (
+                  <p className="muted">Only OWNER or ADMIN can manage SAML IdPs.</p>
+                )
               ) : (
                 <p className="muted">Select an organization first.</p>
               )}
