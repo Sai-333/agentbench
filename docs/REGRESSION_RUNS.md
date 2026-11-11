@@ -1,6 +1,8 @@
 # Regression runs
 
-Platform-scoped record of a Selenium (or other) suite against a git repo, branch, and commit. These rows are **not** organization data. They do not live under `/api/v1/orgs/{orgId}/...` and they have no `org_id` and no Postgres RLS policy.
+AgentBench **application** regression — a platform-scoped record of the Selenium (or other) suite against this product's git repo, branch, and commit. These rows are **not** consumer / organization data. They do not live under `/api/v1/orgs/{orgId}/...`, they have no `org_id` and no Postgres RLS policy, and the UI is **not** nested inside a tenant workspace tab.
+
+The suite exercises AgentBench itself (auth, org shell, benchmarks, evaluations, public boards, ops, and this page). It is not a per-tenant regression product that each consumer owns.
 
 Mac Compose (`docker compose up -d --build` from this repo) stays the default local stack. The GitHub workflow runs that same Compose file on a GitHub-hosted Ubuntu runner. It does not turn on AMQPS, the S3 profile, gVisor, or Firecracker, and it does not claim an Oracle host.
 
@@ -14,7 +16,7 @@ There is no separate platform-admin role. A caller must be authenticated and hol
 | Signed in, no org, or only DEVELOPER / VIEWER | 403 |
 | OWNER or ADMIN of any org | allowed |
 
-DEVELOPER and VIEWER do not see run rows. The UI tab is labeled **Regression runs**. People without an admin role see the page title and a short explanation; the API still refuses them.
+DEVELOPER and VIEWER do not see run rows. The UI entry is the top-bar **Regression runs** control (AgentBench platform navigation), outside the consumer org tab strip (Overview, Projects, Benchmarks, …). People without an admin role see the page title and a short explanation; the API still refuses them.
 
 ## What a run looks like
 
@@ -91,7 +93,7 @@ The workflow posts pytest's `--junitxml` output. Case names are `classname::name
 4. Install the suite's `requirements.txt` and Google Chrome.
 5. `python tests/seed.py`, which loads `fixtures/mock-data.json`. Pytest also seeds again before cases. That contract is unchanged.
 6. `python -m pytest --junitxml=reports/junit.xml` with no node filter, so the full suite on `main` runs, including cases added there later.
-7. Register a throwaway user on that runner's Compose stack, create an org (the caller becomes OWNER), and POST the XML to `/api/v1/regression-runs` with this repo's `gitRepo`, `gitBranch`, `gitSha`, and `suiteName=selenium`. The password stays in the runner. It is not a production credential.
+7. Run [`scripts/regression/record-run.py`](../scripts/regression/record-run.py): register a throwaway user, create an org only so the caller is OWNER (the org is never written onto the run), and POST the XML to `/api/v1/regression-runs` with this repo's `gitRepo`, `gitBranch`, `gitSha`, and `suiteName=selenium`. The password stays in the runner. It is not a production credential.
 8. Upload `selenium-suite/reports/junit.xml` as the `selenium-junit-report` artifact.
 9. Write a job summary that lists every case as passed, failed, or skipped, plus totals. The job fails if pytest exits non-zero, if any case failed, if the report is missing, or if the API ingest did not succeed. Skipped cases do not fail the job by themselves.
 
@@ -99,7 +101,25 @@ The summary also prints the suite `main` SHA that was cloned, so a log can be ti
 
 ## Local
 
-Start Mac Compose as in the README, then open **Regression runs** as an org OWNER or ADMIN. To record a run by hand:
+Start Mac Compose as in the README. Prefer the helper that clones the suite, runs it, and records a platform run:
+
+```bash
+chmod +x scripts/regression/run-local.sh
+./scripts/regression/run-local.sh
+```
+
+Or record an existing JUnit report:
+
+```bash
+python scripts/regression/record-run.py \
+  --report junit.xml \
+  --git-repo https://github.com/Sai-333/agentbench \
+  --git-branch "$(git rev-parse --abbrev-ref HEAD)" \
+  --git-sha "$(git rev-parse HEAD)" \
+  --suite-name selenium
+```
+
+Then open the top-bar **Regression runs** control as an org OWNER or ADMIN (not an org workspace tab). Hand curl still works with an OWNER/ADMIN token:
 
 ```bash
 curl -sS -X POST \
@@ -109,4 +129,4 @@ curl -sS -X POST \
   "http://localhost:8080/api/v1/regression-runs?gitRepo=https://github.com/Sai-333/agentbench&gitBranch=main&gitSha=$(git rev-parse HEAD)&suiteName=selenium"
 ```
 
-`$TOKEN` must belong to an OWNER or ADMIN. Creating an organization as a new user is enough: that user is OWNER of it.
+`$TOKEN` must belong to an OWNER or ADMIN. Creating an organization as a new user is enough: that user is OWNER of it. The org is not stored on the run.

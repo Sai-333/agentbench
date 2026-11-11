@@ -16,7 +16,7 @@
 4. `evaluations.score_metrics` has no `org_id`; policy scopes via parent `evaluation_scores`.
 5. Identity tables (`users`, `organizations`, `memberships`, tokens, OIDC state) are **not** RLS-scoped so auth and “list my orgs” keep working.
 6. Active public leaderboard rows are readable by slug via a SELECT-only policy (`unpublished_at IS NULL`).
-7. `platform.regression_runs` and `platform.regression_cases` (Flyway V23) are platform-scoped git SHA/branch results. They have no `org_id` and no RLS policy. OWNER/ADMIN checks in the service are the access control. See `docs/REGRESSION_RUNS.md`.
+7. `platform.regression_runs` and `platform.regression_cases` (Flyway V23) are AgentBench **application** regression results (git SHA/branch). They have no `org_id` and no RLS policy — not consumer/tenant data. OWNER/ADMIN checks in the service are the access control. See `docs/REGRESSION_RUNS.md`.
 
 ## Roles
 

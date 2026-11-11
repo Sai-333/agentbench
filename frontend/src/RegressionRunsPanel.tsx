@@ -12,6 +12,7 @@ type Props = {
   expanding: boolean
   onToggle: (id: string) => void
   onRefresh: () => void
+  onBackToOrgs?: () => void
 }
 
 function formatWhen(iso: string): string {
@@ -32,14 +33,20 @@ export function RegressionRunsPanel({
   expanding,
   onToggle,
   onRefresh,
+  onBackToOrgs,
 }: Props) {
   return (
     <>
       <h2>Regression runs</h2>
       <p className="muted small">
-        Platform-scoped results for a git repository, branch, and commit. Not an organization
-        resource. OWNER and ADMIN can view every run.
+        AgentBench application regression — platform-scoped results for a git repository, branch,
+        and commit. Not consumer / organization data. OWNER or ADMIN of any org can view every run.
       </p>
+      {onBackToOrgs ? (
+        <button type="button" className="cta secondary" onClick={onBackToOrgs}>
+          Back to organizations
+        </button>
+      ) : null}
       {!allowed ? (
         <p className="muted">
           Your account does not have OWNER or ADMIN on an organization, so run details stay hidden.

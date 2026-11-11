@@ -44,6 +44,7 @@ import { resetForm } from './formUtils'
 import './App.css'
 
 type Mode = 'login' | 'register'
+/** Org-tenant workspace only. AgentBench application regression lives on `AppSurface`. */
 type WorkspaceTab =
   | 'overview'
   | 'projects'
@@ -55,7 +56,8 @@ type WorkspaceTab =
   | 'compare'
   | 'costs'
   | 'ops'
-  | 'regression'
+/** Consumer org workspace vs platform-scoped AgentBench application surfaces. */
+type AppSurface = 'consumer' | 'platform-regression'
 type LoadState = 'idle' | 'loading' | 'ready' | 'empty' | 'error'
 
 const THEME_KEY = 'agentbench.theme'
@@ -114,6 +116,7 @@ function App() {
   const [selectedEvaluation, setSelectedEvaluation] = useState<EvaluationDetail | null>(null)
   const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null)
   const [tab, setTab] = useState<WorkspaceTab>('overview')
+  const [surface, setSurface] = useState<AppSurface>('consumer')
   const [mode, setMode] = useState<Mode>('login')
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
@@ -551,6 +554,7 @@ function App() {
   }
 
   async function handleSelectOrg(orgId: string) {
+    setSurface('consumer')
     setSelectedOrgId(orgId)
     setError(null)
     setBusy(true)
@@ -1363,14 +1367,36 @@ function App() {
   )
   const draftSelected = selectedVersion?.status === 'DRAFT'
 
+  function openPlatformRegression() {
+    setSurface('platform-regression')
+    setError(null)
+    if (canViewRegressionRuns) {
+      void loadRegressionRuns()
+    }
+  }
+
   return (
     <main className="shell wide">
       <header className="topbar">
         <div>
           <p className="eyebrow">Milestone 8 · Analytics</p>
           <h1>AgentBench</h1>
+          <p className="muted small platform-nav-hint">
+            Consumer orgs below. Application regression is platform-scoped.
+          </p>
         </div>
         <div className="userbox">
+          <div className="tabs wrap platform-tabs" role="navigation" aria-label="AgentBench platform">
+            <button
+              type="button"
+              className={
+                surface === 'platform-regression' ? 'tab active' : 'tab'
+              }
+              onClick={openPlatformRegression}
+            >
+              Regression runs
+            </button>
+          </div>
           <div>
             <strong>{me.displayName}</strong>
             <div className="muted small">{me.email}</div>
@@ -1391,6 +1417,23 @@ function App() {
 
       {error && <p className="error banner">{error}</p>}
 
+      {surface === 'platform-regression' ? (
+        <section className="panel platform-panel">
+          <RegressionRunsPanel
+            allowed={canViewRegressionRuns}
+            runs={regressionRuns}
+            state={regressionState}
+            error={regressionError}
+            expandedId={expandedRegressionId}
+            expanded={expandedRegression}
+            expanding={regressionExpanding}
+            onToggle={(id) => void toggleRegressionRun(id)}
+            onRefresh={() => void loadRegressionRuns()}
+            onBackToOrgs={() => setSurface('consumer')}
+          />
+        </section>
+      ) : (
+      <>
       <section className="grid">
         <div className="panel">
           <h2>Organizations</h2>
@@ -1442,7 +1485,6 @@ function App() {
                 ['benchmarks', 'Benchmarks'],
                 ['projects', 'Projects'],
                 ['ops', 'Ops'],
-                ['regression', 'Regression runs'],
               ] as Array<[WorkspaceTab, string]>
             ).map(([id, label]) => (
               <button
@@ -1458,7 +1500,6 @@ function App() {
                   }
                   if (id === 'costs') void loadCosts(selectedOrgId)
                   if (id === 'ops') void loadHealth(selectedOrgId)
-                  if (id === 'regression' && canViewRegressionRuns) void loadRegressionRuns()
                   if (id === 'evaluations') void loadEvaluationSearch(selectedOrgId, evalPage)
                   if (id === 'sso' && canManageSso) void loadSamlIdps(selectedOrgId)
                 }}
@@ -1608,18 +1649,6 @@ function App() {
                 <p className="muted">Select an organization first.</p>
               )}
             </>
-          ) : tab === 'regression' ? (
-            <RegressionRunsPanel
-              allowed={canViewRegressionRuns}
-              runs={regressionRuns}
-              state={regressionState}
-              error={regressionError}
-              expandedId={expandedRegressionId}
-              expanded={expandedRegression}
-              expanding={regressionExpanding}
-              onToggle={(id) => void toggleRegressionRun(id)}
-              onRefresh={() => void loadRegressionRuns()}
-            />
           ) : tab === 'sso' ? (
             <>
               <h2>Enterprise SSO {selectedOrg ? `· ${selectedOrg.name}` : ''}</h2>
@@ -2765,6 +2794,8 @@ function App() {
             )}
           </div>
         </section>
+      )}
+      </>
       )}
 
       <p className="muted footer-links">
