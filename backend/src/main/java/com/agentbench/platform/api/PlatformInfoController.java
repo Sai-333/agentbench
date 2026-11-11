@@ -27,7 +27,7 @@ public class PlatformInfoController {
                 "orgScopedApiBase", "/api/v1/orgs/{orgId}/...",
                 "auth", "JWT bearer (local email/password + optional Google/GitHub OIDC)",
                 "analytics", "org-private overview/leaderboard/comparisons/costs/exports (json/csv/pdf); opt-in public leaderboards + signed embeds",
-                "regressionRuns", "platform-scoped POST/GET /api/v1/regression-runs (OWNER/ADMIN of any org; git SHA/branch; not tenant data)",
+                "regressionRuns", "AgentBench application regression: platform-scoped POST/GET /api/v1/regression-runs (OWNER/ADMIN of any org; git SHA/branch; not consumer/org tenant data)",
                 "readiness", "production-minded Compose/K8s path; Docker isolation not hostile multi-tenant"
         );
     }

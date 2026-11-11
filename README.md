@@ -82,7 +82,7 @@ Tenant APIs use an explicit org base with membership checks on every request:
 
 Roles (org-scoped): `OWNER`, `ADMIN`, `DEVELOPER`, `VIEWER`.
 
-Every push records a platform-scoped Selenium regression run (git repo, branch, and SHA — not an org resource) from `agentbench-selenium` `main`, with per-case pass/fail on the **Regression runs** page. See [docs/REGRESSION_RUNS.md](docs/REGRESSION_RUNS.md). Mac Compose stays the default local stack.
+Every push records an **AgentBench application** regression run (platform-scoped git repo, branch, and SHA — not consumer / org data) from `agentbench-selenium` `main`, with per-case pass/fail on the top-bar **Regression runs** page. Local helper: [`scripts/regression/run-local.sh`](scripts/regression/run-local.sh). See [docs/REGRESSION_RUNS.md](docs/REGRESSION_RUNS.md). Mac Compose stays the default local stack.
 
 ## Milestone 9 highlights
 

@@ -1,7 +1,8 @@
-# Every push runs the Selenium suite from agentbench-selenium main.
-# The suite SHA is not pinned: main gains cases independently of this repo.
-# Clone, seed fixtures/mock-data.json via tests/seed.py, run the full pytest
-# suite, and POST the JUnit report so a platform regression run exists.
+# Every push runs the AgentBench *application* Selenium suite from
+# agentbench-selenium main (suite SHA not pinned). Results are recorded as a
+# platform-scoped regression run (git repo/branch/SHA) — not per-consumer org
+# data. Clone, seed fixtures/mock-data.json via tests/seed.py, run the full
+# pytest suite, and POST the JUnit report via scripts/regression/record-run.py.
 # Mac Compose stays the default local stack; this job uses that same compose file
 # on a GitHub-hosted Ubuntu runner. It does not enable AMQPS, S3, gVisor, or Firecracker.
 
@@ -17,7 +18,7 @@ permissions:
 
 jobs:
   selenium-regression:
-    name: Selenium regression
+    name: AgentBench application regression
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
@@ -95,86 +96,18 @@ jobs:
           echo "exit_code=${code}" >> "$GITHUB_OUTPUT"
           exit 0
 
-      - name: Record regression run
+      - name: Record AgentBench application regression run
         id: record
         if: steps.pytest.outcome == 'success'
         env:
           AGENTBENCH_API_URL: http://localhost:8080
         run: |
-          python - <<'PY'
-          import json
-          import os
-          import secrets
-          import urllib.error
-          import urllib.parse
-          import urllib.request
-          from pathlib import Path
-
-          report = Path("selenium-suite/reports/junit.xml")
-          if not report.is_file():
-              raise SystemExit("JUnit report missing; nothing to record")
-
-          base = os.environ.get("AGENTBENCH_API_URL", "http://localhost:8080").rstrip("/")
-          run_id = os.environ["GITHUB_RUN_ID"]
-          attempt = os.environ.get("GITHUB_RUN_ATTEMPT", "1")
-          email = f"ci-regression-{run_id}-{attempt}@example.com"
-          password = secrets.token_urlsafe(18)
-          slug = f"ci-reg-{run_id}-{attempt}"
-
-          def call(method, url, body=None, token=None, content_type="application/json", raw=None):
-              data = raw if raw is not None else (None if body is None else json.dumps(body).encode())
-              headers = {"Accept": "application/json"}
-              if data is not None and content_type:
-                  headers["Content-Type"] = content_type
-              if token:
-                  headers["Authorization"] = f"Bearer {token}"
-              request = urllib.request.Request(url, data=data, headers=headers, method=method)
-              try:
-                  with urllib.request.urlopen(request, timeout=60) as response:
-                      payload = response.read()
-                      return json.loads(payload.decode()) if payload else None
-              except urllib.error.HTTPError as exc:
-                  detail = exc.read().decode("utf-8", errors="replace")[:800]
-                  raise SystemExit(f"{method} {urllib.parse.urlparse(url).path} failed: HTTP {exc.code} {detail}") from None
-
-          tokens = call("POST", base + "/api/v1/auth/register", {
-              "email": email,
-              "password": password,
-              "displayName": "CI Regression",
-          })
-          token = tokens["accessToken"]
-          call("POST", base + "/api/v1/orgs", {
-              "name": f"CI Regression {run_id}",
-              "slug": slug,
-          }, token=token)
-          query = urllib.parse.urlencode({
-              "gitRepo": f"https://github.com/{os.environ['GITHUB_REPOSITORY']}",
-              "gitBranch": os.environ["GITHUB_REF_NAME"],
-              "gitSha": os.environ["GITHUB_SHA"],
-              "suiteName": "selenium",
-          })
-          created = call(
-              "POST",
-              base + "/api/v1/regression-runs?" + query,
-              token=token,
-              content_type="application/xml",
-              raw=report.read_bytes(),
-          )
-          cases = created.get("cases") or []
-          passed = int(created["passed"])
-          failed = int(created["failed"])
-          skipped = int(created["skipped"])
-          case_count = int(created["caseCount"])
-          if passed + failed + skipped != case_count or len(cases) != case_count:
-              raise SystemExit(
-                  f"Recorded run {created.get('id')} did not return every case "
-                  f"(passed={passed} failed={failed} skipped={skipped} caseCount={case_count} rows={len(cases)})"
-              )
-          print(
-              f"Recorded regression run {created['id']} "
-              f"passed={passed} failed={failed} skipped={skipped} cases={case_count}"
-          )
-          PY
+          python scripts/regression/record-run.py \
+            --report selenium-suite/reports/junit.xml \
+            --git-repo "https://github.com/${GITHUB_REPOSITORY}" \
+            --git-branch "${GITHUB_REF_NAME}" \
+            --git-sha "${GITHUB_SHA}" \
+            --suite-name selenium
 
       - name: Upload JUnit report
         if: always()
@@ -221,8 +154,9 @@ jobs:
               return text.replace("|", "\\|").replace("\n", " ")
 
           lines = [
-              "## Selenium regression",
+              "## AgentBench application regression",
               "",
+              "- Scope: platform (AgentBench application — not per-consumer org data)",
               f"- AgentBench SHA: `{os.environ.get('GITHUB_SHA', '')}`",
               f"- Branch: `{os.environ.get('GITHUB_REF_NAME', '')}`",
               "- Suite repo: https://github.com/Sai-333/agentbench-selenium",
