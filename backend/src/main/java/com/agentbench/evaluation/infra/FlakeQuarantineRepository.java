@@ -36,15 +36,25 @@ public class FlakeQuarantineRepository {
     }
 
     public List<FlakeQuarantine> listAll(UUID orgId, boolean includeInactive) {
-        String sql = """
+        return jdbc.query(listSql(includeInactive), new MapSqlParameterSource("orgId", orgId), (rs, rowNum) -> map(rs));
+    }
+
+    /**
+     * Active-only SQL must keep whitespace before ORDER BY. A text block drops the
+     * newline after its opening delimiter, which previously produced {@code TRUEORDER}.
+     */
+    public static String listSql(boolean includeInactive) {
+        return """
                 SELECT id, org_id, suite_id, case_key, reason, active, created_by_user_id,
                        created_at, updated_at, expires_at
                 FROM evaluations.flake_quarantines
                 WHERE org_id = :orgId
-                """ + (includeInactive ? "" : " AND active = TRUE") + """
+                """
+                + (includeInactive ? "" : " AND active = TRUE")
+                + """
+
                 ORDER BY created_at DESC
                 """;
-        return jdbc.query(sql, new MapSqlParameterSource("orgId", orgId), (rs, rowNum) -> map(rs));
     }
 
     public Optional<FlakeQuarantine> find(UUID orgId, UUID id) {
