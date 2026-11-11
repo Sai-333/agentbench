@@ -1,0 +1,282 @@
+# Every push runs the Selenium suite from agentbench-selenium main.
+# The suite SHA is not pinned: main gains cases independently of this repo.
+# Clone, seed fixtures/mock-data.json via tests/seed.py, run the full pytest
+# suite, and POST the JUnit report so a platform regression run exists.
+# Mac Compose stays the default local stack; this job uses that same compose file
+# on a GitHub-hosted Ubuntu runner. It does not enable AMQPS, S3, gVisor, or Firecracker.
+
+name: Selenium regression
+
+on:
+  push:
+    branches:
+      - "**"
+
+permissions:
+  contents: read
+
+jobs:
+  selenium-regression:
+    name: Selenium regression
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout agentbench
+        uses: actions/checkout@v4
+
+      - name: Start Compose
+        run: docker compose up -d --build --wait
+
+      - name: Wait for API readiness and frontend
+        run: |
+          set -eu
+          for i in $(seq 1 60); do
+            api=$(curl -sf http://localhost:8080/actuator/health/readiness || true)
+            ui=$(curl -sf -o /dev/null -w '%{http_code}' http://localhost:3000/ || true)
+            echo "attempt ${i} readiness=${api:-down} frontend=${ui}"
+            if printf '%s' "$api" | grep -q UP && [ "$ui" = "200" ]; then
+              exit 0
+            fi
+            sleep 5
+          done
+          docker compose ps
+          docker compose logs --tail=200
+          exit 1
+
+      - name: Clone agentbench-selenium main
+        id: suite
+        run: |
+          set -eu
+          rm -rf selenium-suite
+          git clone --depth 1 --branch main https://github.com/Sai-333/agentbench-selenium.git selenium-suite
+          sha=$(git -C selenium-suite rev-parse HEAD)
+          echo "sha=${sha}" >> "$GITHUB_OUTPUT"
+          echo "Cloned https://github.com/Sai-333/agentbench-selenium main at ${sha} (not pinned)"
+
+      - name: Install Google Chrome
+        run: |
+          set -eu
+          sudo apt-get update
+          wget -q -O /tmp/chrome.deb https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
+          sudo apt-get install -y /tmp/chrome.deb || sudo apt-get install -y -f
+          chrome=$(command -v google-chrome || command -v google-chrome-stable)
+          sudo ln -sfn "$chrome" /usr/local/bin/google-chrome
+          echo "CHROME_BIN=${chrome}" >> "$GITHUB_ENV"
+          "$chrome" --version
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install suite dependencies
+        working-directory: selenium-suite
+        run: python -m pip install -r requirements.txt
+
+      - name: Seed mock data
+        working-directory: selenium-suite
+        env:
+          AGENTBENCH_API_URL: http://localhost:8080
+        run: python tests/seed.py
+
+      - name: Run pytest
+        id: pytest
+        working-directory: selenium-suite
+        env:
+          AGENTBENCH_API_URL: http://localhost:8080
+          AGENTBENCH_BASE_URL: http://localhost:3000
+          AGENTBENCH_STARTUP_TIMEOUT: "120"
+          HEADLESS: "1"
+        run: |
+          set +e
+          mkdir -p reports
+          python -m pytest --junitxml=reports/junit.xml -q
+          code=$?
+          echo "exit_code=${code}" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Record regression run
+        id: record
+        if: steps.pytest.outcome == 'success'
+        env:
+          AGENTBENCH_API_URL: http://localhost:8080
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          import secrets
+          import urllib.error
+          import urllib.parse
+          import urllib.request
+          from pathlib import Path
+
+          report = Path("selenium-suite/reports/junit.xml")
+          if not report.is_file():
+              raise SystemExit("JUnit report missing; nothing to record")
+
+          base = os.environ.get("AGENTBENCH_API_URL", "http://localhost:8080").rstrip("/")
+          run_id = os.environ["GITHUB_RUN_ID"]
+          attempt = os.environ.get("GITHUB_RUN_ATTEMPT", "1")
+          email = f"ci-regression-{run_id}-{attempt}@example.com"
+          password = secrets.token_urlsafe(18)
+          slug = f"ci-reg-{run_id}-{attempt}"
+
+          def call(method, url, body=None, token=None, content_type="application/json", raw=None):
+              data = raw if raw is not None else (None if body is None else json.dumps(body).encode())
+              headers = {"Accept": "application/json"}
+              if data is not None and content_type:
+                  headers["Content-Type"] = content_type
+              if token:
+                  headers["Authorization"] = f"Bearer {token}"
+              request = urllib.request.Request(url, data=data, headers=headers, method=method)
+              try:
+                  with urllib.request.urlopen(request, timeout=60) as response:
+                      payload = response.read()
+                      return json.loads(payload.decode()) if payload else None
+              except urllib.error.HTTPError as exc:
+                  detail = exc.read().decode("utf-8", errors="replace")[:800]
+                  raise SystemExit(f"{method} {urllib.parse.urlparse(url).path} failed: HTTP {exc.code} {detail}") from None
+
+          tokens = call("POST", base + "/api/v1/auth/register", {
+              "email": email,
+              "password": password,
+              "displayName": "CI Regression",
+          })
+          token = tokens["accessToken"]
+          call("POST", base + "/api/v1/orgs", {
+              "name": f"CI Regression {run_id}",
+              "slug": slug,
+          }, token=token)
+          query = urllib.parse.urlencode({
+              "gitRepo": f"https://github.com/{os.environ['GITHUB_REPOSITORY']}",
+              "gitBranch": os.environ["GITHUB_REF_NAME"],
+              "gitSha": os.environ["GITHUB_SHA"],
+              "suiteName": "selenium",
+          })
+          created = call(
+              "POST",
+              base + "/api/v1/regression-runs?" + query,
+              token=token,
+              content_type="application/xml",
+              raw=report.read_bytes(),
+          )
+          cases = created.get("cases") or []
+          passed = int(created["passed"])
+          failed = int(created["failed"])
+          skipped = int(created["skipped"])
+          case_count = int(created["caseCount"])
+          if passed + failed + skipped != case_count or len(cases) != case_count:
+              raise SystemExit(
+                  f"Recorded run {created.get('id')} did not return every case "
+                  f"(passed={passed} failed={failed} skipped={skipped} caseCount={case_count} rows={len(cases)})"
+              )
+          print(
+              f"Recorded regression run {created['id']} "
+              f"passed={passed} failed={failed} skipped={skipped} cases={case_count}"
+          )
+          PY
+
+      - name: Upload JUnit report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: selenium-junit-report
+          path: selenium-suite/reports/junit.xml
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Write job summary and fail if any case failed
+        if: always()
+        env:
+          PYTEST_EXIT: ${{ steps.pytest.outputs.exit_code }}
+          RECORD_OUTCOME: ${{ steps.record.outcome }}
+          SELENIUM_SHA: ${{ steps.suite.outputs.sha }}
+          JUNIT_PATH: selenium-suite/reports/junit.xml
+        run: |
+          python - <<'PY'
+          import os
+          import sys
+          import xml.etree.ElementTree as ET
+          from pathlib import Path
+
+          summary_path = Path(os.environ["GITHUB_STEP_SUMMARY"])
+          report_path = Path(os.environ.get("JUNIT_PATH", "selenium-suite/reports/junit.xml"))
+          pytest_exit = os.environ.get("PYTEST_EXIT", "")
+          record_outcome = os.environ.get("RECORD_OUTCOME", "")
+          suite_sha = os.environ.get("SELENIUM_SHA", "")
+
+          def local(tag):
+              return tag.rsplit("}", 1)[-1]
+
+          def status_of(case):
+              for child in list(case):
+                  name = local(child.tag)
+                  if name in {"failure", "error"}:
+                      return "failed"
+                  if name == "skipped":
+                      return "skipped"
+              return "passed"
+
+          def cell(text):
+              return text.replace("|", "\\|").replace("\n", " ")
+
+          lines = [
+              "## Selenium regression",
+              "",
+              f"- AgentBench SHA: `{os.environ.get('GITHUB_SHA', '')}`",
+              f"- Branch: `{os.environ.get('GITHUB_REF_NAME', '')}`",
+              "- Suite repo: https://github.com/Sai-333/agentbench-selenium",
+              f"- Suite main at clone: `{suite_sha or 'unknown'}` (not pinned)",
+              "",
+          ]
+
+          failed = 0
+          exit_code = int(pytest_exit) if pytest_exit.lstrip("-").isdigit() else 1
+          if not report_path.is_file():
+              lines.append("JUnit report was not produced, so no per-case pass/fail list is available.")
+              summary_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+              sys.exit(1)
+
+          text = report_path.read_text(encoding="utf-8", errors="replace")
+          if "<!DOCTYPE" in text.upper():
+              lines.append("JUnit report contained a DOCTYPE and was not parsed.")
+              summary_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+              sys.exit(1)
+
+          root = ET.fromstring(text)
+          cases = []
+          for el in root.iter():
+              if local(el.tag) != "testcase":
+                  continue
+              classname = el.attrib.get("classname", "").strip()
+              name = el.attrib.get("name", "").strip() or "case"
+              label = f"{classname}::{name}" if classname else name
+              cases.append((label, status_of(el)))
+
+          passed = sum(1 for _, status in cases if status == "passed")
+          failed = sum(1 for _, status in cases if status == "failed")
+          skipped = sum(1 for _, status in cases if status == "skipped")
+          lines.extend([
+              f"- Passed: {passed}",
+              f"- Failed: {failed}",
+              f"- Skipped: {skipped}",
+              f"- Total: {len(cases)}",
+              "",
+              "| Case | Status |",
+              "|---|---|",
+          ])
+          for name, status in cases:
+              lines.append(f"| {cell(name)} | {status} |")
+          lines.append("")
+          if record_outcome != "success":
+              lines.append(f"Recording the run into the API did not succeed (`{record_outcome}`).")
+          summary_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+          if record_outcome != "success" or failed or exit_code != 0:
+              sys.exit(exit_code if exit_code else 1)
+          sys.exit(0)
+          PY
+
+      - name: Compose logs
+        if: failure()
+        run: docker compose logs --tail=200

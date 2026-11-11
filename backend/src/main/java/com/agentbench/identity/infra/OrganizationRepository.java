@@ -11,6 +11,7 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -142,6 +143,28 @@ public class OrganizationRepository {
                 new MapSqlParameterSource("orgId", orgId),
                 Long.class);
         return count == null ? 0 : count;
+    }
+
+    /**
+     * True when the user holds {@code minimum} or a higher org role on any organization.
+     * Used for platform-scoped checks (regression runs), not as a substitute for per-org membership.
+     */
+    public boolean hasRoleAtLeast(UUID userId, OrgRole minimum) {
+        ArrayList<String> roles = new ArrayList<>();
+        for (OrgRole role : OrgRole.values()) {
+            if (role.atLeast(minimum)) {
+                roles.add(role.name());
+            }
+        }
+        Long count = jdbc.queryForObject("""
+                SELECT COUNT(*) FROM identity.memberships
+                WHERE user_id = :userId AND role IN (:roles)
+                """,
+                new MapSqlParameterSource()
+                        .addValue("userId", userId)
+                        .addValue("roles", roles),
+                Long.class);
+        return count != null && count > 0;
     }
 
     private static Organization mapOrg(ResultSet rs) throws SQLException {

@@ -464,6 +464,33 @@ export type SystemHealthResponse = {
   counts: Record<string, number>
 }
 
+export type RegressionCase = {
+  name: string
+  status: 'passed' | 'failed' | 'skipped' | string
+  durationMs: number
+  message: string | null
+}
+
+export type RegressionRunSummary = {
+  id: string
+  gitRepo: string
+  gitBranch: string
+  gitSha: string
+  suiteName: string
+  startedAt: string
+  finishedAt: string
+  passed: number
+  failed: number
+  skipped: number
+  caseCount: number
+  scope: string
+  ingestedBy: string | null
+}
+
+export type RegressionRunDetail = RegressionRunSummary & {
+  cases: RegressionCase[]
+}
+
 export function getAccessToken(): string | null {
   return localStorage.getItem(TOKEN_KEY)
 }

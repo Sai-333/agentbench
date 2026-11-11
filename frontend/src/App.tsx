@@ -24,6 +24,8 @@ import type {
   Org,
   OverviewResponse,
   Project,
+  RegressionRunDetail,
+  RegressionRunSummary,
   SamlIdp,
   SecretMeta,
   SystemHealthResponse,
@@ -37,6 +39,7 @@ import {
   OpsHealthPanel,
   OverviewPanel,
 } from './DashboardPanels'
+import { RegressionRunsPanel } from './RegressionRunsPanel'
 import { resetForm } from './formUtils'
 import './App.css'
 
@@ -52,6 +55,7 @@ type WorkspaceTab =
   | 'compare'
   | 'costs'
   | 'ops'
+  | 'regression'
 type LoadState = 'idle' | 'loading' | 'ready' | 'empty' | 'error'
 
 const THEME_KEY = 'agentbench.theme'
@@ -138,6 +142,12 @@ function App() {
   const [health, setHealth] = useState<SystemHealthResponse | null>(null)
   const [healthState, setHealthState] = useState<LoadState>('idle')
   const [healthError, setHealthError] = useState<string | null>(null)
+  const [regressionRuns, setRegressionRuns] = useState<RegressionRunSummary[]>([])
+  const [regressionState, setRegressionState] = useState<LoadState>('idle')
+  const [regressionError, setRegressionError] = useState<string | null>(null)
+  const [expandedRegressionId, setExpandedRegressionId] = useState('')
+  const [expandedRegression, setExpandedRegression] = useState<RegressionRunDetail | null>(null)
+  const [regressionExpanding, setRegressionExpanding] = useState(false)
   const [evalSearch, setEvalSearch] = useState('')
   const [evalStateFilter, setEvalStateFilter] = useState('')
   const [evalPage, setEvalPage] = useState(0)
@@ -286,6 +296,40 @@ function App() {
       setHealthState('error')
     }
   }, [])
+
+  const loadRegressionRuns = useCallback(async () => {
+    setRegressionState('loading')
+    setRegressionError(null)
+    try {
+      const list = await api<RegressionRunSummary[]>('/api/v1/regression-runs?limit=50')
+      setRegressionRuns(list)
+      setRegressionState(list.length === 0 ? 'empty' : 'ready')
+    } catch (err) {
+      setRegressionRuns([])
+      setRegressionError(err instanceof Error ? err.message : 'Could not load regression runs')
+      setRegressionState('error')
+    }
+  }, [])
+
+  const toggleRegressionRun = useCallback(async (id: string) => {
+    if (expandedRegressionId === id) {
+      setExpandedRegressionId('')
+      setExpandedRegression(null)
+      return
+    }
+    setExpandedRegressionId(id)
+    setExpandedRegression(null)
+    setRegressionExpanding(true)
+    setRegressionError(null)
+    try {
+      const detail = await api<RegressionRunDetail>(`/api/v1/regression-runs/${id}`)
+      setExpandedRegression(detail)
+    } catch (err) {
+      setRegressionError(err instanceof Error ? err.message : 'Could not load regression cases')
+    } finally {
+      setRegressionExpanding(false)
+    }
+  }, [expandedRegressionId])
 
   const loadEvaluationSearch = useCallback(
     async (orgId: string, page = 0) => {
@@ -1314,6 +1358,9 @@ function App() {
   const canEdit = role === 'OWNER' || role === 'ADMIN' || role === 'DEVELOPER'
   const canManageSso = role === 'OWNER' || role === 'ADMIN'
   const canPublishLeaderboard = role === 'OWNER' || role === 'ADMIN'
+  const canViewRegressionRuns = me.memberships.some(
+    (membership) => membership.role === 'OWNER' || membership.role === 'ADMIN',
+  )
   const draftSelected = selectedVersion?.status === 'DRAFT'
 
   return (
@@ -1395,6 +1442,7 @@ function App() {
                 ['benchmarks', 'Benchmarks'],
                 ['projects', 'Projects'],
                 ['ops', 'Ops'],
+                ['regression', 'Regression runs'],
               ] as Array<[WorkspaceTab, string]>
             ).map(([id, label]) => (
               <button
@@ -1410,6 +1458,7 @@ function App() {
                   }
                   if (id === 'costs') void loadCosts(selectedOrgId)
                   if (id === 'ops') void loadHealth(selectedOrgId)
+                  if (id === 'regression' && canViewRegressionRuns) void loadRegressionRuns()
                   if (id === 'evaluations') void loadEvaluationSearch(selectedOrgId, evalPage)
                   if (id === 'sso' && canManageSso) void loadSamlIdps(selectedOrgId)
                 }}
@@ -1559,6 +1608,18 @@ function App() {
                 <p className="muted">Select an organization first.</p>
               )}
             </>
+          ) : tab === 'regression' ? (
+            <RegressionRunsPanel
+              allowed={canViewRegressionRuns}
+              runs={regressionRuns}
+              state={regressionState}
+              error={regressionError}
+              expandedId={expandedRegressionId}
+              expanded={expandedRegression}
+              expanding={regressionExpanding}
+              onToggle={(id) => void toggleRegressionRun(id)}
+              onRefresh={() => void loadRegressionRuns()}
+            />
           ) : tab === 'sso' ? (
             <>
               <h2>Enterprise SSO {selectedOrg ? `· ${selectedOrg.name}` : ''}</h2>
