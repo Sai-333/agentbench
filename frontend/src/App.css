@@ -576,3 +576,37 @@ h4 {
   margin: 0;
   white-space: pre-wrap;
 }
+
+.regression-cases {
+  list-style: none;
+  margin: 0.5rem 0 0.25rem;
+  padding: 0;
+}
+
+.regression-case {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 0.75rem;
+  align-items: baseline;
+  padding: 0.45rem 0.15rem;
+  border-top: 1px solid var(--line);
+}
+
+.regression-case-name {
+  overflow-wrap: anywhere;
+}
+
+.regression-case-message {
+  grid-column: 1 / -1;
+  white-space: pre-wrap;
+}
+
+.regression-status[data-status='passed'] {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.regression-status[data-status='failed'] {
+  color: var(--danger);
+  border-color: var(--danger);
+}
