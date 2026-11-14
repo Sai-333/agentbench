@@ -128,6 +128,7 @@ export function OverviewPanel({
             {overview.volumeByDay.length === 0 ? (
               <p className="muted">No volume in the selected window.</p>
             ) : (
+            <div className="table-scroll">
               <table className="metrics-table">
                 <thead>
                   <tr>
@@ -139,13 +140,14 @@ export function OverviewPanel({
                 <tbody>
                   {overview.volumeByDay.map((point) => (
                     <tr key={point.day}>
-                      <td>{point.day}</td>
-                      <td>{point.started}</td>
-                      <td>{point.completed}</td>
+                      <td data-label="Day">{point.day}</td>
+                      <td data-label="Started">{point.started}</td>
+                      <td data-label="Completed">{point.completed}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
+            </div>
             )}
           </>
         )}
@@ -168,6 +170,7 @@ export function LeaderboardPanel({
   onMintEmbed,
   embedSnippet,
   embedStatus,
+  emptyMessage = 'No completed scored evaluations for this benchmark version yet.',
 }: {
   board: LeaderboardResponse | null
   state: LoadState
@@ -187,6 +190,7 @@ export function LeaderboardPanel({
   onMintEmbed?: () => void
   embedSnippet?: string | null
   embedStatus?: string | null
+  emptyMessage?: string
 }) {
   const [slugDraft, setSlugDraft] = useState('')
   const [titleDraft, setTitleDraft] = useState('')
@@ -298,53 +302,51 @@ export function LeaderboardPanel({
           ) : null}
         </div>
       )}
-      <StateBlock
-        state={state}
-        error={error}
-        emptyMessage="No completed scored evaluations for this benchmark version yet."
-      >
+      <StateBlock state={state} error={error} emptyMessage={emptyMessage}>
         {board && (
           <>
             <p className="muted small">
               Profile {board.scoringProfileKey} · page {board.page.page + 1} · {board.page.total}{' '}
               entries
             </p>
-            <table className="metrics-table">
-              <thead>
-                <tr>
-                  <th>#</th>
-                  <th>Agent</th>
-                  <th>Task</th>
-                  <th>Score</th>
-                  <th>F2P/P2P/P2F/F2F</th>
-                  <th>Tokens</th>
-                  <th>Cost</th>
-                </tr>
-              </thead>
-              <tbody>
-                {board.entries.map((entry) => (
-                  <tr key={`${entry.agentId}-${entry.taskId}`}>
-                    <td>{entry.rank}</td>
-                    <td>
-                      {entry.agentName}{' '}
-                      <span className="badge">{entry.adapterType}</span>
-                    </td>
-                    <td>{entry.taskSlug}</td>
-                    <td>{Number(entry.weightedTotal).toFixed(2)}</td>
-                    <td className="muted small">
-                      {entry.transitionSummary?.F2P ?? 0}/{entry.transitionSummary?.P2P ?? 0}/
-                      {entry.transitionSummary?.P2F ?? 0}/{entry.transitionSummary?.F2F ?? 0}
-                    </td>
-                    <td>{entry.totalTokens ?? '—'}</td>
-                    <td>
-                      {entry.estimatedCostUsd == null
-                        ? '—'
-                        : `$${Number(entry.estimatedCostUsd).toFixed(4)}`}
-                    </td>
+            <div className="table-scroll">
+              <table className="metrics-table">
+                <thead>
+                  <tr>
+                    <th>#</th>
+                    <th>Agent</th>
+                    <th>Task</th>
+                    <th>Score</th>
+                    <th>F2P/P2P/P2F/F2F</th>
+                    <th>Tokens</th>
+                    <th>Cost</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {board.entries.map((entry) => (
+                    <tr key={`${entry.agentId}-${entry.taskId}`}>
+                      <td data-label="#">{entry.rank}</td>
+                      <td data-label="Agent">
+                        {entry.agentName}{' '}
+                        <span className="badge">{entry.adapterType}</span>
+                      </td>
+                      <td data-label="Task">{entry.taskSlug}</td>
+                      <td data-label="Score">{Number(entry.weightedTotal).toFixed(2)}</td>
+                      <td data-label="F2P/P2P/P2F/F2F" className="muted small">
+                        {entry.transitionSummary?.F2P ?? 0}/{entry.transitionSummary?.P2P ?? 0}/
+                        {entry.transitionSummary?.P2F ?? 0}/{entry.transitionSummary?.F2F ?? 0}
+                      </td>
+                      <td data-label="Tokens">{entry.totalTokens ?? '—'}</td>
+                      <td data-label="Cost">
+                        {entry.estimatedCostUsd == null
+                          ? '—'
+                          : `$${Number(entry.estimatedCostUsd).toFixed(4)}`}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </>
         )}
       </StateBlock>
@@ -356,51 +358,51 @@ export function ComparisonPanel({
   comparison,
   state,
   error,
+  emptyMessage = 'Select agents and a published benchmark version to compare identical runs.',
 }: {
   comparison: ComparisonResponse | null
   state: LoadState
   error: string | null
+  emptyMessage?: string
 }) {
   return (
     <div className="dash-stack">
-      <StateBlock
-        state={state}
-        error={error}
-        emptyMessage="Select agents and a published benchmark version to compare identical runs."
-      >
+      <StateBlock state={state} error={error} emptyMessage={emptyMessage}>
         {comparison && (
           <>
             <p className="muted small">Profile {comparison.scoringProfileKey}</p>
-            <table className="metrics-table">
-              <thead>
-                <tr>
-                  <th>Agent</th>
-                  <th>Task</th>
-                  <th>Total</th>
-                  {comparison.metricKeys.map((key) => (
-                    <th key={key}>{key}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {comparison.rows.map((row) => (
-                  <tr key={`${row.agentId}-${row.taskId}`}>
-                    <td>
-                      {row.agentName} <span className="badge">{row.adapterType}</span>
-                    </td>
-                    <td>{row.taskSlug}</td>
-                    <td>{Number(row.weightedTotal).toFixed(2)}</td>
+            <div className="table-scroll">
+              <table className="metrics-table">
+                <thead>
+                  <tr>
+                    <th>Agent</th>
+                    <th>Task</th>
+                    <th>Total</th>
                     {comparison.metricKeys.map((key) => (
-                      <td key={key}>
-                        {row.metricRaws[key] == null
-                          ? '—'
-                          : Number(row.metricRaws[key]).toFixed(3)}
-                      </td>
+                      <th key={key}>{key}</th>
                     ))}
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {comparison.rows.map((row) => (
+                    <tr key={`${row.agentId}-${row.taskId}`}>
+                      <td data-label="Agent">
+                        {row.agentName} <span className="badge">{row.adapterType}</span>
+                      </td>
+                      <td data-label="Task">{row.taskSlug}</td>
+                      <td data-label="Total">{Number(row.weightedTotal).toFixed(2)}</td>
+                      {comparison.metricKeys.map((key) => (
+                        <td key={key} data-label={key}>
+                          {row.metricRaws[key] == null
+                            ? '—'
+                            : Number(row.metricRaws[key]).toFixed(3)}
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </>
         )}
       </StateBlock>
@@ -412,18 +414,16 @@ export function CostsPanel({
   costs,
   state,
   error,
+  emptyMessage = 'No token or cost records yet. Costs appear when adapters report them.',
 }: {
   costs: CostAnalyticsResponse | null
   state: LoadState
   error: string | null
+  emptyMessage?: string
 }) {
   return (
     <div className="dash-stack">
-      <StateBlock
-        state={state}
-        error={error}
-        emptyMessage="No token or cost records yet. Costs appear when adapters report them."
-      >
+      <StateBlock state={state} error={error} emptyMessage={emptyMessage}>
         {costs && (
           <>
             <div className="stat-grid" role="group" aria-label="Cost analytics">
@@ -454,53 +454,57 @@ export function CostsPanel({
             {costs.byAgent.length === 0 ? (
               <p className="muted">No per-agent cost rows.</p>
             ) : (
-              <table className="metrics-table">
-                <thead>
-                  <tr>
-                    <th>Agent</th>
-                    <th>Calls</th>
-                    <th>Tokens</th>
-                    <th>Cost</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {costs.byAgent.map((row) => (
-                    <tr key={row.agentId}>
-                      <td>
-                        {row.agentName} <span className="badge">{row.adapterType}</span>
-                      </td>
-                      <td>{row.invocationCount}</td>
-                      <td>{row.totalTokens}</td>
-                      <td>${Number(row.estimatedCostUsd || 0).toFixed(4)}</td>
+              <div className="table-scroll">
+                <table className="metrics-table">
+                  <thead>
+                    <tr>
+                      <th>Agent</th>
+                      <th>Calls</th>
+                      <th>Tokens</th>
+                      <th>Cost</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {costs.byAgent.map((row) => (
+                      <tr key={row.agentId}>
+                        <td data-label="Agent">
+                          {row.agentName} <span className="badge">{row.adapterType}</span>
+                        </td>
+                        <td data-label="Calls">{row.invocationCount}</td>
+                        <td data-label="Tokens">{row.totalTokens}</td>
+                        <td data-label="Cost">${Number(row.estimatedCostUsd || 0).toFixed(4)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             )}
             <h3>By day</h3>
             {costs.byDay.length === 0 ? (
               <p className="muted">No daily cost points.</p>
             ) : (
-              <table className="metrics-table">
-                <thead>
-                  <tr>
-                    <th>Day</th>
-                    <th>Calls</th>
-                    <th>Tokens</th>
-                    <th>Cost</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {costs.byDay.map((row) => (
-                    <tr key={row.day}>
-                      <td>{row.day}</td>
-                      <td>{row.invocationCount}</td>
-                      <td>{row.totalTokens}</td>
-                      <td>${Number(row.estimatedCostUsd || 0).toFixed(4)}</td>
+              <div className="table-scroll">
+                <table className="metrics-table">
+                  <thead>
+                    <tr>
+                      <th>Day</th>
+                      <th>Calls</th>
+                      <th>Tokens</th>
+                      <th>Cost</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {costs.byDay.map((row) => (
+                      <tr key={row.day}>
+                        <td data-label="Day">{row.day}</td>
+                        <td data-label="Calls">{row.invocationCount}</td>
+                        <td data-label="Tokens">{row.totalTokens}</td>
+                        <td data-label="Cost">${Number(row.estimatedCostUsd || 0).toFixed(4)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             )}
           </>
         )}
@@ -539,26 +543,28 @@ export function OpsHealthPanel({
               ))}
             </div>
             <h3>Actuator components</h3>
-            <table className="metrics-table">
-              <thead>
-                <tr>
-                  <th>Component</th>
-                  <th>Status</th>
-                  <th>Detail</th>
-                </tr>
-              </thead>
-              <tbody>
-                {Object.entries(health.components).map(([name, component]) => (
-                  <tr key={name}>
-                    <td>{name}</td>
-                    <td>
-                      <span className="badge">{component.status}</span>
-                    </td>
-                    <td className="muted small">{component.detail}</td>
+            <div className="table-scroll">
+              <table className="metrics-table">
+                <thead>
+                  <tr>
+                    <th>Component</th>
+                    <th>Status</th>
+                    <th>Detail</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {Object.entries(health.components).map(([name, component]) => (
+                    <tr key={name}>
+                      <td data-label="Component">{name}</td>
+                      <td data-label="Status">
+                        <span className="badge">{component.status}</span>
+                      </td>
+                      <td data-label="Detail" className="muted small">{component.detail}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </>
         )}
       </StateBlock>

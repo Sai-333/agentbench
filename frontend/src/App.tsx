@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import {
   api,
@@ -41,6 +41,26 @@ import {
 } from './DashboardPanels'
 import { RegressionRunsPanel } from './RegressionRunsPanel'
 import { resetForm } from './formUtils'
+import {
+  EMPTY_COMPARISON_FILTER,
+  EMPTY_EVALUATION_FILTER,
+  EMPTY_LEADERBOARD_FILTER,
+  EVALUATION_STATES,
+  comparisonFiltersActive,
+  comparisonSearchParams,
+  costSearchParams,
+  evaluationFiltersActive,
+  evaluationSearchParams,
+  filterComparisonRows,
+  filterCostAgents,
+  filterEvaluationItems,
+  filterLeaderboardRows,
+  leaderboardFiltersActive,
+  leaderboardSearchParams,
+  type ComparisonTableFilter,
+  type EvaluationFilter,
+  type LeaderboardFilter,
+} from './listFilters'
 import './App.css'
 
 type Mode = 'login' | 'register'
@@ -151,10 +171,27 @@ function App() {
   const [expandedRegressionId, setExpandedRegressionId] = useState('')
   const [expandedRegression, setExpandedRegression] = useState<RegressionRunDetail | null>(null)
   const [regressionExpanding, setRegressionExpanding] = useState(false)
-  const [evalSearch, setEvalSearch] = useState('')
-  const [evalStateFilter, setEvalStateFilter] = useState('')
+  const [evalFilters, setEvalFilters] = useState<EvaluationFilter>(EMPTY_EVALUATION_FILTER)
   const [evalPage, setEvalPage] = useState(0)
   const [evalSearchResult, setEvalSearchResult] = useState<EvaluationSearchResponse | null>(null)
+  const [evalSearchError, setEvalSearchError] = useState<string | null>(null)
+  const [lbFilters, setLbFilters] = useState<LeaderboardFilter>(EMPTY_LEADERBOARD_FILTER)
+  const [compareTaskFilter, setCompareTaskFilter] = useState<ComparisonTableFilter>(EMPTY_COMPARISON_FILTER)
+  const [costAgentId, setCostAgentId] = useState('')
+  const [costQuery, setCostQuery] = useState('')
+  const evalFiltersRef = useRef(evalFilters)
+  const lbFiltersRef = useRef(lbFilters)
+  const compareTaskRef = useRef(compareTaskFilter)
+  const costAgentRef = useRef(costAgentId)
+  const evalReq = useRef(0)
+  const lbReq = useRef(0)
+  const loadedLbVersion = useRef('')
+  const costReq = useRef(0)
+  const compareReq = useRef(0)
+  evalFiltersRef.current = evalFilters
+  lbFiltersRef.current = lbFilters
+  compareTaskRef.current = compareTaskFilter
+  costAgentRef.current = costAgentId
   const [oidcProviders, setOidcProviders] = useState<AuthProviderInfo[]>([])
 
   const loadBenchmarks = useCallback(async (orgId: string) => {
@@ -240,7 +277,11 @@ function App() {
   }, [])
 
   const loadLeaderboard = useCallback(async (orgId: string, versionId: string) => {
+    const gen = ++lbReq.current
+    const filters = lbFiltersRef.current
     if (!versionId) {
+      if (gen !== lbReq.current) return
+      loadedLbVersion.current = ''
       setLeaderboard(null)
       setPublication(null)
       setEmbedSnippet(null)
@@ -248,23 +289,32 @@ function App() {
       setLeaderboardState('empty')
       return
     }
-    setLeaderboardState('loading')
+    if (loadedLbVersion.current !== versionId) {
+      setLeaderboard(null)
+      setLeaderboardState('loading')
+      setEmbedSnippet(null)
+      setEmbedStatus(null)
+    } else {
+      setLeaderboardState((prev) => (prev === 'ready' ? prev : 'loading'))
+    }
     setLeaderboardError(null)
-    setEmbedSnippet(null)
-    setEmbedStatus(null)
     try {
+      const query = leaderboardSearchParams(filters, 0, 50)
       const [data, pub] = await Promise.all([
         api<LeaderboardResponse>(
-          `/api/v1/orgs/${orgId}/benchmark-versions/${versionId}/leaderboard?page=0&size=50`,
+          `/api/v1/orgs/${orgId}/benchmark-versions/${versionId}/leaderboard?${query.toString()}`,
         ),
         api<LeaderboardPublicationStatus>(
           `/api/v1/orgs/${orgId}/benchmark-versions/${versionId}/leaderboard/publication`,
         ),
       ])
+      if (gen !== lbReq.current) return
+      loadedLbVersion.current = versionId
       setLeaderboard(data)
       setPublication(pub)
       setLeaderboardState(data.entries.length === 0 ? 'empty' : 'ready')
     } catch (err) {
+      if (gen !== lbReq.current) return
       setLeaderboard(null)
       setPublication(null)
       setLeaderboardError(err instanceof Error ? err.message : 'Could not load leaderboard')
@@ -273,13 +323,21 @@ function App() {
   }, [])
 
   const loadCosts = useCallback(async (orgId: string) => {
+    const gen = ++costReq.current
+    const agentId = costAgentRef.current
     setCostsState('loading')
     setCostsError(null)
     try {
-      const data = await api<CostAnalyticsResponse>(`/api/v1/orgs/${orgId}/analytics/costs`)
+      const query = costSearchParams(agentId)
+      const suffix = query.toString()
+      const data = await api<CostAnalyticsResponse>(
+        `/api/v1/orgs/${orgId}/analytics/costs${suffix ? `?${suffix}` : ''}`,
+      )
+      if (gen !== costReq.current) return
       setCosts(data)
       setCostsState(data.invocationCount === 0 ? 'empty' : 'ready')
     } catch (err) {
+      if (gen !== costReq.current) return
       setCosts(null)
       setCostsError(err instanceof Error ? err.message : 'Could not load costs')
       setCostsState('error')
@@ -334,22 +392,23 @@ function App() {
     }
   }, [expandedRegressionId])
 
-  const loadEvaluationSearch = useCallback(
-    async (orgId: string, page = 0) => {
-      const params = new URLSearchParams({
-        page: String(page),
-        size: '20',
-      })
-      if (evalStateFilter) params.set('state', evalStateFilter)
-      if (evalSearch.trim()) params.set('q', evalSearch.trim())
+  const loadEvaluationSearch = useCallback(async (orgId: string, page = 0) => {
+    const gen = ++evalReq.current
+    const filters = evalFiltersRef.current
+    setEvalSearchError(null)
+    try {
+      const params = evaluationSearchParams(filters, page)
       const data = await api<EvaluationSearchResponse>(
         `/api/v1/orgs/${orgId}/analytics/evaluations?${params.toString()}`,
       )
+      if (gen !== evalReq.current) return
       setEvalSearchResult(data)
       setEvalPage(page)
-    },
-    [evalSearch, evalStateFilter],
-  )
+    } catch (err) {
+      if (gen !== evalReq.current) return
+      setEvalSearchError(err instanceof Error ? err.message : 'Could not filter evaluations')
+    }
+  }, [])
 
   const loadWorkspace = useCallback(async () => {
     const profile = await api<MeResponse>('/api/v1/me')
@@ -475,6 +534,71 @@ function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedOrgId, selectedEvaluation?.evaluation.id, selectedEvaluation?.evaluation.state])
 
+  useEffect(() => {
+    if (!selectedOrgId) return
+    const delay = evalFilters.q.trim() ? 250 : 0
+    const timer = window.setTimeout(() => {
+      void loadEvaluationSearch(selectedOrgId, 0)
+    }, delay)
+    return () => window.clearTimeout(timer)
+  }, [
+    selectedOrgId,
+    evalFilters.q,
+    evalFilters.state,
+    evalFilters.agentId,
+    evalFilters.taskId,
+    evalFilters.benchmarkVersionId,
+    loadEvaluationSearch,
+  ])
+
+  useEffect(() => {
+    if (!selectedOrgId || tab !== 'leaderboard') return
+    const delay = lbFilters.q.trim() ? 250 : 0
+    const timer = window.setTimeout(() => {
+      void loadLeaderboard(selectedOrgId, selectedVersionId)
+    }, delay)
+    return () => window.clearTimeout(timer)
+  }, [
+    selectedOrgId,
+    tab,
+    selectedVersionId,
+    lbFilters.q,
+    lbFilters.agentId,
+    lbFilters.taskId,
+    loadLeaderboard,
+  ])
+
+  useEffect(() => {
+    if (!selectedOrgId || tab !== 'costs') return
+    void loadCosts(selectedOrgId)
+  }, [selectedOrgId, tab, costAgentId, loadCosts])
+
+  useEffect(() => {
+    if (!selectedOrgId || !selectedVersionId) return
+    let cancelled = false
+    void api<Task[]>(`/api/v1/orgs/${selectedOrgId}/benchmark-versions/${selectedVersionId}/tasks`)
+      .then((list) => {
+        if (cancelled) return
+        setTasks(list)
+        setLbFilters((prev) =>
+          prev.taskId && !list.some((task) => task.id === prev.taskId)
+            ? { ...prev, taskId: '' }
+            : prev,
+        )
+        setCompareTaskFilter((prev) =>
+          prev.taskId && !list.some((task) => task.id === prev.taskId)
+            ? { ...prev, taskId: '' }
+            : prev,
+        )
+      })
+      .catch(() => {
+        if (!cancelled) setTasks([])
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [selectedOrgId, selectedVersionId])
+
   async function handleAuth(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     setError(null)
@@ -553,9 +677,24 @@ function App() {
     }
   }
 
+  function clearListFilters() {
+    evalFiltersRef.current = EMPTY_EVALUATION_FILTER
+    lbFiltersRef.current = EMPTY_LEADERBOARD_FILTER
+    compareTaskRef.current = EMPTY_COMPARISON_FILTER
+    costAgentRef.current = ''
+    setEvalFilters(EMPTY_EVALUATION_FILTER)
+    setLbFilters(EMPTY_LEADERBOARD_FILTER)
+    setCompareTaskFilter(EMPTY_COMPARISON_FILTER)
+    setCostAgentId('')
+    setCostQuery('')
+    setEvalPage(0)
+    loadedLbVersion.current = ''
+  }
+
   async function handleSelectOrg(orgId: string) {
     setSurface('consumer')
     setSelectedOrgId(orgId)
+    clearListFilters()
     setError(null)
     setBusy(true)
     try {
@@ -699,29 +838,51 @@ function App() {
     }
   }
 
+  const loadComparison = useCallback(async () => {
+    if (!selectedOrgId || !selectedVersionId || compareAgentIds.length === 0) {
+      setComparison(null)
+      setComparisonState('empty')
+      setComparisonError(null)
+      return
+    }
+    const gen = ++compareReq.current
+    setComparison(null)
+    setComparisonState('loading')
+    setComparisonError(null)
+    try {
+      const params = comparisonSearchParams(
+        selectedVersionId,
+        compareAgentIds,
+        compareTaskRef.current.taskId,
+      )
+      const data = await api<ComparisonResponse>(
+        `/api/v1/orgs/${selectedOrgId}/analytics/comparisons?${params.toString()}`,
+      )
+      if (gen !== compareReq.current) return
+      setComparison(data)
+      setComparisonState(data.rows.length === 0 ? 'empty' : 'ready')
+    } catch (err) {
+      if (gen !== compareReq.current) return
+      setComparison(null)
+      setComparisonError(err instanceof Error ? err.message : 'Could not compare agents')
+      setComparisonState('error')
+    }
+  }, [selectedOrgId, selectedVersionId, compareAgentIds])
+
+  useEffect(() => {
+    if (tab !== 'compare' || !selectedOrgId) return
+    void loadComparison()
+  }, [tab, selectedOrgId, selectedVersionId, compareAgentIds, compareTaskFilter.taskId, loadComparison])
+
   async function handleLoadComparison() {
     if (!selectedOrgId || !selectedVersionId || compareAgentIds.length === 0) {
       setError('Select a benchmark version and at least one agent to compare')
       return
     }
-    setComparisonState('loading')
-    setComparisonError(null)
     setBusy(true)
+    setTab('compare')
     try {
-      const params = new URLSearchParams({
-        benchmarkVersionId: selectedVersionId,
-        agentIds: compareAgentIds.join(','),
-      })
-      const data = await api<ComparisonResponse>(
-        `/api/v1/orgs/${selectedOrgId}/analytics/comparisons?${params.toString()}`,
-      )
-      setComparison(data)
-      setComparisonState(data.rows.length === 0 ? 'empty' : 'ready')
-      setTab('compare')
-    } catch (err) {
-      setComparison(null)
-      setComparisonError(err instanceof Error ? err.message : 'Could not compare agents')
-      setComparisonState('error')
+      await loadComparison()
     } finally {
       setBusy(false)
     }
@@ -749,8 +910,10 @@ function App() {
     setBusy(true)
     setError(null)
     try {
+      const query = leaderboardSearchParams(lbFiltersRef.current, 0, 100)
+      query.set('format', format)
       await downloadAuthenticated(
-        `/api/v1/orgs/${selectedOrgId}/benchmark-versions/${selectedVersionId}/leaderboard/export?format=${format}`,
+        `/api/v1/orgs/${selectedOrgId}/benchmark-versions/${selectedVersionId}/leaderboard/export?${query.toString()}`,
         `leaderboard-${selectedVersionId}.${format}`,
       )
     } catch (err) {
@@ -1368,6 +1531,40 @@ function App() {
     (membership) => membership.role === 'OWNER' || membership.role === 'ADMIN',
   )
   const draftSelected = selectedVersion?.status === 'DRAFT'
+  const evaluationSource =
+    evalSearchResult?.items ??
+    evaluations.map((evaluation) => ({
+      id: evaluation.id,
+      state: evaluation.state,
+      agentId: evaluation.agentId,
+      agentName:
+        agents.find((agent) => agent.id === evaluation.agentId)?.name ||
+        evaluation.agentId.slice(0, 8),
+      taskId: evaluation.taskId,
+      taskSlug:
+        tasks.find((task) => task.id === evaluation.taskId)?.slug || evaluation.taskId.slice(0, 8),
+      benchmarkVersionId: evaluation.benchmarkVersionId,
+      benchmarkVersion:
+        versions.find((version) => version.id === evaluation.benchmarkVersionId)?.version || '',
+      weightedTotal: null as number | null,
+      failureClass: evaluation.failureClass,
+      createdAt: evaluation.createdAt,
+      updatedAt: evaluation.updatedAt,
+      completedAt: evaluation.completedAt,
+    }))
+  const evaluationItems = filterEvaluationItems(evaluationSource, evalFilters)
+  const leaderboardRows = leaderboard ? filterLeaderboardRows(leaderboard.entries, lbFilters) : []
+  const leaderboardView = leaderboard ? { ...leaderboard, entries: leaderboardRows } : null
+  const leaderboardViewState: LoadState =
+    leaderboardState === 'ready' && leaderboardRows.length === 0 ? 'empty' : leaderboardState
+  const comparisonRows = comparison
+    ? filterComparisonRows(comparison.rows, compareTaskFilter)
+    : []
+  const comparisonView = comparison ? { ...comparison, rows: comparisonRows } : null
+  const comparisonViewState: LoadState =
+    comparisonState === 'ready' && comparisonRows.length === 0 ? 'empty' : comparisonState
+  const costAgents = costs ? filterCostAgents(costs.byAgent, costAgentId, costQuery) : []
+  const costsView = costs ? { ...costs, byAgent: costAgents } : null
 
   function openPlatformRegression() {
     setSurface('platform-regression')
@@ -1533,28 +1730,81 @@ function App() {
               <h2>Org leaderboard {selectedOrg ? `· ${selectedOrg.name}` : ''}</h2>
               {selectedOrg ? (
                 <>
-                  <label>
-                    Benchmark version
-                    <select
-                      value={selectedVersionId}
-                      onChange={(event) => {
-                        const versionId = event.target.value
-                        setSelectedVersionId(versionId)
-                        void loadLeaderboard(selectedOrgId, versionId)
-                      }}
+                  <div className="filter-row">
+                    <label>
+                      Benchmark version
+                      <select
+                        value={selectedVersionId}
+                        onChange={(event) => setSelectedVersionId(event.target.value)}
+                      >
+                        <option value="">Select version</option>
+                        {versions.map((version) => (
+                          <option key={version.id} value={version.id}>
+                            {version.version} ({version.status})
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label>
+                      Task
+                      <select
+                        value={lbFilters.taskId}
+                        onChange={(event) =>
+                          setLbFilters((prev) => ({ ...prev, taskId: event.target.value }))
+                        }
+                      >
+                        <option value="">Any</option>
+                        {tasks.map((task) => (
+                          <option key={task.id} value={task.id}>
+                            {task.slug}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label>
+                      Agent
+                      <select
+                        value={lbFilters.agentId}
+                        onChange={(event) =>
+                          setLbFilters((prev) => ({ ...prev, agentId: event.target.value }))
+                        }
+                      >
+                        <option value="">Any</option>
+                        {agents.map((agent) => (
+                          <option key={agent.id} value={agent.id}>
+                            {agent.name}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label>
+                      Search
+                      <input
+                        value={lbFilters.q}
+                        onChange={(event) =>
+                          setLbFilters((prev) => ({ ...prev, q: event.target.value }))
+                        }
+                        placeholder="agent or task"
+                      />
+                    </label>
+                    <button
+                      type="button"
+                      className="cta secondary"
+                      disabled={!leaderboardFiltersActive(lbFilters)}
+                      onClick={() => setLbFilters(EMPTY_LEADERBOARD_FILTER)}
                     >
-                      <option value="">Select version</option>
-                      {versions.map((version) => (
-                        <option key={version.id} value={version.id}>
-                          {version.version} ({version.status})
-                        </option>
-                      ))}
-                    </select>
-                  </label>
+                      Clear
+                    </button>
+                  </div>
                   <LeaderboardPanel
-                    board={leaderboard}
-                    state={leaderboardState}
+                    board={leaderboardView}
+                    state={leaderboardViewState}
                     error={leaderboardError}
+                    emptyMessage={
+                      leaderboardFiltersActive(lbFilters)
+                        ? 'No leaderboard rows match these filters.'
+                        : 'No completed scored evaluations for this benchmark version yet.'
+                    }
                     busy={busy}
                     onExport={(format) => void handleExportLeaderboard(format)}
                     canPublish={canPublishLeaderboard}
@@ -1593,6 +1843,42 @@ function App() {
                       ))}
                     </select>
                   </label>
+                  <div className="filter-row">
+                    <label>
+                      Task
+                      <select
+                        value={compareTaskFilter.taskId}
+                        onChange={(event) =>
+                          setCompareTaskFilter((prev) => ({ ...prev, taskId: event.target.value }))
+                        }
+                      >
+                        <option value="">Any</option>
+                        {tasks.map((task) => (
+                          <option key={task.id} value={task.id}>
+                            {task.slug}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label>
+                      Search
+                      <input
+                        value={compareTaskFilter.q}
+                        onChange={(event) =>
+                          setCompareTaskFilter((prev) => ({ ...prev, q: event.target.value }))
+                        }
+                        placeholder="agent or task"
+                      />
+                    </label>
+                    <button
+                      type="button"
+                      className="cta secondary"
+                      disabled={!comparisonFiltersActive(compareTaskFilter)}
+                      onClick={() => setCompareTaskFilter(EMPTY_COMPARISON_FILTER)}
+                    >
+                      Clear
+                    </button>
+                  </div>
                   <div className="compare-agents">
                     {agents.map((agent) => (
                       <label key={agent.id} className="check-row">
@@ -1614,9 +1900,14 @@ function App() {
                     Run comparison
                   </button>
                   <ComparisonPanel
-                    comparison={comparison}
-                    state={comparisonState}
+                    comparison={comparisonView}
+                    state={comparisonViewState}
                     error={comparisonError}
+                    emptyMessage={
+                      comparisonFiltersActive(compareTaskFilter)
+                        ? 'No comparison rows match these filters.'
+                        : 'Select agents and a published benchmark version to compare identical runs.'
+                    }
                   />
                 </>
               ) : (
@@ -1627,7 +1918,57 @@ function App() {
             <>
               <h2>Cost analytics {selectedOrg ? `· ${selectedOrg.name}` : ''}</h2>
               {selectedOrg ? (
-                <CostsPanel costs={costs} state={costsState} error={costsError} />
+                <>
+                  <div className="filter-row">
+                    <label>
+                      Agent
+                      <select
+                        value={costAgentId}
+                        onChange={(event) => setCostAgentId(event.target.value)}
+                      >
+                        <option value="">Any</option>
+                        {agents.map((agent) => (
+                          <option key={agent.id} value={agent.id}>
+                            {agent.name}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label>
+                      Search
+                      <input
+                        value={costQuery}
+                        onChange={(event) => setCostQuery(event.target.value)}
+                        placeholder="agent name"
+                      />
+                    </label>
+                    <button
+                      type="button"
+                      className="cta secondary"
+                      disabled={!costAgentId && !costQuery.trim()}
+                      onClick={() => {
+                        setCostAgentId('')
+                        setCostQuery('')
+                      }}
+                    >
+                      Clear
+                    </button>
+                  </div>
+                  <CostsPanel
+                    costs={costsView}
+                    state={
+                      costsState === 'ready' && costQuery.trim() && costAgents.length === 0
+                        ? 'empty'
+                        : costsState
+                    }
+                    error={costsError}
+                    emptyMessage={
+                      costAgentId || costQuery.trim()
+                        ? 'No cost rows match these filters.'
+                        : 'No token or cost records yet. Costs appear when adapters report them.'
+                    }
+                  />
+                </>
               ) : (
                 <p className="muted">Select an organization first.</p>
               )}
@@ -1999,31 +2340,81 @@ function App() {
                     <label>
                       Search
                       <input
-                        value={evalSearch}
-                        onChange={(event) => setEvalSearch(event.target.value)}
+                        value={evalFilters.q}
+                        onChange={(event) =>
+                          setEvalFilters((prev) => ({ ...prev, q: event.target.value }))
+                        }
+                        onKeyDown={(event) => {
+                          if (event.key === 'Enter') {
+                            void loadEvaluationSearch(selectedOrgId, 0)
+                          }
+                        }}
                         placeholder="agent, task, id…"
                       />
                     </label>
                     <label>
                       State
                       <select
-                        value={evalStateFilter}
-                        onChange={(event) => setEvalStateFilter(event.target.value)}
+                        value={evalFilters.state}
+                        onChange={(event) =>
+                          setEvalFilters((prev) => ({ ...prev, state: event.target.value }))
+                        }
                       >
                         <option value="">Any</option>
-                        {[
-                          'QUEUED',
-                          'INVOKING_AGENT',
-                          'RUNNING_VISIBLE_TESTS',
-                          'RUNNING_HIDDEN_TESTS',
-                          'SCORING',
-                          'COMPLETED',
-                          'FAILED',
-                          'CANCELLED',
-                          'TIMED_OUT',
-                        ].map((state) => (
+                        {EVALUATION_STATES.map((state) => (
                           <option key={state} value={state}>
                             {state}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label>
+                      Agent
+                      <select
+                        value={evalFilters.agentId}
+                        onChange={(event) =>
+                          setEvalFilters((prev) => ({ ...prev, agentId: event.target.value }))
+                        }
+                      >
+                        <option value="">Any</option>
+                        {agents.map((agent) => (
+                          <option key={agent.id} value={agent.id}>
+                            {agent.name}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label>
+                      Task
+                      <select
+                        value={evalFilters.taskId}
+                        onChange={(event) =>
+                          setEvalFilters((prev) => ({ ...prev, taskId: event.target.value }))
+                        }
+                      >
+                        <option value="">Any</option>
+                        {tasks.map((task) => (
+                          <option key={task.id} value={task.id}>
+                            {task.slug}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label>
+                      Version
+                      <select
+                        value={evalFilters.benchmarkVersionId}
+                        onChange={(event) =>
+                          setEvalFilters((prev) => ({
+                            ...prev,
+                            benchmarkVersionId: event.target.value,
+                          }))
+                        }
+                      >
+                        <option value="">Any</option>
+                        {versions.map((version) => (
+                          <option key={version.id} value={version.id}>
+                            {version.version}
                           </option>
                         ))}
                       </select>
@@ -2036,27 +2427,31 @@ function App() {
                     >
                       Apply
                     </button>
+                    <button
+                      type="button"
+                      className="cta secondary"
+                      disabled={!evaluationFiltersActive(evalFilters)}
+                      onClick={() => setEvalFilters(EMPTY_EVALUATION_FILTER)}
+                    >
+                      Clear
+                    </button>
                   </div>
-                  {(evalSearchResult?.items.length ?? 0) === 0 &&
-                  (evaluations.length === 0) ? (
-                    <p className="muted">No evaluations yet.</p>
+                  {evalSearchError && (
+                    <p className="error" role="alert">
+                      {evalSearchError}
+                    </p>
+                  )}
+                  {evaluationItems.length === 0 ? (
+                    <p className="muted">
+                      {!evalSearchResult && evaluations.length === 0 && !evalSearchError
+                        ? 'Loading evaluations…'
+                        : evaluationFiltersActive(evalFilters)
+                          ? 'No evaluations match these filters.'
+                          : 'No evaluations yet.'}
+                    </p>
                   ) : (
                     <ul className="list">
-                      {(evalSearchResult?.items ?? evaluations.map((evaluation) => ({
-                        id: evaluation.id,
-                        state: evaluation.state,
-                        agentId: evaluation.agentId,
-                        agentName: agents.find((a) => a.id === evaluation.agentId)?.name || evaluation.agentId.slice(0, 8),
-                        taskId: evaluation.taskId,
-                        taskSlug: evaluation.taskId.slice(0, 8),
-                        benchmarkVersionId: evaluation.benchmarkVersionId,
-                        benchmarkVersion: '',
-                        weightedTotal: null as number | null,
-                        failureClass: evaluation.failureClass,
-                        createdAt: evaluation.createdAt,
-                        updatedAt: evaluation.updatedAt,
-                        completedAt: evaluation.completedAt,
-                      }))).map((evaluation) => (
+                      {evaluationItems.map((evaluation) => (
                         <li key={evaluation.id}>
                           <button
                             type="button"
@@ -2083,7 +2478,7 @@ function App() {
                     </ul>
                   )}
                   {evalSearchResult && evalSearchResult.page.total > evalSearchResult.page.size && (
-                    <div className="toolbar-actions" style={{ marginTop: '0.75rem' }}>
+                    <div className="toolbar-actions page-actions">
                       <button
                         type="button"
                         className="cta secondary"
@@ -2258,15 +2653,15 @@ function App() {
       </section>
 
       {tab === 'evaluations' && selectedEvaluation && (
-        <section className="panel" style={{ marginTop: '1.25rem' }}>
-          <div className="topbar" style={{ marginBottom: '1rem' }}>
+        <section className="panel detail-panel">
+          <div className="topbar detail-toolbar">
             <div>
               <h2>Evaluation detail</h2>
-              <p className="muted small">
+              <p className="muted small break-anywhere">
                 {selectedEvaluation.evaluation.id} · attempt {selectedEvaluation.evaluation.attempt}
               </p>
             </div>
-            <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+            <div className="action-row">
               <button type="button" className="cta secondary" onClick={handleRefreshEvaluation} disabled={busy}>
                 Refresh
               </button>
@@ -2393,30 +2788,32 @@ function App() {
                     </span>
                   </p>
                   {(report.tools?.length ?? 0) > 0 && (
-                    <table className="metrics-table">
-                      <thead>
-                        <tr>
-                          <th>Tool</th>
-                          <th>New</th>
-                          <th>Pre-existing</th>
-                          <th>Total</th>
-                          <th>Notes</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {report.tools.map((tool) => (
-                          <tr key={tool.tool}>
-                            <td>{tool.tool}</td>
-                            <td>{tool.newFindings}</td>
-                            <td>{tool.preExistingFindings}</td>
-                            <td>{tool.totalFindings}</td>
-                            <td className="muted small">
-                              {tool.stub ? 'stub' : tool.notes || ''}
-                            </td>
+                    <div className="table-scroll">
+                      <table className="metrics-table">
+                        <thead>
+                          <tr>
+                            <th>Tool</th>
+                            <th>New</th>
+                            <th>Pre-existing</th>
+                            <th>Total</th>
+                            <th>Notes</th>
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                        </thead>
+                        <tbody>
+                          {report.tools.map((tool) => (
+                            <tr key={tool.tool}>
+                              <td data-label="Tool">{tool.tool}</td>
+                              <td data-label="New">{tool.newFindings}</td>
+                              <td data-label="Pre-existing">{tool.preExistingFindings}</td>
+                              <td data-label="Total">{tool.totalFindings}</td>
+                              <td data-label="Notes" className="muted small">
+                                {tool.stub ? 'stub' : tool.notes || ''}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
                   )}
                   {report.tools?.some((tool) => (tool.findingsSample?.length ?? 0) > 0) && (
                     <ul className="muted small">
@@ -2453,53 +2850,57 @@ function App() {
               {selectedEvaluation.score.transitionSummary && (
                 <>
                   <h4>Visible transitions</h4>
-                  <table className="metrics-table">
-                    <thead>
-                      <tr>
-                        <th>F2P</th>
-                        <th>P2P</th>
-                        <th>P2F</th>
-                        <th>F2F</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <tr>
-                        <td>{selectedEvaluation.score.transitionSummary.F2P ?? 0}</td>
-                        <td>{selectedEvaluation.score.transitionSummary.P2P ?? 0}</td>
-                        <td>{selectedEvaluation.score.transitionSummary.P2F ?? 0}</td>
-                        <td>{selectedEvaluation.score.transitionSummary.F2F ?? 0}</td>
-                      </tr>
-                    </tbody>
-                  </table>
+                  <div className="table-scroll">
+                    <table className="metrics-table">
+                      <thead>
+                        <tr>
+                          <th>F2P</th>
+                          <th>P2P</th>
+                          <th>P2F</th>
+                          <th>F2F</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr>
+                          <td data-label="F2P">{selectedEvaluation.score.transitionSummary.F2P ?? 0}</td>
+                          <td data-label="P2P">{selectedEvaluation.score.transitionSummary.P2P ?? 0}</td>
+                          <td data-label="P2F">{selectedEvaluation.score.transitionSummary.P2F ?? 0}</td>
+                          <td data-label="F2F">{selectedEvaluation.score.transitionSummary.F2F ?? 0}</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
                 </>
               )}
               <h4>Raw metrics (separate from weighted total)</h4>
-              <table className="metrics-table">
-                <thead>
-                  <tr>
-                    <th>Metric</th>
-                    <th>Raw</th>
-                    <th>Weight</th>
-                    <th>Weighted</th>
-                    <th>Notes</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {selectedEvaluation.score.metrics.map((metric) => (
-                    <tr key={metric.metricKey}>
-                      <td>{metric.metricKey}</td>
-                      <td>{Number(metric.rawValue).toFixed(3)}</td>
-                      <td>{(Number(metric.weight) * 100).toFixed(0)}%</td>
-                      <td>{Number(metric.weightedValue).toFixed(2)}</td>
-                      <td className="muted small">
-                        {metric.meta?.stub ? 'stub' : ''}
-                        {metric.meta?.neverF2P ? ' post-only · never F2P' : ''}
-                        {metric.meta?.withheld ? ' withheld' : ''}
-                      </td>
+              <div className="table-scroll">
+                <table className="metrics-table">
+                  <thead>
+                    <tr>
+                      <th>Metric</th>
+                      <th>Raw</th>
+                      <th>Weight</th>
+                      <th>Weighted</th>
+                      <th>Notes</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {selectedEvaluation.score.metrics.map((metric) => (
+                      <tr key={metric.metricKey}>
+                        <td data-label="Metric">{metric.metricKey}</td>
+                        <td data-label="Raw">{Number(metric.rawValue).toFixed(3)}</td>
+                        <td data-label="Weight">{(Number(metric.weight) * 100).toFixed(0)}%</td>
+                        <td data-label="Weighted">{Number(metric.weightedValue).toFixed(2)}</td>
+                        <td data-label="Notes" className="muted small">
+                          {metric.meta?.stub ? 'stub' : ''}
+                          {metric.meta?.neverF2P ? ' post-only · never F2P' : ''}
+                          {metric.meta?.withheld ? ' withheld' : ''}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
               {(selectedEvaluation.score.warnings?.length ?? 0) > 0 && (
                 <ul className="muted small">
                   {selectedEvaluation.score.warnings.map((warning) => (

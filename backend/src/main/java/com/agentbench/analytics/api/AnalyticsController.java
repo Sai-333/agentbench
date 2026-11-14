@@ -69,9 +69,11 @@ public class AnalyticsController {
             @PathVariable UUID orgId,
             @PathVariable UUID versionId,
             @RequestParam(required = false) UUID taskId,
+            @RequestParam(required = false) UUID agentId,
+            @RequestParam(required = false) String q,
             @RequestParam(required = false) Integer page,
             @RequestParam(required = false) Integer size) {
-        return analyticsService.leaderboard(orgId, versionId, taskId, page, size);
+        return analyticsService.leaderboard(orgId, versionId, taskId, agentId, q, page, size);
     }
 
     @GetMapping("/benchmark-versions/{versionId}/leaderboard/publication")
@@ -126,8 +128,10 @@ public class AnalyticsController {
             @PathVariable UUID orgId,
             @PathVariable UUID versionId,
             @RequestParam(required = false) UUID taskId,
+            @RequestParam(required = false) UUID agentId,
+            @RequestParam(required = false) String q,
             @RequestParam(defaultValue = "csv") String format) {
-        byte[] body = analyticsService.exportLeaderboard(orgId, versionId, taskId, format);
+        byte[] body = analyticsService.exportLeaderboard(orgId, versionId, taskId, agentId, q, format);
         return attachment(
                 body,
                 "leaderboard-" + versionId,

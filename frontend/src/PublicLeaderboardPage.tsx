@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useMemo, useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
 import { api, getAccessToken } from './api'
 import type {
@@ -6,6 +6,12 @@ import type {
   PublicLeaderboardResponse,
   PublicVoteSummaryResponse,
 } from './api'
+import {
+  EMPTY_PUBLIC_BOARD_FILTER,
+  filterPublicEntries,
+  publicBoardFiltersActive,
+  type PublicBoardFilter,
+} from './listFilters'
 import './App.css'
 
 type LoadState = 'loading' | 'ready' | 'error' | 'empty'
@@ -37,12 +43,25 @@ export function PublicLeaderboardPage({ slug }: { slug: string }) {
   const [engagementError, setEngagementError] = useState<string | null>(null)
   const [posting, setPosting] = useState(false)
   const [voting, setVoting] = useState(false)
+  const [boardFilter, setBoardFilter] = useState<PublicBoardFilter>(EMPTY_PUBLIC_BOARD_FILTER)
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
     const stored = localStorage.getItem('agentbench.theme')
     return stored === 'dark' ? 'dark' : 'light'
   })
 
   const withOptionalAuth = !!getAccessToken()
+  const visibleEntries = useMemo(
+    () => filterPublicEntries(board?.entries ?? [], boardFilter),
+    [board, boardFilter],
+  )
+  const agentOptions = useMemo(
+    () => [...new Set((board?.entries ?? []).map((entry) => entry.agentName))].sort(),
+    [board],
+  )
+  const taskOptions = useMemo(
+    () => [...new Set((board?.entries ?? []).map((entry) => entry.taskSlug))].sort(),
+    [board],
+  )
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme
@@ -190,33 +209,91 @@ export function PublicLeaderboardPage({ slug }: { slug: string }) {
             <p className="muted small">
               {board.note} · Profile {board.scoringProfileKey} · {board.page.total} entries
             </p>
-            <table className="metrics-table">
-              <thead>
-                <tr>
-                  <th>#</th>
-                  <th>Agent</th>
-                  <th>Task</th>
-                  <th>Score</th>
-                  <th>F2P/P2P/P2F/F2F</th>
-                </tr>
-              </thead>
-              <tbody>
-                {board.entries.map((entry) => (
-                  <tr key={`${entry.rank}-${entry.agentName}-${entry.taskSlug}`}>
-                    <td>{entry.rank}</td>
-                    <td>
-                      {entry.agentName} <span className="badge">{entry.adapterType}</span>
-                    </td>
-                    <td>{entry.taskSlug}</td>
-                    <td>{Number(entry.weightedTotal).toFixed(2)}</td>
-                    <td className="muted small">
-                      {entry.transitionSummary?.F2P ?? 0}/{entry.transitionSummary?.P2P ?? 0}/
-                      {entry.transitionSummary?.P2F ?? 0}/{entry.transitionSummary?.F2F ?? 0}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <div className="filter-row">
+              <label>
+                Search
+                <input
+                  value={boardFilter.q}
+                  onChange={(event) =>
+                    setBoardFilter((prev) => ({ ...prev, q: event.target.value }))
+                  }
+                  placeholder="agent or task"
+                />
+              </label>
+              <label>
+                Agent
+                <select
+                  value={boardFilter.agent}
+                  onChange={(event) =>
+                    setBoardFilter((prev) => ({ ...prev, agent: event.target.value }))
+                  }
+                >
+                  <option value="">Any</option>
+                  {agentOptions.map((name) => (
+                    <option key={name} value={name}>
+                      {name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Task
+                <select
+                  value={boardFilter.task}
+                  onChange={(event) =>
+                    setBoardFilter((prev) => ({ ...prev, task: event.target.value }))
+                  }
+                >
+                  <option value="">Any</option>
+                  {taskOptions.map((slug) => (
+                    <option key={slug} value={slug}>
+                      {slug}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <button
+                type="button"
+                className="cta secondary"
+                disabled={!publicBoardFiltersActive(boardFilter)}
+                onClick={() => setBoardFilter(EMPTY_PUBLIC_BOARD_FILTER)}
+              >
+                Clear
+              </button>
+            </div>
+            {visibleEntries.length === 0 ? (
+              <p className="muted">No leaderboard rows match these filters.</p>
+            ) : (
+              <div className="table-scroll">
+                <table className="metrics-table">
+                  <thead>
+                    <tr>
+                      <th>#</th>
+                      <th>Agent</th>
+                      <th>Task</th>
+                      <th>Score</th>
+                      <th>F2P/P2P/P2F/F2F</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {visibleEntries.map((entry) => (
+                      <tr key={`${entry.rank}-${entry.agentName}-${entry.taskSlug}`}>
+                        <td data-label="#">{entry.rank}</td>
+                        <td data-label="Agent">
+                          {entry.agentName} <span className="badge">{entry.adapterType}</span>
+                        </td>
+                        <td data-label="Task">{entry.taskSlug}</td>
+                        <td data-label="Score">{Number(entry.weightedTotal).toFixed(2)}</td>
+                        <td data-label="F2P/P2P/P2F/F2F" className="muted small">
+                          {entry.transitionSummary?.F2P ?? 0}/{entry.transitionSummary?.P2P ?? 0}/
+                          {entry.transitionSummary?.P2F ?? 0}/{entry.transitionSummary?.F2F ?? 0}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         )}
       </section>
