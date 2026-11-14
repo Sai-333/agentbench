@@ -15,7 +15,8 @@ public final class AgentDtos {
 
     public record CreateAgentRequest(
             @NotBlank @Size(max = 120) String name,
-            @NotBlank String adapterType,
+            /** Omit to register the default Grok provider. */
+            String adapterType,
             UUID secretRefId,
             Map<String, Object> config
     ) {

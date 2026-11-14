@@ -33,7 +33,7 @@ curl -sf -X POST http://localhost:8080/api/v1/auth/register \
   -d '{"email":"demo@example.com","password":"password123","displayName":"Demo"}'
 ```
 
-Open the frontend, sign in, create an org/project, publish a benchmark version, register a **FAKE** agent, and run an evaluation. Org-private analytics live under the dashboard tabs.
+Open the frontend, sign in, create an org/project, publish a benchmark version, and run an evaluation. If you do not pick another agent, the run uses **Grok**. `XAI_API_KEY` calls `https://api.x.ai/v1` and wins when set. When it is empty, `CURSOR_API_KEY` (a legacy Cursor user API key) calls `POST https://api.cursor.com/v1/agents` with model id `grok-4.7` (`GROK_MODEL` can be `grok-4.6` or `grok-4.5`). That Cursor key is not sent to xAI. Register a **FAKE** agent for a local demo when no key is configured. Org-private analytics live under the dashboard tabs. See [docs/AGENTS.md](docs/AGENTS.md).
 
 ### Production-ish Compose overlay
 
@@ -150,6 +150,9 @@ Notable variables:
 - `AGENTBENCH_EVAL_FLAKY_REPEAT_RUNS`
 - `AGENTBENCH_EVAL_BASELINE_CONFIRMATION_ENABLED` / `AGENTBENCH_EVAL_BASELINE_CONFIRMATION_RUNS` (R5 gate; see `docs/SCORING_METHODOLOGY.md`)
 - `AGENTBENCH_SHUTDOWN_TIMEOUT` / `AGENTBENCH_RABBIT_LISTENER_MAX_ATTEMPTS`
+- `XAI_API_KEY` — direct key for the default Grok agent (`https://api.x.ai/v1`). Leave empty for FAKE-only demos. Never commit a real key.
+- `CURSOR_API_KEY` — legacy Cursor user API key (Dashboard → API Keys). Used for Grok only when `XAI_API_KEY` is empty. Calls `POST https://api.cursor.com/v1/agents` with `model.id` `grok-4.7`, `grok-4.6`, or `grok-4.5`. Not sent to xAI.
+- `GROK_MODEL` — default `grok-4.7`
 
 ## Flyway
 
@@ -178,6 +181,7 @@ Never edit applied migrations; forward-only only.
 | [docs/SCORING_METHODOLOGY.md](docs/SCORING_METHODOLOGY.md) | F2P/P2P/P2F/F2F, hidden post-only, flake quarantine, baseline gates |
 | [docs/QUALITY_SONAR.md](docs/QUALITY_SONAR.md) | Optional SonarQube/SonarCloud quality path |
 | [docs/QUALITY_LANGUAGE.md](docs/QUALITY_LANGUAGE.md) | Optional Python (ruff) / Node (eslint) quality scanners |
+| [docs/AGENTS.md](docs/AGENTS.md) | Agent providers; Grok is the default |
 | [docs/RUNNERS.md](docs/RUNNERS.md) | Suite runners (Maven / pytest / Jest) |
 | [deploy/kubernetes/](deploy/kubernetes/) | K8s templates |
 | [deploy/helm/agentbench/](deploy/helm/agentbench/) | Helm chart (install/upgrade/uninstall) |
@@ -188,7 +192,7 @@ Never edit applied migrations; forward-only only.
 
 ## CI
 
-GitHub Actions builds backend (`mvn verify`, including Testcontainers when Docker is available), frontend (`npm ci && npm run build`), and Helm/operator packaging (`./scripts/helm/smoke.sh`, including `./scripts/operator/smoke.sh`). WireMock covers OpenAI-compatible HTTP without paid APIs.
+GitHub Actions builds backend (`mvn verify`, including Testcontainers when Docker is available), frontend (`npm ci && npm run build`), and Helm/operator packaging (`./scripts/helm/smoke.sh`, including `./scripts/operator/smoke.sh`). WireMock covers OpenAI-compatible HTTP, including the default Grok agent, without paid APIs.
 
 **Docker 29 note:** Engine 29 defaults to a minimum API of 1.44 while Testcontainers 1.21.x still negotiates an older client API. Local/daemon workaround:
 

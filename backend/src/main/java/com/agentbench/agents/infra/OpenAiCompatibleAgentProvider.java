@@ -74,18 +74,33 @@ public class OpenAiCompatibleAgentProvider implements AgentProvider {
 
     @Override
     public AgentInvocationResult invoke(AgentInvocationRequest request) {
+        return complete(request, new ChatCallDefaults(
+                "OpenAI-compatible",
+                PROVIDER_VERSION,
+                defaultBaseUrl,
+                "gpt-4o-mini",
+                "OpenAI-compatible agent requires an org secret_ref API key"));
+    }
+
+    /**
+     * Shared OpenAI-compatible Chat Completions call. Grok uses the same HTTP shape
+     * with xAI defaults. Never log {@code request.apiKey()}.
+     */
+    AgentInvocationResult complete(AgentInvocationRequest request, ChatCallDefaults defaults) {
         if (request.apiKey() == null || request.apiKey().isBlank()) {
             return AgentInvocationResult.failure(
                     AgentInvocationStatus.FAILED,
                     "AGENT_CREDENTIAL_MISSING",
-                    "OpenAI-compatible agent requires an org secret_ref API key",
+                    defaults.missingCredentialMessage(),
                     null,
                     Map.of());
         }
 
         JsonNode config = readConfig(request.agent().configJson());
-        String baseUrl = trimSlash(config.path("baseUrl").asText(defaultBaseUrl));
-        String model = config.path("model").asText("gpt-4o-mini");
+        String baseUrl = trimSlash(config.path("baseUrl").asText(
+                defaults.defaultBaseUrl() == null ? "" : defaults.defaultBaseUrl()));
+        String configuredModel = config.path("model").asText("");
+        String model = configuredModel.isBlank() ? defaults.defaultModel() : configuredModel;
         double temperature = config.path("temperature").asDouble(0.2);
         int maxTokens = config.path("maxTokens").asInt(4096);
         Duration timeout = request.timeout() != null ? request.timeout() : defaultTimeout;
@@ -121,7 +136,8 @@ public class OpenAiCompatibleAgentProvider implements AgentProvider {
                     .POST(HttpRequest.BodyPublishers.ofString(objectMapper.writeValueAsString(body)))
                     .build();
 
-            log.info("OpenAI-compatible invoke evaluation={} agent={} model={} baseHost={}",
+            log.info("{} invoke evaluation={} agent={} model={} baseHost={}",
+                    defaults.logLabel(),
                     request.evaluationId(),
                     request.agent().id(),
                     model,
@@ -164,7 +180,7 @@ public class OpenAiCompatibleAgentProvider implements AgentProvider {
             return AgentInvocationResult.success(
                     patch,
                     model,
-                    PROVIDER_VERSION,
+                    defaults.providerVersion(),
                     promptTokens,
                     completionTokens,
                     totalTokens,
@@ -175,7 +191,7 @@ public class OpenAiCompatibleAgentProvider implements AgentProvider {
             return AgentInvocationResult.failure(
                     AgentInvocationStatus.TIMED_OUT,
                     "AGENT_TIMEOUT",
-                    "OpenAI-compatible request timed out",
+                    defaults.logLabel() + " request timed out",
                     model,
                     Map.of());
         } catch (InterruptedException ex) {
@@ -183,12 +199,14 @@ public class OpenAiCompatibleAgentProvider implements AgentProvider {
             return AgentInvocationResult.failure(
                     AgentInvocationStatus.CANCELLED,
                     "AGENT_INTERRUPTED",
-                    "OpenAI-compatible request interrupted",
+                    defaults.logLabel() + " request interrupted",
                     model,
                     Map.of());
         } catch (Exception ex) {
-            log.warn("OpenAI-compatible invoke failed evaluation={}: {}",
-                    request.evaluationId(), SecretRedactor.sanitizeError(ex.getMessage()));
+            log.warn("{} invoke failed evaluation={}: {}",
+                    defaults.logLabel(),
+                    request.evaluationId(),
+                    SecretRedactor.sanitizeError(ex.getMessage()));
             return AgentInvocationResult.failure(
                     AgentInvocationStatus.FAILED,
                     "AGENT_ERROR",

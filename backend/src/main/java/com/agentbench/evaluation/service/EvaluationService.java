@@ -5,6 +5,7 @@ import com.agentbench.agents.domain.Agent;
 import com.agentbench.agents.domain.AgentInvocation;
 import com.agentbench.agents.infra.AgentRepository;
 import com.agentbench.agents.service.AgentInvocationService;
+import com.agentbench.agents.service.AgentService;
 import com.agentbench.benchmarks.domain.BenchmarkStatus;
 import com.agentbench.benchmarks.domain.BenchmarkVersion;
 import com.agentbench.benchmarks.domain.Task;
@@ -46,6 +47,7 @@ public class EvaluationService {
     private final EvaluationRepository evaluationRepository;
     private final BenchmarkRepository benchmarkRepository;
     private final AgentRepository agentRepository;
+    private final AgentService agentService;
     private final AgentInvocationService agentInvocationService;
     private final OrgAccessService orgAccessService;
     private final ObjectMapper objectMapper;
@@ -54,12 +56,14 @@ public class EvaluationService {
             EvaluationRepository evaluationRepository,
             BenchmarkRepository benchmarkRepository,
             AgentRepository agentRepository,
+            AgentService agentService,
             AgentInvocationService agentInvocationService,
             OrgAccessService orgAccessService,
             ObjectMapper objectMapper) {
         this.evaluationRepository = evaluationRepository;
         this.benchmarkRepository = benchmarkRepository;
         this.agentRepository = agentRepository;
+        this.agentService = agentService;
         this.agentInvocationService = agentInvocationService;
         this.orgAccessService = orgAccessService;
         this.objectMapper = objectMapper;
@@ -106,8 +110,10 @@ public class EvaluationService {
             throw ApiException.validation("Task does not belong to the given benchmark version");
         }
 
-        Agent agent = agentRepository.find(orgId, request.agentId())
-                .orElseThrow(() -> ApiException.notFound("Agent not found"));
+        Agent agent = request.agentId() == null
+                ? agentService.ensureDefaultGrokAgent(orgId)
+                : agentRepository.find(orgId, request.agentId())
+                        .orElseThrow(() -> ApiException.notFound("Agent not found"));
         if (!agent.enabled()) {
             throw ApiException.validation("Agent is disabled");
         }

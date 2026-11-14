@@ -17,7 +17,8 @@ public final class EvaluationDtos {
     public record CreateEvaluationRequest(
             @NotNull UUID benchmarkVersionId,
             @NotNull UUID taskId,
-            @NotNull UUID agentId
+            /** Omit to run the org's default Grok agent. */
+            UUID agentId
     ) {
     }
 

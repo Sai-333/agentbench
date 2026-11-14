@@ -294,6 +294,17 @@ agentbench:
     openai:
       default-base-url: ${AGENTBENCH_OPENAI_BASE_URL:https://api.openai.com}
       default-timeout-sec: ${AGENTBENCH_OPENAI_TIMEOUT_SEC:60}
+    # Default model provider.
+    # XAI_API_KEY (or an org secret ref) -> https://api.x.ai/v1 chat completions.
+    # CURSOR_API_KEY, only when XAI_API_KEY is empty and there is no secret ref,
+    # -> POST https://api.cursor.com/v1/agents with model.id grok-4.7 / grok-4.6 / grok-4.5.
+    # Never log either key and never commit one.
+    grok:
+      base-url: ${XAI_BASE_URL:https://api.x.ai/v1}
+      cursor-agents-url: ${CURSOR_AGENTS_URL:https://api.cursor.com/v1/agents}
+      model: ${GROK_MODEL:grok-4.7}
+      api-key: ${XAI_API_KEY:}
+      cursor-api-key: ${CURSOR_API_KEY:}
     http:
       default-timeout-sec: ${AGENTBENCH_HTTP_AGENT_TIMEOUT_SEC:60}
     coding-cli:

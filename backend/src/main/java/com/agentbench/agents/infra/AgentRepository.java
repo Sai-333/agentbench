@@ -50,6 +50,18 @@ public class AgentRepository {
         return find(orgId, id).orElseThrow();
     }
 
+    public Optional<Agent> findByName(UUID orgId, String name) {
+        var list = jdbc.query("""
+                SELECT id, org_id, name, adapter_type, secret_ref_id, config_json::text AS config_json,
+                       enabled, created_by, created_at, updated_at
+                FROM agents.agents
+                WHERE org_id = :orgId AND name = :name
+                """,
+                new MapSqlParameterSource().addValue("orgId", orgId).addValue("name", name),
+                (rs, rowNum) -> map(rs));
+        return list.stream().findFirst();
+    }
+
     public Optional<Agent> find(UUID orgId, UUID agentId) {
         var list = jdbc.query("""
                 SELECT id, org_id, name, adapter_type, secret_ref_id, config_json::text AS config_json,

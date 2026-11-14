@@ -33,6 +33,8 @@ public class ArtifactSecretScanner {
             named("bearer", Pattern.compile("(?i)authorization\\s*[:=]\\s*bearer\\s+\\S+")),
             named("api_key_header", Pattern.compile("(?i)x-api-key\\s*[:=]\\s*\\S+")),
             named("openai_sk", Pattern.compile("\\bsk-[A-Za-z0-9_\\-]{8,}\\b")),
+            named("xai_key", Pattern.compile("\\bxai-[A-Za-z0-9_\\-]{8,}\\b")),
+            named("cursor_key", Pattern.compile("\\bcrsr_[A-Za-z0-9]{8,}\\b")),
             named("json_secret_field", Pattern.compile(
                     "(?i)\"(?:api[_-]?key|token|authorization|password|secret)\"\\s*:\\s*\"[^\"]+\"")),
             named("aws_access_key", Pattern.compile("\\bAKIA[0-9A-Z]{16}\\b")),
