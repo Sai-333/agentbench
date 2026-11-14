@@ -142,6 +142,7 @@ config:
   # Default Grok model id. Keys belong in secrets.extra, never in this file.
   grokModel: "grok-4.7"
   xaiBaseUrl: "https://api.x.ai/v1"
+  cursorAgentsUrl: "https://api.cursor.com/v1/agents"
   githubValidationEnabled: "false"
   oidcGoogleEnabled: "false"
   oidcGithubEnabled: "false"
@@ -173,8 +174,10 @@ secrets:
   jwtSecret: "REPLACE_ME_JWT_SECRET_AT_LEAST_32_CHARS_LONG"
   secretsEncryptionKey: "REPLACE_ME_BASE64_32_BYTE_AES_KEY"
   # Optional Grok credentials. Leave empty; set the real value in a private values file
-  # or an external secret. XAI_API_KEY is preferred. CURSOR_API_KEY is a legacy Cursor
-  # user API key and is used only when XAI_API_KEY is empty. Never commit a real key.
+  # or an external secret. XAI_API_KEY calls https://api.x.ai/v1 and is preferred.
+  # CURSOR_API_KEY is a legacy Cursor user API key. It calls
+  # POST https://api.cursor.com/v1/agents only when XAI_API_KEY is empty.
+  # Never commit a real key.
   xaiApiKey: ""
   cursorApiKey: ""
   # Extra stringData keys when create=true

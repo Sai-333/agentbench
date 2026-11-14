@@ -103,6 +103,7 @@ services:
       CURSOR_API_KEY: ${CURSOR_API_KEY:-}
       GROK_MODEL: ${GROK_MODEL:-grok-4.7}
       XAI_BASE_URL: ${XAI_BASE_URL:-https://api.x.ai/v1}
+      CURSOR_AGENTS_URL: ${CURSOR_AGENTS_URL:-https://api.cursor.com/v1/agents}
       AGENTBENCH_OIDC_SUCCESS_REDIRECT_URL: ${AGENTBENCH_OIDC_SUCCESS_REDIRECT_URL:-http://localhost:3000/}
       AGENTBENCH_OIDC_GOOGLE_ENABLED: ${AGENTBENCH_OIDC_GOOGLE_ENABLED:-false}
       AGENTBENCH_OIDC_GOOGLE_CLIENT_ID: ${AGENTBENCH_OIDC_GOOGLE_CLIENT_ID:-}
@@ -212,6 +213,7 @@ services:
       CURSOR_API_KEY: ${CURSOR_API_KEY:-}
       GROK_MODEL: ${GROK_MODEL:-grok-4.7}
       XAI_BASE_URL: ${XAI_BASE_URL:-https://api.x.ai/v1}
+      CURSOR_AGENTS_URL: ${CURSOR_AGENTS_URL:-https://api.cursor.com/v1/agents}
       # M7: hardened Docker eval containers when host Docker is reachable from worker.
       # Never mount docker.sock into evaluation containers (RuntimeIsolator forbids it).
       # Optional: uncomment volume below ONLY on the worker to enable nested docker run.

@@ -10,8 +10,11 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
+import java.net.http.HttpClient;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Base64;
 import java.util.UUID;
 
 import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
@@ -128,6 +131,75 @@ class GrokAgentProviderTest {
     }
 
     @Test
+    void cursorKeyCallsAgentsApiAndDoesNotCallXai() {
+        String cursorKey = "crsr_testnotarealkey0123456789";
+        String patch = "diff --git a/src/Bug.java b/src/Bug.java\n--- a/src/Bug.java\n+++ b/src/Bug.java\n@@ -1 +1 @@\n-old\n+new\n";
+        wireMock.stubFor(post(urlEqualTo("/v1/agents"))
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody("""
+                                {"agent":{"id":"bc-test","latestRunId":"run-test"},"run":{"id":"run-test","status":"CREATING"}}
+                                """)));
+        wireMock.stubFor(com.github.tomakehurst.wiremock.client.WireMock.get(urlEqualTo("/v1/agents/bc-test/runs/run-test"))
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody("""
+                                {"id":"run-test","status":"FINISHED","result":%s}
+                                """.formatted(json(patch)))));
+        wireMock.stubFor(com.github.tomakehurst.wiremock.client.WireMock.delete(urlEqualTo("/v1/agents/bc-test"))
+                .willReturn(aResponse().withStatus(200).withBody("{\"id\":\"bc-test\"}")));
+
+        GrokAgentProvider provider = provider(
+                "https://api.x.ai/v1",
+                "grok-4.6",
+                "",
+                cursorKey,
+                wireMock.baseUrl() + "/v1/agents");
+        AgentInvocationResult result = provider.invoke(request(agent("{}", null), cursorKey));
+
+        assertEquals(AgentInvocationStatus.SUCCEEDED, result.status());
+        assertEquals("grok-4.6", result.model());
+        assertEquals(GrokAgentProvider.CURSOR_PROVIDER_VERSION, result.providerVersion());
+        assertTrue(result.patchContent().contains("diff --git"));
+        assertFalse(String.valueOf(result.metadata()).contains(cursorKey));
+        assertEquals("https://api.cursor.com/v1/agents", GrokAgentProvider.CURSOR_AGENTS_URL);
+
+        String basic = "Basic " + Base64.getEncoder().encodeToString((cursorKey + ":").getBytes(StandardCharsets.UTF_8));
+        wireMock.verify(postRequestedFor(urlEqualTo("/v1/agents"))
+                .withHeader("Authorization", equalTo(basic))
+                .withRequestBody(containing("\"id\":\"grok-4.6\""))
+                .withRequestBody(containing("Fix the bug")));
+        assertEquals(0, wireMock.findAll(
+                com.github.tomakehurst.wiremock.client.WireMock.postRequestedFor(
+                        urlEqualTo("/v1/chat/completions"))).size());
+    }
+
+    @Test
+    void xaiKeyStaysOnChatCompletionsWhenBothKeysAreSet() {
+        wireMock.stubFor(post(urlEqualTo("/v1/chat/completions"))
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody("""
+                                {"id":"chatcmpl-xai","choices":[{"finish_reason":"stop","message":{"content":"diff --git a/x b/x\\n"}}],"usage":{}}
+                                """)));
+        GrokAgentProvider provider = provider(
+                wireMock.baseUrl() + "/v1",
+                "grok-4.7",
+                "xai-env-not-a-real-key",
+                "crsr_testnotarealkey0123456789",
+                wireMock.baseUrl() + "/v1/agents");
+        AgentInvocationResult result = provider.invoke(request(agent("{}", null), "xai-env-not-a-real-key"));
+        assertEquals(AgentInvocationStatus.SUCCEEDED, result.status());
+        assertEquals(GrokAgentProvider.PROVIDER_VERSION, result.providerVersion());
+        assertEquals(0, wireMock.findAll(
+                com.github.tomakehurst.wiremock.client.WireMock.postRequestedFor(
+                        urlEqualTo("/v1/agents"))).size());
+    }
+
+    @Test
     void fakeProviderStillSucceedsWithoutAKey() {
         FakeAgentProvider fake = new FakeAgentProvider(objectMapper);
         Agent agent = new Agent(
@@ -140,12 +212,25 @@ class GrokAgentProviderTest {
     }
 
     private GrokAgentProvider provider(String baseUrl, String model) {
+        return provider(baseUrl, model, "", "", GrokAgentProvider.CURSOR_AGENTS_URL);
+    }
+
+    private GrokAgentProvider provider(
+            String baseUrl, String model, String xaiKey, String cursorKey, String cursorAgentsUrl) {
         OpenAiCompatibleAgentProvider chat = new OpenAiCompatibleAgentProvider(
                 objectMapper,
-                java.net.http.HttpClient.newHttpClient(),
+                HttpClient.newHttpClient(),
                 "https://api.openai.com",
                 Duration.ofSeconds(10));
-        return new GrokAgentProvider(chat, baseUrl, model);
+        return new GrokAgentProvider(
+                chat,
+                objectMapper,
+                HttpClient.newHttpClient(),
+                baseUrl,
+                model,
+                xaiKey,
+                cursorKey,
+                cursorAgentsUrl);
     }
 
     private Agent agent(String config, UUID secretRef) {

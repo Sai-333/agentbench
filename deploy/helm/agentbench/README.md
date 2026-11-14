@@ -99,7 +99,7 @@ helm uninstall agentbench -n agentbench
 
 Prefer `secrets.existingSecret` + `secrets.create=false` in real clusters.
 
-The default agent is Grok (`config.grokModel`, default `grok-4.7`, base `config.xaiBaseUrl`). Put `secrets.xaiApiKey` and, only if you have no xAI key, `secrets.cursorApiKey` (legacy Cursor user API key) in a private values file. The chart's committed defaults are empty. See `docs/AGENTS.md`.
+The default agent is Grok (`config.grokModel`, default `grok-4.7`). `secrets.xaiApiKey` calls `config.xaiBaseUrl` (`https://api.x.ai/v1`). When that key is empty, `secrets.cursorApiKey` (legacy Cursor user API key) calls `config.cursorAgentsUrl` (`POST https://api.cursor.com/v1/agents`). The chart's committed key defaults are empty. See `docs/AGENTS.md`.
 
 Optional Ingress:
 

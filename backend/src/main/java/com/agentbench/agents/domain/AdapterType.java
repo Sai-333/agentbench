@@ -16,9 +16,9 @@ public enum AdapterType {
     CODING_CLI,
     /**
      * Default model provider. OpenAI-compatible Chat Completions against the xAI API
-     * ({@code https://api.x.ai/v1}). Model from {@code GROK_MODEL} (default {@code grok-4.7};
-     * legacy Cursor keys also include {@code grok-4.6} and {@code grok-4.5}). Key from an org
-     * secret ref, else {@code XAI_API_KEY}, else {@code CURSOR_API_KEY}.
+     * {@code XAI_API_KEY} or an org secret ref calls {@code https://api.x.ai/v1}.
+     * When that key is empty, {@code CURSOR_API_KEY} calls {@code POST https://api.cursor.com/v1/agents}
+     * with model id {@code grok-4.7} ({@code grok-4.6} / {@code grok-4.5} via {@code GROK_MODEL}).
      */
     GROK,
     /**

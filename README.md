@@ -33,7 +33,7 @@ curl -sf -X POST http://localhost:8080/api/v1/auth/register \
   -d '{"email":"demo@example.com","password":"password123","displayName":"Demo"}'
 ```
 
-Open the frontend, sign in, create an org/project, publish a benchmark version, and run an evaluation. If you do not pick another agent, the run uses **Grok** (OpenAI-compatible at `https://api.x.ai/v1`). Set `XAI_API_KEY`, or a legacy Cursor user key in `CURSOR_API_KEY` when the xAI key is unset. `GROK_MODEL` defaults to `grok-4.7` (legacy Cursor keys can also run `grok-4.6` and `grok-4.5`). Register a **FAKE** agent for a local demo when no key is configured. Org-private analytics live under the dashboard tabs. See [docs/AGENTS.md](docs/AGENTS.md).
+Open the frontend, sign in, create an org/project, publish a benchmark version, and run an evaluation. If you do not pick another agent, the run uses **Grok**. `XAI_API_KEY` calls `https://api.x.ai/v1` and wins when set. When it is empty, `CURSOR_API_KEY` (a legacy Cursor user API key) calls `POST https://api.cursor.com/v1/agents` with model id `grok-4.7` (`GROK_MODEL` can be `grok-4.6` or `grok-4.5`). That Cursor key is not sent to xAI. Register a **FAKE** agent for a local demo when no key is configured. Org-private analytics live under the dashboard tabs. See [docs/AGENTS.md](docs/AGENTS.md).
 
 ### Production-ish Compose overlay
 
@@ -151,7 +151,7 @@ Notable variables:
 - `AGENTBENCH_EVAL_BASELINE_CONFIRMATION_ENABLED` / `AGENTBENCH_EVAL_BASELINE_CONFIRMATION_RUNS` (R5 gate; see `docs/SCORING_METHODOLOGY.md`)
 - `AGENTBENCH_SHUTDOWN_TIMEOUT` / `AGENTBENCH_RABBIT_LISTENER_MAX_ATTEMPTS`
 - `XAI_API_KEY` — direct key for the default Grok agent (`https://api.x.ai/v1`). Leave empty for FAKE-only demos. Never commit a real key.
-- `CURSOR_API_KEY` — legacy Cursor user API key (Dashboard → API Keys). Used for Grok only when `XAI_API_KEY` is empty. On a legacy Cursor plan it can run `grok-4.7`, `grok-4.6`, and `grok-4.5`.
+- `CURSOR_API_KEY` — legacy Cursor user API key (Dashboard → API Keys). Used for Grok only when `XAI_API_KEY` is empty. Calls `POST https://api.cursor.com/v1/agents` with `model.id` `grok-4.7`, `grok-4.6`, or `grok-4.5`. Not sent to xAI.
 - `GROK_MODEL` — default `grok-4.7`
 
 ## Flyway

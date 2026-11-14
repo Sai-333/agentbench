@@ -2112,7 +2112,7 @@ function App() {
                   {canEdit && (
                     <>
                       <p className="muted small">
-                        Grok is the default. Set XAI_API_KEY, or CURSOR_API_KEY when you only have a legacy Cursor key. FAKE still works for local demos with no key.
+                        Grok is the default. XAI_API_KEY calls api.x.ai. A legacy Cursor key in CURSOR_API_KEY calls api.cursor.com/v1/agents and is not sent to xAI. FAKE still works with no key.
                       </p>
                       <form className="form compact" onSubmit={handleCreateEvaluation}>
                         <h3>Enqueue evaluation</h3>
