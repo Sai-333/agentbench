@@ -18,6 +18,10 @@ public final class SecretRedactor {
             "(?i)(x-api-key\\s*[:=]\\s*)\\S+");
     private static final Pattern SK_STYLE = Pattern.compile(
             "\\b(sk-[A-Za-z0-9_\\-]{8,})\\b");
+    private static final Pattern XAI_KEY = Pattern.compile(
+            "\\b(xai-[A-Za-z0-9_\\-]{8,})\\b");
+    private static final Pattern CURSOR_KEY = Pattern.compile(
+            "\\b(crsr_[A-Za-z0-9]{8,})\\b");
     private static final Pattern KEY_ASSIGN = Pattern.compile(
             "(?i)(\"(?:api[_-]?key|token|authorization|password|secret)\"\\s*:\\s*\")([^\"]+)(\")");
     private static final Pattern AWS_ACCESS_KEY = Pattern.compile(
@@ -47,6 +51,8 @@ public final class SecretRedactor {
         String out = BEARER.matcher(input).replaceAll("$1[REDACTED]");
         out = API_KEY_HEADER.matcher(out).replaceAll("$1[REDACTED]");
         out = SK_STYLE.matcher(out).replaceAll("sk-[REDACTED]");
+        out = XAI_KEY.matcher(out).replaceAll("xai-[REDACTED]");
+        out = CURSOR_KEY.matcher(out).replaceAll("crsr_[REDACTED]");
         out = KEY_ASSIGN.matcher(out).replaceAll("$1[REDACTED]$3");
         out = AWS_ACCESS_KEY.matcher(out).replaceAll("[REDACTED:aws_access_key]");
         out = AWS_SECRET_ASSIGN.matcher(out).replaceAll("$1[REDACTED]");
@@ -79,6 +85,8 @@ public final class SecretRedactor {
         return n.equals("apikey")
                 || n.equals("api_key".replace("_", ""))
                 || n.equals("openaiapikey")
+                || n.equals("xaiapikey")
+                || n.equals("cursorapikey")
                 || n.equals("accesstoken")
                 || n.equals("refreshtoken")
                 || n.equals("bearertoken")

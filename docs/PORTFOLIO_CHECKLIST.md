@@ -15,7 +15,7 @@
 | Signed SAML AuthnRequests / SP signing keys | Optional platform PEM/env (`AGENTBENCH_SAML_SIGNING_*`, default off); HTTP-Redirect `SigAlg`/`Signature`; SP metadata cert + `AuthnRequestsSigned`; `SamlSpSigningIntegrationTest` + `SamlAuthnRequestFactoryTest`; `docs/AUTH_SAML.md` |
 | Versioned benchmarks + hidden suites + RBAC | M3 |
 | Durable evaluation state machine + outbox | M4 |
-| Provider-independent agents (Fake / OpenAI-compat / HTTP / CODING_CLI) | M5 + isolator-backed CODING_CLI (`docs/AGENTS_CODING_CLI.md`) |
+| Provider-independent agents (Grok default / Fake / OpenAI-compat / HTTP / CODING_CLI) | M5 + default Grok (`docs/AGENTS.md`) + isolator-backed CODING_CLI (`docs/AGENTS_CODING_CLI.md`) |
 | Scoring + visible F2P/P2P/P2F/F2F; hidden post-only pass rate | M6 |
 | Hardened Docker `RuntimeIsolator` + quality tools | M7 |
 | Opt-in gVisor (`runsc`) behind `RuntimeIsolator` | `mode=gvisor` → `docker --runtime=runsc`; fail-fast without runsc; ADR-004; Mac stays Docker |

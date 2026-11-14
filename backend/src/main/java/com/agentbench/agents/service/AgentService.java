@@ -5,6 +5,7 @@ import com.agentbench.agents.domain.AdapterType;
 import com.agentbench.agents.domain.Agent;
 import com.agentbench.agents.infra.AgentProviderRegistry;
 import com.agentbench.agents.infra.AgentRepository;
+import com.agentbench.agents.infra.GrokAgentProvider;
 import com.agentbench.agents.infra.SecretRedactor;
 import com.agentbench.identity.domain.OrgRole;
 import com.agentbench.identity.infra.SecretRefRepository;
@@ -20,6 +21,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 
 @Service
@@ -142,6 +144,46 @@ public class AgentService {
         }
     }
 
+    /**
+     * Enabled Grok agent used when an evaluation does not name another agent.
+     * Reuses {@link GrokAgentProvider#DEFAULT_AGENT_NAME} when that row is already Grok.
+     */
+    @Transactional
+    public Agent ensureDefaultGrokAgent(UUID orgId) {
+        orgAccessService.requireMembership(orgId, OrgRole.DEVELOPER);
+        UserPrincipal principal = orgAccessService.requirePrincipal();
+        Optional<Agent> named = agentRepository.findByName(orgId, GrokAgentProvider.DEFAULT_AGENT_NAME);
+        if (named.isPresent() && usableGrok(named.get())) {
+            return named.get();
+        }
+        String name = named.isEmpty()
+                ? GrokAgentProvider.DEFAULT_AGENT_NAME
+                : GrokAgentProvider.DEFAULT_AGENT_NAME + " (default)";
+        Optional<Agent> target = name.equals(GrokAgentProvider.DEFAULT_AGENT_NAME)
+                ? named
+                : agentRepository.findByName(orgId, name);
+        if (target.isPresent() && usableGrok(target.get())) {
+            return target.get();
+        }
+        if (target.isPresent()) {
+            throw ApiException.conflict(
+                    "Default Grok agent name is already used by another adapter. Pass agentId or rename that agent.");
+        }
+        try {
+            return agentRepository.insert(
+                    orgId,
+                    name,
+                    AdapterType.GROK.name(),
+                    null,
+                    "{}",
+                    principal.userId());
+        } catch (DuplicateKeyException ex) {
+            return agentRepository.findByName(orgId, name)
+                    .filter(AgentService::usableGrok)
+                    .orElseThrow(() -> ApiException.conflict("Could not create the default Grok agent"));
+        }
+    }
+
     @Transactional(readOnly = true)
     public AgentDtos.TestConnectionResponse testConnection(UUID orgId, UUID agentId) {
         orgAccessService.requireMembership(orgId, OrgRole.DEVELOPER);
@@ -160,7 +202,14 @@ public class AgentService {
                 .orElseThrow(() -> ApiException.notFound("Agent not found"));
     }
 
+    private static boolean usableGrok(Agent agent) {
+        return agent.enabled() && AdapterType.GROK.name().equals(agent.adapterType());
+    }
+
     private String normalizeAdapterType(String raw) {
+        if (raw == null || raw.isBlank()) {
+            raw = AdapterType.GROK.name();
+        }
         AdapterType type;
         try {
             type = AdapterType.fromString(raw).normalize();

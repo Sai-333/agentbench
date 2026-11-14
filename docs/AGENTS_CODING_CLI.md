@@ -3,7 +3,7 @@
 Provider-independent coding-agent CLI path. Invocations run inside `RuntimeIsolator`
 (Docker hardened by default, optional gVisor, local CI fallback) — **not** a raw host shell.
 
-Default demos stay on **FAKE**. Use CODING_CLI when you want an isolator-backed CLI agent.
+Default model calls use **Grok** (`docs/AGENTS.md`). **FAKE** still works for local demos when no API key is configured. Use CODING_CLI when you want an isolator-backed CLI agent.
 
 ## Enable / register
 

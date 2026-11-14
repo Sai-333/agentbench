@@ -846,7 +846,7 @@ function App() {
     const formEl = event.currentTarget
     const form = new FormData(formEl)
     const name = String(form.get('name') || '')
-    const adapterType = String(form.get('adapterType') || 'FAKE')
+    const adapterType = String(form.get('adapterType') || 'GROK')
     const patch = String(form.get('patch') || '')
     const model = String(form.get('model') || '')
     const baseUrl = String(form.get('baseUrl') || '')
@@ -857,7 +857,7 @@ function App() {
     if (model) config.model = model
     if (baseUrl) config.baseUrl = baseUrl
     if (endpoint) config.endpoint = endpoint
-    if (adapterType === 'OPENAI_COMPATIBLE' || adapterType === 'HTTP' || adapterType === 'CODING_CLI') {
+    if (adapterType === 'GROK' || adapterType === 'OPENAI_COMPATIBLE' || adapterType === 'HTTP' || adapterType === 'CODING_CLI') {
       config.maxRetries = Number(form.get('maxRetries') || 2)
       config.timeoutSec = Number(form.get('timeoutSec') || 60)
     }
@@ -973,10 +973,12 @@ function App() {
     const benchmarkVersionId = String(form.get('benchmarkVersionId') || '')
     const taskId = String(form.get('taskId') || '')
     const agentId = String(form.get('agentId') || '')
+    const payload: Record<string, string> = { benchmarkVersionId, taskId }
+    if (agentId) payload.agentId = agentId
     try {
       const created = await api<Evaluation>(`/api/v1/orgs/${selectedOrgId}/evaluations`, {
         method: 'POST',
-        body: JSON.stringify({ benchmarkVersionId, taskId, agentId }),
+        body: JSON.stringify(payload),
       })
       resetForm(formEl)
       await loadEvaluations(selectedOrgId)
@@ -1897,7 +1899,7 @@ function App() {
                         <h3>Store agent API key</h3>
                         <label>
                           Secret name
-                          <input name="name" required maxLength={100} placeholder="openai-prod" />
+                          <input name="name" required maxLength={100} placeholder="grok-prod" />
                         </label>
                         <label>
                           Plaintext (write-only)
@@ -1911,12 +1913,13 @@ function App() {
                         <h3>Register agent</h3>
                         <label>
                           Name
-                          <input name="name" required maxLength={120} placeholder="OpenAI fixer" />
+                          <input name="name" required maxLength={120} placeholder="Grok" />
                         </label>
                         <label>
                           Adapter
-                          <select name="adapterType" defaultValue="FAKE">
-                            <option value="FAKE">FAKE (deterministic CI)</option>
+                          <select name="adapterType" defaultValue="GROK">
+                            <option value="GROK">GROK (default)</option>
+                            <option value="FAKE">FAKE (local demo, no key)</option>
                             <option value="OPENAI_COMPATIBLE">OPENAI_COMPATIBLE</option>
                             <option value="HTTP">HTTP webhook</option>
                             <option value="CODING_CLI">CODING_CLI (isolator)</option>
@@ -1935,11 +1938,11 @@ function App() {
                         </label>
                         <label>
                           Model
-                          <input name="model" placeholder="gpt-4o-mini" />
+                          <input name="model" placeholder="grok-4.7" />
                         </label>
                         <label>
                           Base URL (OpenAI-compatible)
-                          <input name="baseUrl" placeholder="https://api.openai.com" />
+                          <input name="baseUrl" placeholder="https://api.x.ai/v1" />
                         </label>
                         <label>
                           HTTP endpoint
@@ -2109,7 +2112,7 @@ function App() {
                   {canEdit && (
                     <>
                       <p className="muted small">
-                        Configure providers on the Agents tab. FAKE agents still work for local demos.
+                        Grok is the default. Set XAI_API_KEY, or CURSOR_API_KEY when you only have a legacy Cursor key. FAKE still works for local demos with no key.
                       </p>
                       <form className="form compact" onSubmit={handleCreateEvaluation}>
                         <h3>Enqueue evaluation</h3>
@@ -2129,7 +2132,8 @@ function App() {
                         </label>
                         <label>
                           Agent
-                          <select name="agentId" required defaultValue={agents[0]?.id || ''}>
+                          <select name="agentId" defaultValue="">
+                            <option value="">Default (Grok)</option>
                             {agents.map((agent) => (
                               <option key={agent.id} value={agent.id}>
                                 {agent.name} ({agent.adapterType})
@@ -2137,7 +2141,7 @@ function App() {
                             ))}
                           </select>
                         </label>
-                        <button className="cta" type="submit" disabled={busy || agents.length === 0}>
+                        <button className="cta" type="submit" disabled={busy}>
                           Create evaluation
                         </button>
                       </form>

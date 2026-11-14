@@ -81,6 +81,19 @@ class ArtifactSecretScannerTest {
     }
 
     @Test
+    void redactsXaiAndCursorKeys() {
+        String xai = "xai-testnotarealkey0123456789";
+        String cursor = "crsr_testnotarealkey0123456789";
+        ArtifactSecretScanner.ScanResult result = scanner.prepareText(
+                "patch.diff", "notes " + xai + " " + cursor, "text/plain");
+        assertTrue(result.modified());
+        assertFalse(result.content().contains(xai));
+        assertFalse(result.content().contains(cursor));
+        assertTrue(result.patternIds().contains("xai_key"));
+        assertTrue(result.patternIds().contains("cursor_key"));
+    }
+
+    @Test
     void redactsOpenaiSkKey() {
         String input = "api_key=sk-abcdefghijklmnopqrstuvwxyz012345";
         ArtifactSecretScanner.ScanResult result = scanner.prepareText("cfg", input, "text/plain");

@@ -56,9 +56,24 @@ class SecretRedactorTest {
     }
 
     @Test
+    void redactsXaiAndCursorKeysButKeepsEnvVarNames() {
+        String xai = "xai-testnotarealkey0123456789";
+        String cursor = "crsr_testnotarealkey0123456789";
+        String out = SecretRedactor.redact("bearer " + xai + " and " + cursor);
+        assertFalse(out.contains(xai));
+        assertFalse(out.contains(cursor));
+        String message = SecretRedactor.sanitizeError(
+                "Grok agent requires an API key. Set XAI_API_KEY or CURSOR_API_KEY, or store one in an org secret_ref");
+        assertTrue(message.contains("XAI_API_KEY"));
+        assertTrue(message.contains("CURSOR_API_KEY"));
+    }
+
+    @Test
     void detectsSecretLikeConfigKeys() {
         assertTrue(SecretRedactor.looksLikeSecretKey("apiKey"));
         assertTrue(SecretRedactor.looksLikeSecretKey("openai_api_key"));
+        assertTrue(SecretRedactor.looksLikeSecretKey("XAI_API_KEY"));
+        assertTrue(SecretRedactor.looksLikeSecretKey("CURSOR_API_KEY"));
         assertFalse(SecretRedactor.looksLikeSecretKey("baseUrl"));
         assertFalse(SecretRedactor.looksLikeSecretKey("model"));
         assertFalse(SecretRedactor.looksLikeSecretKey("costPer1kPromptTokens"));

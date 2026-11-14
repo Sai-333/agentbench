@@ -15,6 +15,13 @@ public enum AdapterType {
     /** Coding-agent CLI adapter — runs via RuntimeIsolator (Docker/gVisor/local). */
     CODING_CLI,
     /**
+     * Default model provider. OpenAI-compatible Chat Completions against the xAI API
+     * ({@code https://api.x.ai/v1}). Model from {@code GROK_MODEL} (default {@code grok-4.7};
+     * legacy Cursor keys also include {@code grok-4.6} and {@code grok-4.5}). Key from an org
+     * secret ref, else {@code XAI_API_KEY}, else {@code CURSOR_API_KEY}.
+     */
+    GROK,
+    /**
      * Legacy alias accepted at API boundary; persisted/normalized to {@link #OPENAI_COMPATIBLE}.
      */
     SPRING_AI;
@@ -24,6 +31,7 @@ public enum AdapterType {
             OPENAI_COMPATIBLE.name(),
             HTTP.name(),
             CODING_CLI.name(),
+            GROK.name(),
             SPRING_AI.name()
     );
 

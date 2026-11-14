@@ -6,8 +6,10 @@ import com.agentbench.agents.domain.spi.AgentInvocationRequest;
 import com.agentbench.agents.domain.spi.AgentInvocationResult;
 import com.agentbench.agents.domain.spi.AgentInvocationStatus;
 import com.agentbench.agents.domain.spi.AgentProvider;
+import com.agentbench.agents.domain.AdapterType;
 import com.agentbench.agents.infra.AgentInvocationRepository;
 import com.agentbench.agents.infra.AgentProviderRegistry;
+import com.agentbench.agents.infra.GrokAgentProvider;
 import com.agentbench.agents.infra.SecretRedactor;
 import com.agentbench.identity.service.SecretService;
 import com.agentbench.platform.error.ApiException;
@@ -49,6 +51,8 @@ public class AgentInvocationService {
     private final int defaultMaxRetries;
     private final int defaultTimeoutSec;
     private final long retryBackoffMs;
+    private final String xaiApiKey;
+    private final String cursorApiKey;
 
     public AgentInvocationService(
             AgentProviderRegistry providerRegistry,
@@ -59,7 +63,9 @@ public class AgentInvocationService {
             ObjectMapper objectMapper,
             @Value("${agentbench.agents.default-max-retries:2}") int defaultMaxRetries,
             @Value("${agentbench.agents.default-timeout-sec:60}") int defaultTimeoutSec,
-            @Value("${agentbench.agents.retry-backoff-ms:250}") long retryBackoffMs) {
+            @Value("${agentbench.agents.retry-backoff-ms:250}") long retryBackoffMs,
+            @Value("${agentbench.agents.grok.api-key:}") String xaiApiKey,
+            @Value("${agentbench.agents.grok.cursor-api-key:}") String cursorApiKey) {
         this.providerRegistry = providerRegistry;
         this.invocationRepository = invocationRepository;
         this.secretService = secretService;
@@ -69,6 +75,8 @@ public class AgentInvocationService {
         this.defaultMaxRetries = Math.max(0, defaultMaxRetries);
         this.defaultTimeoutSec = Math.max(5, defaultTimeoutSec);
         this.retryBackoffMs = Math.max(0, retryBackoffMs);
+        this.xaiApiKey = xaiApiKey;
+        this.cursorApiKey = cursorApiKey;
     }
 
     /**
@@ -187,6 +195,22 @@ public class AgentInvocationService {
         if ("FAKE".equals(provider.adapterType())) {
             return Map.of("ok", true, "provider", provider.adapterType(), "detail", "Fake provider ready");
         }
+        if ("GROK".equals(provider.adapterType())) {
+            String apiKey = resolveApiKey(agent);
+            boolean hasCredentials = apiKey != null && !apiKey.isBlank();
+            if (!hasCredentials) {
+                return Map.of(
+                        "ok", false,
+                        "provider", provider.adapterType(),
+                        "detail", GrokAgentProvider.MISSING_KEY_MESSAGE,
+                        "hasCredentials", false);
+            }
+            return Map.of(
+                    "ok", true,
+                    "provider", provider.adapterType(),
+                    "detail", "Grok provider ready; credentials present (not echoed)",
+                    "hasCredentials", true);
+        }
         if ("CODING_CLI".equals(provider.adapterType())) {
             JsonNode config = readConfig(agent.configJson());
             boolean fixture = config.hasNonNull("patch");
@@ -268,14 +292,28 @@ public class AgentInvocationService {
     }
 
     private String resolveApiKey(Agent agent) {
-        if (agent.secretRefId() == null) {
-            return null;
+        if (agent.secretRefId() != null) {
+            try {
+                return secretService.decryptForOrg(agent.orgId(), agent.secretRefId());
+            } catch (ApiException ex) {
+                throw new ApiException(HttpStatus.BAD_REQUEST, "AGENT_CREDENTIAL_MISSING",
+                        "Unable to resolve agent secret_ref");
+            }
+        }
+        if (isGrok(agent)) {
+            return GrokAgentProvider.selectEnvKey(xaiApiKey, cursorApiKey);
+        }
+        return null;
+    }
+
+    private static boolean isGrok(Agent agent) {
+        if (agent.adapterType() == null) {
+            return false;
         }
         try {
-            return secretService.decryptForOrg(agent.orgId(), agent.secretRefId());
-        } catch (ApiException ex) {
-            throw new ApiException(HttpStatus.BAD_REQUEST, "AGENT_CREDENTIAL_MISSING",
-                    "Unable to resolve agent secret_ref");
+            return AdapterType.fromString(agent.adapterType()).normalize() == AdapterType.GROK;
+        } catch (IllegalArgumentException ex) {
+            return false;
         }
     }
 
