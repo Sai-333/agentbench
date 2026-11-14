@@ -47,7 +47,9 @@ html,
 body {
   margin: 0;
   min-width: 320px;
+  max-width: 100%;
   min-height: 100vh;
+  overflow-x: clip;
   font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
   line-height: 1.5;
   font-weight: 400;
@@ -64,9 +66,11 @@ body {
 }
 
 .shell {
+  width: 100%;
   max-width: 28rem;
   margin: 0 auto;
   padding: 3.5rem 1.5rem 3rem;
+  overflow-wrap: anywhere;
 }
 
 .shell.wide {
@@ -107,6 +111,7 @@ h3 {
 
 .topbar {
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
   gap: 1rem;
   align-items: flex-start;
@@ -167,6 +172,8 @@ h3 {
   background: var(--panel);
   border: 1px solid var(--line);
   padding: 1.25rem 1.35rem;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .grid {
@@ -174,7 +181,7 @@ h3 {
   gap: 1rem;
 }
 
-@media (min-width: 840px) {
+@media (min-width: 1100px) {
   .grid {
     grid-template-columns: 1fr 1.4fr;
   }
@@ -627,4 +634,150 @@ h4 {
 .regression-status[data-status='failed'] {
   color: var(--danger);
   border-color: var(--danger);
+}
+
+.grid > *,
+.dash-stack,
+.table-scroll {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.table-scroll {
+  overflow-x: auto;
+}
+
+.action-row,
+.page-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.detail-panel {
+  margin-top: 1.25rem;
+}
+
+.detail-toolbar {
+  margin-bottom: 1rem;
+}
+
+.list-item,
+.comment-item p,
+.break-anywhere {
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 900px) {
+  .shell,
+  .shell.wide {
+    padding: 1.25rem 0.9rem 2rem;
+  }
+
+  .topbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .userbox,
+  .platform-nav-hint,
+  .tabs.wrap {
+    width: 100%;
+    max-width: none;
+  }
+
+  .action-row,
+  .toolbar-actions {
+    width: 100%;
+  }
+}
+
+@media (max-width: 640px) {
+  .filter-row,
+  .toolbar,
+  .toolbar-actions,
+  .action-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .filter-row label,
+  .filter-row .cta,
+  .toolbar-actions .cta,
+  .action-row .cta,
+  .form .cta,
+  .panel > .cta,
+  .comment-form .cta,
+  .vote-row .cta {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .tab {
+    flex: 1 1 calc(50% - 0.5rem);
+    text-align: center;
+  }
+
+  .stat-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .regression-case {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .table-scroll {
+    overflow-x: visible;
+  }
+
+  .metrics-table,
+  .metrics-table tbody,
+  .metrics-table tr,
+  .metrics-table td {
+    display: block;
+    width: 100%;
+  }
+
+  .metrics-table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  .metrics-table tr {
+    margin: 0 0 0.75rem;
+    padding: 0.35rem 0.7rem 0.5rem;
+    border: 1px solid var(--line);
+    background: var(--surface-soft);
+  }
+
+  .metrics-table td {
+    display: grid;
+    grid-template-columns: minmax(6.5rem, 38%) minmax(0, 1fr);
+    gap: 0.35rem 0.75rem;
+    align-items: baseline;
+    border: none;
+    padding: 0.35rem 0;
+    text-align: left;
+  }
+
+  .metrics-table td::before {
+    content: attr(data-label);
+    color: var(--muted);
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+
+  h1 {
+    font-size: 2rem;
+  }
 }

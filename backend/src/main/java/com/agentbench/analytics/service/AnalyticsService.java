@@ -108,15 +108,17 @@ public class AnalyticsService {
             UUID orgId,
             UUID benchmarkVersionId,
             UUID taskId,
+            UUID agentId,
+            String q,
             Integer page,
             Integer size) {
         orgAccessService.requireMembership(orgId, OrgRole.VIEWER);
         requireVersion(orgId, benchmarkVersionId);
         int pageNum = page == null || page < 0 ? 0 : page;
         int pageSize = size == null ? 25 : Math.min(Math.max(size, 1), 100);
-        long total = analyticsRepository.countLeaderboard(orgId, benchmarkVersionId, taskId);
+        long total = analyticsRepository.countLeaderboard(orgId, benchmarkVersionId, taskId, agentId, q);
         List<AnalyticsDtos.LeaderboardEntry> entries = analyticsRepository.leaderboard(
-                orgId, benchmarkVersionId, taskId, pageSize, pageNum * pageSize);
+                orgId, benchmarkVersionId, taskId, agentId, q, pageSize, pageNum * pageSize);
         return new AnalyticsDtos.LeaderboardResponse(
                 benchmarkVersionId,
                 analyticsRepository.scoringProfileKey(orgId, benchmarkVersionId),
@@ -259,8 +261,15 @@ public class AnalyticsService {
     }
 
     @Transactional(readOnly = true)
-    public byte[] exportLeaderboard(UUID orgId, UUID benchmarkVersionId, UUID taskId, String format) {
-        AnalyticsDtos.LeaderboardResponse board = leaderboard(orgId, benchmarkVersionId, taskId, 0, 100);
+    public byte[] exportLeaderboard(
+            UUID orgId,
+            UUID benchmarkVersionId,
+            UUID taskId,
+            UUID agentId,
+            String q,
+            String format) {
+        AnalyticsDtos.LeaderboardResponse board = leaderboard(
+                orgId, benchmarkVersionId, taskId, agentId, q, 0, 100);
         String normalized = format == null ? "csv" : format.trim().toLowerCase();
         return switch (normalized) {
             case "csv" -> reportExportService.leaderboardCsv(board.entries()).getBytes(StandardCharsets.UTF_8);
@@ -431,9 +440,9 @@ public class AnalyticsService {
 
         int pageNum = page == null || page < 0 ? 0 : page;
         int pageSize = size == null ? 25 : Math.min(Math.max(size, 1), 100);
-        long total = analyticsRepository.countLeaderboard(pub.orgId(), pub.benchmarkVersionId(), null);
+        long total = analyticsRepository.countLeaderboard(pub.orgId(), pub.benchmarkVersionId(), null, null, null);
         List<AnalyticsDtos.LeaderboardEntry> privateEntries = analyticsRepository.leaderboard(
-                pub.orgId(), pub.benchmarkVersionId(), null, pageSize, pageNum * pageSize);
+                pub.orgId(), pub.benchmarkVersionId(), null, null, null, pageSize, pageNum * pageSize);
         List<AnalyticsDtos.PublicLeaderboardEntry> entries = privateEntries.stream()
                 .map(e -> new AnalyticsDtos.PublicLeaderboardEntry(
                         e.rank(),

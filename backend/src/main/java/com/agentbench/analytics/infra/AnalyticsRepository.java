@@ -151,7 +151,12 @@ public class AnalyticsRepository {
                 ));
     }
 
-    public long countLeaderboard(UUID orgId, UUID benchmarkVersionId, UUID taskId) {
+    public long countLeaderboard(
+            UUID orgId,
+            UUID benchmarkVersionId,
+            UUID taskId,
+            UUID agentId,
+            String q) {
         MapSqlParameterSource params = new MapSqlParameterSource()
                 .addValue("orgId", orgId)
                 .addValue("benchmarkVersionId", benchmarkVersionId);
@@ -160,16 +165,15 @@ public class AnalyticsRepository {
                     SELECT DISTINCT ON (e.agent_id, e.task_id) e.id
                     FROM evaluations.evaluations e
                     JOIN evaluations.evaluation_scores s ON s.evaluation_id = e.id
+                    JOIN agents.agents a ON a.id = e.agent_id
+                    JOIN benchmarks.tasks t ON t.id = e.task_id
                     WHERE e.org_id = :orgId
                       AND e.benchmark_version_id = :benchmarkVersionId
                       AND e.state = 'COMPLETED'
                       AND s.score_status = 'VALID'
                       AND s.weighted_total IS NOT NULL
                 """);
-        if (taskId != null) {
-            sql.append(" AND e.task_id = :taskId");
-            params.addValue("taskId", taskId);
-        }
+        appendLeaderboardFilters(sql, params, taskId, agentId, q);
         sql.append("""
                     ORDER BY e.agent_id, e.task_id, s.weighted_total DESC, e.completed_at ASC NULLS LAST
                 ) ranked
@@ -182,6 +186,8 @@ public class AnalyticsRepository {
             UUID orgId,
             UUID benchmarkVersionId,
             UUID taskId,
+            UUID agentId,
+            String q,
             int limit,
             int offset) {
         MapSqlParameterSource params = new MapSqlParameterSource()
@@ -221,10 +227,7 @@ public class AnalyticsRepository {
                       AND s.score_status = 'VALID'
                       AND s.weighted_total IS NOT NULL
                 """);
-        if (taskId != null) {
-            sql.append(" AND e.task_id = :taskId");
-            params.addValue("taskId", taskId);
-        }
+        appendLeaderboardFilters(sql, params, taskId, agentId, q);
         sql.append("""
                     ORDER BY e.agent_id, e.task_id, s.weighted_total DESC, e.completed_at ASC NULLS LAST
                 ) best
@@ -538,6 +541,41 @@ public class AnalyticsRepository {
                 new MapSqlParameterSource("orgId", orgId),
                 Long.class);
         return count == null ? 0L : count;
+    }
+
+    private static void appendLeaderboardFilters(
+            StringBuilder sql,
+            MapSqlParameterSource params,
+            UUID taskId,
+            UUID agentId,
+            String q) {
+        if (taskId != null) {
+            sql.append(" AND e.task_id = :taskId");
+            params.addValue("taskId", taskId);
+        }
+        if (agentId != null) {
+            sql.append(" AND e.agent_id = :agentId");
+            params.addValue("agentId", agentId);
+        }
+        if (q != null && !q.isBlank()) {
+            sql.append("""
+                     AND (
+                        a.name ILIKE :lq ESCAPE '\\'
+                        OR t.slug ILIKE :lq ESCAPE '\\'
+                        OR t.title ILIKE :lq ESCAPE '\\'
+                        OR a.adapter_type ILIKE :lq ESCAPE '\\'
+                     )
+                    """);
+            params.addValue("lq", likeContains(q));
+        }
+    }
+
+    private static String likeContains(String q) {
+        String escaped = q.trim()
+                .replace("\\", "\\\\")
+                .replace("%", "\\%")
+                .replace("_", "\\_");
+        return "%" + escaped + "%";
     }
 
     private static String evaluationSearchFilters(

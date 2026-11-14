@@ -1,4 +1,11 @@
+import { useState } from 'react'
 import type { RegressionRunDetail, RegressionRunSummary } from './api'
+import {
+  EMPTY_REGRESSION_FILTER,
+  filterRegressionRuns,
+  regressionFiltersActive,
+  type RegressionFilter,
+} from './listFilters'
 
 type LoadState = 'idle' | 'loading' | 'ready' | 'empty' | 'error'
 
@@ -35,6 +42,8 @@ export function RegressionRunsPanel({
   onRefresh,
   onBackToOrgs,
 }: Props) {
+  const [filter, setFilter] = useState<RegressionFilter>(EMPTY_REGRESSION_FILTER)
+  const visibleRuns = filterRegressionRuns(runs, filter)
   return (
     <>
       <h2>Regression runs</h2>
@@ -56,14 +65,51 @@ export function RegressionRunsPanel({
           <button type="button" className="cta secondary" onClick={onRefresh}>
             Refresh runs
           </button>
+          <div className="filter-row">
+            <label>
+              Search
+              <input
+                value={filter.q}
+                onChange={(event) => setFilter((prev) => ({ ...prev, q: event.target.value }))}
+                placeholder="suite, branch, commit, repo"
+              />
+            </label>
+            <label>
+              Outcome
+              <select
+                value={filter.outcome}
+                onChange={(event) =>
+                  setFilter((prev) => ({
+                    ...prev,
+                    outcome: event.target.value as RegressionFilter['outcome'],
+                  }))
+                }
+              >
+                <option value="">Any</option>
+                <option value="passed">Passed</option>
+                <option value="failed">Failed</option>
+                <option value="skipped">Has skipped</option>
+              </select>
+            </label>
+            <button
+              type="button"
+              className="cta secondary"
+              disabled={!regressionFiltersActive(filter)}
+              onClick={() => setFilter(EMPTY_REGRESSION_FILTER)}
+            >
+              Clear
+            </button>
+          </div>
           {error && <p className="error">{error}</p>}
           {state === 'loading' || state === 'idle' ? (
             <p className="muted">Loading regression runs…</p>
           ) : state === 'empty' ? (
             <p className="muted">No regression runs yet.</p>
+          ) : visibleRuns.length === 0 ? (
+            <p className="muted">No regression runs match these filters.</p>
           ) : (
             <ul className="list">
-              {runs.map((run) => {
+              {visibleRuns.map((run) => {
                 const open = expandedId === run.id
                 const detail = open && expanded?.id === run.id ? expanded : null
                 return (
