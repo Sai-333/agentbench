@@ -111,30 +111,19 @@ public class OpenAiCompatibleAgentProvider implements AgentProvider {
         String systemPrompt = config.path("systemPrompt").asText("""
                 You are a coding agent evaluated by AgentBench.
                 Return ONLY a unified diff patch that fixes the task.
+                The first characters of your reply must be diff --git.
                 Do not claim test results. Do not include explanations outside a diff/patch fence.
                 """);
         String userPrompt = buildUserPrompt(request);
 
         try {
-            ObjectNode body = objectMapper.createObjectNode();
-            body.put("model", model);
-            body.put("temperature", temperature);
-            body.put("max_tokens", maxTokens);
-            ArrayNode messages = body.putArray("messages");
-            messages.addObject().put("role", "system").put("content", systemPrompt);
-            messages.addObject().put("role", "user").put("content", userPrompt);
-
             String url = baseUrl.endsWith("/v1")
                     ? baseUrl + "/chat/completions"
                     : baseUrl + "/v1/chat/completions";
 
-            HttpRequest httpRequest = HttpRequest.newBuilder()
-                    .uri(URI.create(url))
-                    .timeout(timeout)
-                    .header("Content-Type", "application/json")
-                    .header("Authorization", "Bearer " + request.apiKey())
-                    .POST(HttpRequest.BodyPublishers.ofString(objectMapper.writeValueAsString(body)))
-                    .build();
+            ArrayNode messages = objectMapper.createArrayNode();
+            messages.addObject().put("role", "system").put("content", systemPrompt);
+            messages.addObject().put("role", "user").put("content", userPrompt);
 
             log.info("{} invoke evaluation={} agent={} model={} baseHost={}",
                     defaults.logLabel(),
@@ -143,20 +132,41 @@ public class OpenAiCompatibleAgentProvider implements AgentProvider {
                     model,
                     URI.create(baseUrl).getHost());
 
-            HttpResponse<String> response = httpClient.send(httpRequest, HttpResponse.BodyHandlers.ofString());
-            if (response.statusCode() >= 400) {
+            JsonNode root = postChat(url, request.apiKey(), timeout, model, temperature, maxTokens, messages);
+            if (root == null) {
                 return AgentInvocationResult.failure(
                         AgentInvocationStatus.FAILED,
-                        "AGENT_HTTP_" + response.statusCode(),
-                        SecretRedactor.sanitizeError("Provider HTTP " + response.statusCode() + ": " + truncate(response.body(), 300)),
+                        "AGENT_HTTP_ERROR",
+                        "Provider response was not JSON",
                         model,
-                        Map.of("httpStatus", response.statusCode())
+                        Map.of());
+            }
+            if (root.has("httpStatus")) {
+                int status = root.path("httpStatus").asInt();
+                return AgentInvocationResult.failure(
+                        AgentInvocationStatus.FAILED,
+                        "AGENT_HTTP_" + status,
+                        SecretRedactor.sanitizeError(root.path("errorBody").asText("")),
+                        model,
+                        Map.of("httpStatus", status)
                 );
             }
 
-            JsonNode root = objectMapper.readTree(response.body());
             String content = root.path("choices").path(0).path("message").path("content").asText("");
             String patch = extractPatch(content);
+            if (patch == null || patch.isBlank()) {
+                messages.addObject().put("role", "assistant").put("content", content);
+                messages.addObject().put("role", "user").put("content",
+                        "That reply was not a unified diff. Reply with only a patch whose first line is "
+                                + "diff --git a/<path> b/<path>, followed by --- and +++ headers and @@ hunks. No prose.");
+                log.info("{} retrying for a unified diff evaluation={}", defaults.logLabel(), request.evaluationId());
+                JsonNode retry = postChat(url, request.apiKey(), timeout, model, temperature, maxTokens, messages);
+                if (retry != null && !retry.has("httpStatus")) {
+                    root = retry;
+                    content = root.path("choices").path(0).path("message").path("content").asText("");
+                    patch = extractPatch(content);
+                }
+            }
             if (patch == null || patch.isBlank()) {
                 return AgentInvocationResult.failure(
                         AgentInvocationStatus.FAILED,
@@ -216,6 +226,36 @@ public class OpenAiCompatibleAgentProvider implements AgentProvider {
         }
     }
 
+    private JsonNode postChat(
+            String url,
+            String apiKey,
+            Duration timeout,
+            String model,
+            double temperature,
+            int maxTokens,
+            ArrayNode messages) throws Exception {
+        ObjectNode body = objectMapper.createObjectNode();
+        body.put("model", model);
+        body.put("temperature", temperature);
+        body.put("max_tokens", maxTokens);
+        body.set("messages", messages);
+        HttpRequest httpRequest = HttpRequest.newBuilder()
+                .uri(URI.create(url))
+                .timeout(timeout)
+                .header("Content-Type", "application/json")
+                .header("Authorization", "Bearer " + apiKey)
+                .POST(HttpRequest.BodyPublishers.ofString(objectMapper.writeValueAsString(body)))
+                .build();
+        HttpResponse<String> response = httpClient.send(httpRequest, HttpResponse.BodyHandlers.ofString());
+        if (response.statusCode() >= 400) {
+            ObjectNode error = objectMapper.createObjectNode();
+            error.put("httpStatus", response.statusCode());
+            error.put("errorBody", "Provider HTTP " + response.statusCode() + ": " + truncate(response.body(), 300));
+            return error;
+        }
+        return objectMapper.readTree(response.body());
+    }
+
     static String extractPatch(String content) {
         if (content == null) {
             return null;
@@ -231,12 +271,12 @@ public class OpenAiCompatibleAgentProvider implements AgentProvider {
             }
         }
         String trimmed = content.trim();
-        if (trimmed.startsWith("diff ") || trimmed.startsWith("--- ")) {
+        if (trimmed.startsWith("diff --git ") || trimmed.startsWith("--- ")) {
             return trimmed;
         }
-        int idx = trimmed.indexOf("diff --git");
+        int idx = trimmed.indexOf("\ndiff --git ");
         if (idx >= 0) {
-            return trimmed.substring(idx).trim();
+            return trimmed.substring(idx + 1).trim();
         }
         return null;
     }
