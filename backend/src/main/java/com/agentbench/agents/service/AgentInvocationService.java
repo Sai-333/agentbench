@@ -23,6 +23,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.io.ByteArrayInputStream;
@@ -82,8 +83,9 @@ public class AgentInvocationService {
     /**
      * Invoke the configured provider for an evaluation agent stage.
      * Persists each attempt; returns the successful patch or throws ApiException.
+     * Own transaction so a failed call does not mark the stage transaction rollback-only.
      */
-    @Transactional
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public AgentInvocationResult invokeForEvaluation(
             Agent agent,
             UUID evaluationId,
@@ -95,7 +97,7 @@ public class AgentInvocationService {
                 agent, evaluationId, taskId, taskPrompt, visibleContextJson, referencePatchHint, null);
     }
 
-    @Transactional
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public AgentInvocationResult invokeForEvaluation(
             Agent agent,
             UUID evaluationId,

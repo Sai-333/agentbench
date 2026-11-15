@@ -494,6 +494,7 @@ public class AnalyticsRepository {
                 WHERE e.org_id = :orgId
                 """ + evaluationSearchFilters(state, agentId, taskId, benchmarkVersionId, q, params)
                 + """
+                
                 ORDER BY e.created_at DESC
                 LIMIT :limit OFFSET :offset
                 """;
