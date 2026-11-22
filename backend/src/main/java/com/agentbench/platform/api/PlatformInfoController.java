@@ -28,6 +28,7 @@ public class PlatformInfoController {
                 "auth", "JWT bearer (local email/password + optional Google/GitHub OIDC)",
                 "analytics", "org-private overview/leaderboard/comparisons/costs/exports (json/csv/pdf); opt-in public leaderboards + signed embeds",
                 "regressionRuns", "AgentBench application regression: platform-scoped POST/GET /api/v1/regression-runs (OWNER/ADMIN of any org; git SHA/branch; not consumer/org tenant data)",
+                "gpuBenchmark", "Local GPU probe: POST/GET /api/v1/gpu-benchmarks records device, API, and a transfer score from this API process. Unavailable rows have no score when no GPU is present or the probe cannot run. CI does not require a GPU.",
                 "readiness", "production-minded Compose/K8s path; Docker isolation not hostile multi-tenant"
         );
     }

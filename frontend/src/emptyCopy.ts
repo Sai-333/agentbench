@@ -48,6 +48,10 @@ export const EMPTY = {
     'No regression runs match these filters. Clear the filters to see every run.',
   regressionForbidden:
     'Your account does not have OWNER or ADMIN on an organization, so run details stay hidden. Create an organization or ask an owner for access.',
+  gpuProbe:
+    'No GPU probe yet. Run the probe to record the device, API, and score, or an unavailable result.',
+  gpuProbeForbidden:
+    'Your account does not have OWNER or ADMIN on an organization, so probe results stay hidden. Create an organization or ask an owner for access.',
   publicLeaderboard:
     'Published, but no completed scored evaluations yet. Ask an owner to publish a completed run.',
   publicFiltered: 'No leaderboard rows match these filters. Clear the filters to see every row.',

@@ -185,8 +185,20 @@
             </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <configuration>
+                    <!-- JDK 21.0.13 still marks java.lang.foreign as preview. -->
+                    <compilerArgs>
+                        <arg>--enable-preview</arg>
+                    </compilerArgs>
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>
                 <configuration>
+                    <!-- Preview for java.lang.foreign; native access for the GPU probe. -->
+                    <argLine>--enable-preview --enable-native-access=ALL-UNNAMED</argLine>
                     <!-- Saxon registers itself as the JAXP transformer. Checkstyle and PMD need
                          those classes, and WireMock's XML helper needs the JDK factory. -->
                     <systemPropertyVariables>

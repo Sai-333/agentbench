@@ -49,6 +49,7 @@
 | Artifact secret scanning (R7) | `ArtifactSecretScanner` + `ScanningArtifactStorage` on persist; redact (default) or quarantine; built-in patterns (API/AWS/PEM/JWT/GitHub/Slack/env dumps) + optional extra regexes; audit `platform.artifact_secret_findings` (Flyway V18, no raw secrets); `docs/OPERATIONS.md` — **residual:** not full DLP; binary non-text skipped; no per-org scan policy |
 | Flake quarantine + baseline confirmation gates (R5) | Flyway V19 `flake_quarantines` + `baseline_confirmed`; OWNER/ADMIN CRUD; task/suite quarantine sources; scoring excludes quarantined; opt-in confirmation gate (`BASELINE_UNCONFIRMED`); `docs/SCORING_METHODOLOGY.md` — **residual:** not automatic ML flake discovery; gate default off |
 | Selenium regression runs on push | Flyway V23 `platform.regression_runs` + cases; **AgentBench application** regression (platform-scoped, no `org_id`, no RLS — not per-consumer); OWNER/ADMIN of any org; ingest JUnit XML / pytest JSON / canonical cases with counts taken from case rows; top-bar **Regression runs** UI (outside org workspace tabs); `.github/workflows/selenium-regression.yml` clones `agentbench-selenium` `main` at run time (suite SHA not pinned), seeds `fixtures/mock-data.json` via `tests/seed.py`, runs the full pytest suite, POSTs the JUnit report, uploads it, and fails the job if any case failed; `docs/REGRESSION_RUNS.md` — **residual:** GitHub-hosted Ubuntu, not a Mac runner; does not cover Oracle, Firecracker, gVisor, or S3; Mac Compose remains the local default |
+| Local GPU probe (device, API, transfer score) | Flyway V26 `platform.gpu_benchmark_results` (no `org_id`, no RLS); OWNER/ADMIN of any org; `POST/GET /api/v1/gpu-benchmarks`; CUDA, Vulkan, or OpenCL transfer MiB/s from the API process; unavailable rows store a null score; top-bar **GPU probe**; `docs/GPU_BENCHMARK.md` — **residual:** CI has no GPU; not a 3DMark, UL, or certification score; a GPU on the worker only is not measured |
 
 ## Deferred / not claimed
 
@@ -65,6 +66,7 @@
 | Live AWS Compliance-mode Object Lock in default Compose / production demo | **Not claimed** — optional Object Lock code path landed; default MinIO/Helm leave it off; no hosted Compliance bucket asserted |
 | Full CDN / edge network product | **Not claimed** — Cache-Control + ETag are CDN-friendly; no managed CDN required or asserted |
 | Distributed anti-spam / CAPTCHA / ML moderation for public boards | **Not claimed** — comments/votes landed with size limits, in-process IP rate limits, OWNER/ADMIN soft-delete; not a full abuse platform |
+| 3DMark, UL, or a certified GPU score | **Not claimed** — the local probe records device, API, and its own transfer MiB/s, or an explicit unavailable row with no score. CI does not require a GPU |
 
 ## Demo path
 

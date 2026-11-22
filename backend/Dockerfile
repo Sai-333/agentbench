@@ -15,7 +15,7 @@ WORKDIR /app
 COPY --from=build /build/target/agentbench-*.jar /app/app.jar
 USER agentbench
 EXPOSE 8080
-ENV JAVA_OPTS="-XX:MaxRAMPercentage=75.0"
+ENV JAVA_OPTS="-XX:MaxRAMPercentage=75.0 --enable-preview --enable-native-access=ALL-UNNAMED"
 # Prefer graceful SIGTERM handling (Spring server.shutdown=graceful).
 STOPSIGNAL SIGTERM
 ENTRYPOINT ["sh", "-c", "java $JAVA_OPTS -jar /app/app.jar"]
