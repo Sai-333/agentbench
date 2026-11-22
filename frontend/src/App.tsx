@@ -40,6 +40,9 @@ import {
   OverviewPanel,
 } from './DashboardPanels'
 import { RegressionRunsPanel } from './RegressionRunsPanel'
+import { EMPTY } from './emptyCopy'
+import { ScoreBars, StageTimeline, StatusChip } from './evaluationUi'
+import { evaluationProgressHint, showFailureChip } from './evaluationStages'
 import { resetForm } from './formUtils'
 import {
   EMPTY_COMPARISON_FILTER,
@@ -1637,7 +1640,9 @@ function App() {
         <div className="panel">
           <h2>Organizations</h2>
           {orgs.length === 0 ? (
-            <p className="muted">No organizations yet. Create one to get started.</p>
+            <p className="empty-state" role="status">
+              {EMPTY.organizations}
+            </p>
           ) : (
             <ul className="list">
               {orgs.map((org) => (
@@ -1722,7 +1727,9 @@ function App() {
                   }}
                 />
               ) : (
-                <p className="muted">Select or create an organization to view analytics.</p>
+                <p className="empty-state" role="status">
+                  {EMPTY.selectOrgAnalytics}
+                </p>
               )}
             </>
           ) : tab === 'leaderboard' ? (
@@ -1801,9 +1808,7 @@ function App() {
                     state={leaderboardViewState}
                     error={leaderboardError}
                     emptyMessage={
-                      leaderboardFiltersActive(lbFilters)
-                        ? 'No leaderboard rows match these filters.'
-                        : 'No completed scored evaluations for this benchmark version yet.'
+                      leaderboardFiltersActive(lbFilters) ? EMPTY.leaderboardFiltered : EMPTY.leaderboard
                     }
                     busy={busy}
                     onExport={(format) => void handleExportLeaderboard(format)}
@@ -1818,7 +1823,9 @@ function App() {
                   />
                 </>
               ) : (
-                <p className="muted">Select an organization first.</p>
+                <p className="empty-state" role="status">
+                  {EMPTY.selectOrgContinue}
+                </p>
               )}
             </>
           ) : tab === 'compare' ? (
@@ -1905,13 +1912,15 @@ function App() {
                     error={comparisonError}
                     emptyMessage={
                       comparisonFiltersActive(compareTaskFilter)
-                        ? 'No comparison rows match these filters.'
-                        : 'Select agents and a published benchmark version to compare identical runs.'
+                        ? EMPTY.comparisonFiltered
+                        : EMPTY.comparison
                     }
                   />
                 </>
               ) : (
-                <p className="muted">Select an organization first.</p>
+                <p className="empty-state" role="status">
+                  {EMPTY.selectOrgContinue}
+                </p>
               )}
             </>
           ) : tab === 'costs' ? (
@@ -1963,14 +1972,14 @@ function App() {
                     }
                     error={costsError}
                     emptyMessage={
-                      costAgentId || costQuery.trim()
-                        ? 'No cost rows match these filters.'
-                        : 'No token or cost records yet. Costs appear when adapters report them.'
+                      costAgentId || costQuery.trim() ? EMPTY.costsFiltered : EMPTY.costs
                     }
                   />
                 </>
               ) : (
-                <p className="muted">Select an organization first.</p>
+                <p className="empty-state" role="status">
+                  {EMPTY.selectOrgContinue}
+                </p>
               )}
             </>
           ) : tab === 'ops' ? (
@@ -1989,7 +1998,9 @@ function App() {
                   <OpsHealthPanel health={health} state={healthState} error={healthError} />
                 </>
               ) : (
-                <p className="muted">Select an organization first.</p>
+                <p className="empty-state" role="status">
+                  {EMPTY.selectOrgContinue}
+                </p>
               )}
             </>
           ) : tab === 'sso' ? (
@@ -2004,7 +2015,9 @@ function App() {
                       list is empty.
                     </p>
                     {samlIdps.length === 0 ? (
-                      <p className="muted">No SAML IdPs configured for this organization.</p>
+                      <p className="empty-state" role="status">
+                        {EMPTY.samlEmpty}
+                      </p>
                     ) : (
                       <ul className="list">
                         {samlIdps.map((idp) => (
@@ -2159,10 +2172,14 @@ function App() {
                     </form>
                   </>
                 ) : (
-                  <p className="muted">Only OWNER or ADMIN can manage SAML IdPs.</p>
+                  <p className="empty-state" role="status">
+                    {EMPTY.samlForbidden}
+                  </p>
                 )
               ) : (
-                <p className="muted">Select an organization first.</p>
+                <p className="empty-state" role="status">
+                  {EMPTY.selectOrgContinue}
+                </p>
               )}
             </>
           ) : tab === 'agents' ? (
@@ -2174,7 +2191,9 @@ function App() {
                     Provider-independent adapters. API keys live in org secrets — never in agent config.
                   </p>
                   {agents.length === 0 ? (
-                    <p className="muted">No agents registered yet.</p>
+                    <p className="empty-state" role="status">
+                      {EMPTY.agents}
+                    </p>
                   ) : (
                     <ul className="list">
                       {agents.map((agent) => (
@@ -2321,7 +2340,9 @@ function App() {
                   )}
                 </>
               ) : (
-                <p className="muted">Select or create an organization to manage agents.</p>
+                <p className="empty-state" role="status">
+                  {EMPTY.agentsNeedOrg}
+                </p>
               )}
             </>
           ) : tab === 'evaluations' ? (
@@ -2331,10 +2352,7 @@ function App() {
                 <>
                   <p className="muted small">
                     Your role: {role || 'unknown'}
-                    {selectedEvaluation &&
-                    !TERMINAL_STATES.has(selectedEvaluation.evaluation.state)
-                      ? ' · live polling every 3s'
-                      : ''}
+                    {selectedEvaluation ? evaluationProgressHint(selectedEvaluation) : ''}
                   </p>
                   <div className="filter-row">
                     <label>
@@ -2442,12 +2460,12 @@ function App() {
                     </p>
                   )}
                   {evaluationItems.length === 0 ? (
-                    <p className="muted">
+                    <p className="empty-state" role="status">
                       {!evalSearchResult && evaluations.length === 0 && !evalSearchError
                         ? 'Loading evaluations…'
                         : evaluationFiltersActive(evalFilters)
-                          ? 'No evaluations match these filters.'
-                          : 'No evaluations yet.'}
+                          ? EMPTY.evaluationsFiltered
+                          : EMPTY.evaluations}
                     </p>
                   ) : (
                     <ul className="list">
@@ -2462,9 +2480,11 @@ function App() {
                             }
                             onClick={() => handleSelectEvaluation(evaluation.id)}
                           >
-                            <span>
-                              <span className="badge">{evaluation.state}</span>{' '}
-                              {evaluation.agentName} · {evaluation.taskSlug}
+                            <span className="status-row">
+                              <StatusChip status={evaluation.state} />
+                              <span>
+                                {evaluation.agentName} · {evaluation.taskSlug}
+                              </span>
                             </span>
                             <span className="muted small">
                               {evaluation.weightedTotal != null
@@ -2544,7 +2564,9 @@ function App() {
                   )}
                 </>
               ) : (
-                <p className="muted">Select or create an organization to manage evaluations.</p>
+                <p className="empty-state" role="status">
+                  {EMPTY.evaluationsNeedOrg}
+                </p>
               )}
             </>
           ) : tab === 'projects' ? (
@@ -2554,7 +2576,9 @@ function App() {
                 <>
                   <p className="muted small">Your role: {role || 'unknown'}</p>
                   {projects.length === 0 ? (
-                    <p className="muted">No projects in this organization yet.</p>
+                    <p className="empty-state" role="status">
+                      {EMPTY.projects}
+                    </p>
                   ) : (
                     <ul className="list plain">
                       {projects.map((project) => (
@@ -2583,7 +2607,9 @@ function App() {
                   )}
                 </>
               ) : (
-                <p className="muted">Select or create an organization to manage projects.</p>
+                <p className="empty-state" role="status">
+                  {EMPTY.projectsNeedOrg}
+                </p>
               )}
             </>
           ) : (
@@ -2593,7 +2619,9 @@ function App() {
                 <>
                   <p className="muted small">Your role: {role || 'unknown'}</p>
                   {benchmarks.length === 0 ? (
-                    <p className="muted">No benchmarks yet.</p>
+                    <p className="empty-state" role="status">
+                      {EMPTY.benchmarks}
+                    </p>
                   ) : (
                     <ul className="list">
                       {benchmarks.map((benchmark) => (
@@ -2645,7 +2673,9 @@ function App() {
                   )}
                 </>
               ) : (
-                <p className="muted">Select or create an organization to manage benchmarks.</p>
+                <p className="empty-state" role="status">
+                  {EMPTY.benchmarksNeedOrg}
+                </p>
               )}
             </>
           )}
@@ -2696,22 +2726,20 @@ function App() {
                 )}
             </div>
           </div>
-          <p>
-            <span className="badge">{selectedEvaluation.evaluation.state}</span>
+          <p className="status-row">
+            <StatusChip status={selectedEvaluation.evaluation.state} />
+            {showFailureChip(selectedEvaluation) && <StatusChip status="FAILED" />}
             {selectedEvaluation.evaluation.failureClass && (
               <span className="muted small">
-                {' '}
-                · {selectedEvaluation.evaluation.failureClass}
+                {selectedEvaluation.evaluation.failureClass}
                 {selectedEvaluation.evaluation.errorCode
                   ? ` / ${selectedEvaluation.evaluation.errorCode}`
                   : ''}
               </span>
             )}
           </p>
-          {selectedEvaluation.evaluation.errorMessage && (
-            <p className="error">{selectedEvaluation.evaluation.errorMessage}</p>
-          )}
-          <h3>Status timeline</h3>
+          <StageTimeline detail={selectedEvaluation} />
+          <h3>State changes</h3>
           <ol className="timeline">
             {selectedEvaluation.transitions.map((transition) => (
               <li key={transition.id}>
@@ -2835,7 +2863,7 @@ function App() {
             <>
               <h3>Score</h3>
               <p>
-                <span className="badge">{selectedEvaluation.score.scoreStatus}</span>
+                <StatusChip status={selectedEvaluation.score.scoreStatus} />
                 {selectedEvaluation.score.weightedTotal != null ? (
                   <>
                     {' '}
@@ -2847,6 +2875,7 @@ function App() {
                 )}
                 <span className="muted small"> · profile {selectedEvaluation.score.profileKey}</span>
               </p>
+              <ScoreBars score={selectedEvaluation.score} />
               {selectedEvaluation.score.transitionSummary && (
                 <>
                   <h4>Visible transitions</h4>
@@ -2946,7 +2975,9 @@ function App() {
               Versions · {selectedBenchmark.name}
             </h2>
             {versions.length === 0 ? (
-              <p className="muted">No versions yet.</p>
+              <p className="empty-state" role="status">
+                {EMPTY.versions}
+              </p>
             ) : (
               <ul className="list">
                 {versions.map((version) => (
@@ -2998,11 +3029,15 @@ function App() {
           <div className="panel">
             <h2>Tasks {selectedVersion ? `· ${selectedVersion.version}` : ''}</h2>
             {!selectedVersion ? (
-              <p className="muted">Select a version to manage tasks.</p>
+              <p className="empty-state" role="status">
+                {EMPTY.tasksNeedVersion}
+              </p>
             ) : (
               <>
                 {tasks.length === 0 ? (
-                  <p className="muted">No tasks in this version.</p>
+                  <p className="empty-state" role="status">
+                    {EMPTY.tasks}
+                  </p>
                 ) : (
                   <ul className="list">
                     {tasks.map((task) => (

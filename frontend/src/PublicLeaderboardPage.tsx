@@ -1,6 +1,7 @@
 import { useMemo, useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
 import { api, getAccessToken } from './api'
+import { EMPTY } from './emptyCopy'
 import type {
   PublicCommentListResponse,
   PublicLeaderboardResponse,
@@ -202,7 +203,9 @@ export function PublicLeaderboardPage({ slug }: { slug: string }) {
           </p>
         )}
         {state === 'empty' && board && (
-          <p className="muted">Published, but no completed scored evaluations yet.</p>
+          <p className="empty-state" role="status">
+            {EMPTY.publicLeaderboard}
+          </p>
         )}
         {state === 'ready' && board && (
           <div className="dash-stack">
@@ -262,7 +265,9 @@ export function PublicLeaderboardPage({ slug }: { slug: string }) {
               </button>
             </div>
             {visibleEntries.length === 0 ? (
-              <p className="muted">No leaderboard rows match these filters.</p>
+              <p className="empty-state" role="status">
+                {EMPTY.publicFiltered}
+              </p>
             ) : (
               <div className="table-scroll">
                 <table className="metrics-table">
