@@ -16,8 +16,9 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * Validates GitHub repository accessibility via the GitHub REST API when a token is available.
- * Tokens come from encrypted org secret refs or optional env fallback — never logged or returned.
+ * Validates GitHub repository accessibility via the GitHub REST API.
+ * Public repositories are checked without a token. A configured token is sent as a bearer
+ * header and is never logged or returned.
  */
 @Component
 public class GitHubRepositoryValidator {
@@ -89,28 +90,33 @@ public class GitHubRepositoryValidator {
 
         String owner = matcher.group("owner");
         String repo = matcher.group("repo");
-        String token = secretToken.filter(t -> !t.isBlank()).orElse(envToken);
-        if (token.isBlank()) {
-            // Prefer real validation when a token is configured; otherwise clear SKIPPED status.
-            return ValidationResult.skipped(
-                    "No GitHub token configured (set org GIT secret or AGENTBENCH_GITHUB_TOKEN); validation skipped");
+        if (!safeSegment(owner) || !safeSegment(repo)) {
+            return ValidationResult.skipped("Non-GitHub URL; accessibility check skipped");
         }
+        String token = secretToken.filter(t -> !t.isBlank()).orElse(envToken);
 
         try {
             HttpRequest.Builder builder = HttpRequest.newBuilder()
                     .uri(URI.create("https://api.github.com/repos/" + owner + "/" + repo))
                     .timeout(Duration.ofSeconds(10))
                     .header("Accept", "application/vnd.github+json")
+                    .header("User-Agent", "agentbench")
                     .header("X-GitHub-Api-Version", "2022-11-28")
-                    .header("Authorization", "Bearer " + token)
                     .GET();
-            HttpResponse<String> response = httpClient.send(builder.build(), HttpResponse.BodyHandlers.ofString());
+            // Public repositories are visible without a token. Never log the token.
+            if (!token.isBlank()) {
+                builder.header("Authorization", "Bearer " + token);
+            }
+            HttpResponse<Void> response = httpClient.send(builder.build(), HttpResponse.BodyHandlers.discarding());
             int status = response.statusCode();
             if (status >= 200 && status < 300) {
-                return ValidationResult.valid("Repository accessible");
+                return ValidationResult.valid("Repository found");
             }
-            if (status == 404 || status == 403) {
-                return ValidationResult.invalid("GitHub API returned HTTP " + status + " (repo missing or inaccessible)");
+            if (status == 404) {
+                return ValidationResult.invalid("Repository not found");
+            }
+            if (status == 403) {
+                return ValidationResult.invalid("GitHub API returned HTTP 403 (repo inaccessible)");
             }
             log.warn("Unexpected GitHub validation status={} for owner={} repo={}", status, owner, repo);
             return ValidationResult.invalid("GitHub API returned HTTP " + status);

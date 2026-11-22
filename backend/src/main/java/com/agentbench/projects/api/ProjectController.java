@@ -87,7 +87,7 @@ public class ProjectController {
     }
 
     @PostMapping(value = "/projects/{projectId}/repository/validate", produces = MediaType.APPLICATION_JSON_VALUE)
-    @Operation(summary = "Validate repository accessibility via GitHub API when token available")
+    @Operation(summary = "Validate repository accessibility via the GitHub API")
     public ProjectDtos.RepositoryResponse validateRepository(@PathVariable UUID orgId, @PathVariable UUID projectId) {
         return projectService.validateRepository(orgId, projectId);
     }
