@@ -1421,6 +1421,7 @@ function App() {
       .split(',')
       .map((t) => t.trim())
       .filter(Boolean)
+    const gitUrl = String(form.get('gitUrl') || '')
     const baselineCommitSha = String(form.get('baselineCommitSha') || '')
     const expectedBehavior = String(form.get('expectedBehavior') || '')
     const referencePatch = String(form.get('referencePatch') || '')
@@ -1439,6 +1440,7 @@ function App() {
             category: category || null,
             difficulty: difficulty || null,
             languageTags,
+            gitUrl: gitUrl || null,
             baselineCommitSha: baselineCommitSha || null,
             expectedBehavior,
             referencePatch,
@@ -3204,6 +3206,7 @@ function App() {
                       {selectedTask.languageTags?.length
                         ? ` · ${selectedTask.languageTags.join(', ')}`
                         : ''}
+                      {selectedTask.gitUrl ? ` · ${selectedTask.gitUrl}` : ''}
                       {selectedTask.baselineCommitSha
                         ? ` · baseline ${selectedTask.baselineCommitSha.slice(0, 8)}`
                         : ''}
@@ -3276,6 +3279,14 @@ function App() {
                       <label>
                         Language tags (comma-separated)
                         <input name="languageTags" placeholder="java,maven" />
+                      </label>
+                      <label>
+                        GitHub repository
+                        <input
+                          name="gitUrl"
+                          placeholder="https://github.com/owner/repo"
+                          maxLength={500}
+                        />
                       </label>
                       <label>
                         Baseline commit SHA

@@ -107,6 +107,7 @@ export type Task = {
   difficulty: string | null
   languageTags: string[]
   repoSnapshotId: string | null
+  gitUrl: string | null
   baselineCommitSha: string | null
   referencePatch: string
   expectedBehavior: string

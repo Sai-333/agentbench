@@ -16,6 +16,8 @@ import com.agentbench.identity.security.UserPrincipal;
 import com.agentbench.platform.error.ApiException;
 import com.agentbench.platform.infra.storage.ArtifactSecretScanner;
 import com.agentbench.platform.infra.storage.ArtifactStorage;
+import com.agentbench.projects.domain.RepoSnapshot;
+import com.agentbench.projects.github.GitHubRepositoryValidator;
 import com.agentbench.projects.infra.ProjectRepository;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -47,6 +49,7 @@ public class BenchmarkService {
 
     private final BenchmarkRepository benchmarkRepository;
     private final ProjectRepository projectRepository;
+    private final GitHubRepositoryValidator gitHubRepositoryValidator;
     private final OrgAccessService orgAccessService;
     private final ArtifactStorage artifactStorage;
     private final ArtifactSecretScanner artifactSecretScanner;
@@ -55,12 +58,14 @@ public class BenchmarkService {
     public BenchmarkService(
             BenchmarkRepository benchmarkRepository,
             ProjectRepository projectRepository,
+            GitHubRepositoryValidator gitHubRepositoryValidator,
             OrgAccessService orgAccessService,
             ArtifactStorage artifactStorage,
             ArtifactSecretScanner artifactSecretScanner,
             ObjectMapper objectMapper) {
         this.benchmarkRepository = benchmarkRepository;
         this.projectRepository = projectRepository;
+        this.gitHubRepositoryValidator = gitHubRepositoryValidator;
         this.orgAccessService = orgAccessService;
         this.artifactStorage = artifactStorage;
         this.artifactSecretScanner = artifactSecretScanner;
@@ -215,6 +220,7 @@ public class BenchmarkService {
         BenchmarkVersion version = requireVersion(orgId, versionId);
         requireDraft(version);
         validateRepoSnapshot(orgId, request.repoSnapshotId());
+        String gitUrl = normalizeGitUrl(request.gitUrl(), request.baselineCommitSha());
         try {
             Task task = benchmarkRepository.insertTask(
                     orgId,
@@ -227,6 +233,7 @@ public class BenchmarkService {
                     TaskDifficulty.fromString(request.difficulty()),
                     writeJson(normalizeTags(request.languageTags())),
                     request.repoSnapshotId(),
+                    gitUrl,
                     blankToNull(request.baselineCommitSha()),
                     blankToEmpty(request.referencePatch()),
                     blankToEmpty(request.expectedBehavior()),
@@ -270,6 +277,7 @@ public class BenchmarkService {
         BenchmarkVersion version = requireVersion(orgId, existing.benchmarkVersionId());
         requireDraft(version);
         validateRepoSnapshot(orgId, request.repoSnapshotId());
+        String gitUrl = normalizeGitUrl(request.gitUrl(), request.baselineCommitSha());
         Task task = benchmarkRepository.updateTask(
                 orgId,
                 taskId,
@@ -280,6 +288,7 @@ public class BenchmarkService {
                 TaskDifficulty.fromString(request.difficulty()),
                 writeJson(normalizeTags(request.languageTags())),
                 request.repoSnapshotId(),
+                gitUrl,
                 blankToNull(request.baselineCommitSha()),
                 blankToEmpty(request.referencePatch()),
                 blankToEmpty(request.expectedBehavior()),
@@ -364,6 +373,7 @@ public class BenchmarkService {
                 task.category(),
                 task.difficulty() == null ? null : task.difficulty().name(),
                 task.languageTags(),
+                task.gitUrl(),
                 task.baselineCommitSha(),
                 task.repoSnapshotId(),
                 task.timeoutSec(),
@@ -449,7 +459,12 @@ public class BenchmarkService {
             taskMap.put("difficulty", task.difficulty() == null ? null : task.difficulty().name());
             taskMap.put("languageTags", task.languageTags());
             taskMap.put("repoSnapshotId", task.repoSnapshotId() == null ? null : task.repoSnapshotId().toString());
+            taskMap.put("gitUrl", task.gitUrl());
             taskMap.put("baselineCommitSha", task.baselineCommitSha());
+            Map<String, Object> repoSnapshot = pinnedRepoSnapshot(orgId, task);
+            if (repoSnapshot != null) {
+                taskMap.put("repoSnapshot", repoSnapshot);
+            }
             taskMap.put("referencePatch", task.referencePatch());
             taskMap.put("expectedBehavior", task.expectedBehavior());
             taskMap.put("timeoutSec", task.timeoutSec());
@@ -492,6 +507,66 @@ public class BenchmarkService {
         return projectRepository.findById(orgId, projectId)
                 .orElseThrow(() -> ApiException.notFound("Project not found"))
                 .id();
+    }
+
+    /**
+     * A github.com owner/repo plus a commit SHA is pinned onto the published version.
+     * The worker checks that commit out; the URL is not metadata-only.
+     */
+    private Map<String, Object> pinnedRepoSnapshot(UUID orgId, Task task) {
+        String gitUrl = blankToNull(task.gitUrl());
+        String sha = blankToNull(task.baselineCommitSha());
+        String branch = null;
+        String digest = "";
+        String storageUri = "";
+        if (task.repoSnapshotId() != null) {
+            Optional<RepoSnapshot> found = projectRepository.findSnapshot(orgId, task.repoSnapshotId());
+            if (found.isPresent()) {
+                RepoSnapshot snap = found.get();
+                if (gitUrl == null) {
+                    gitUrl = blankToNull(snap.gitUrl());
+                }
+                if (sha == null) {
+                    sha = blankToNull(snap.commitSha());
+                }
+                branch = blankToNull(snap.branch());
+                digest = snap.contentDigest() == null ? "" : snap.contentDigest();
+                storageUri = snap.storageUri() == null ? "" : snap.storageUri();
+            }
+        }
+        var parsed = GitHubRepositoryValidator.parseGithub(gitUrl);
+        if (parsed.isEmpty() || sha == null || !sha.matches("(?i)[0-9a-f]{40}")) {
+            return null;
+        }
+        if (digest.isBlank()) {
+            digest = sha.toLowerCase();
+        }
+        Map<String, Object> pin = new LinkedHashMap<>();
+        pin.put("gitUrl", GitHubRepositoryValidator.httpsCloneUrl(parsed.get()));
+        pin.put("commitSha", sha.toLowerCase());
+        pin.put("branch", branch);
+        pin.put("contentDigest", digest);
+        pin.put("storageUri", storageUri);
+        return pin;
+    }
+
+    private String normalizeGitUrl(String gitUrl, String commitSha) {
+        String url = blankToNull(gitUrl);
+        if (url == null) {
+            return null;
+        }
+        if (GitHubRepositoryValidator.parseGithub(url).isEmpty()) {
+            throw ApiException.validation("gitUrl must be a github.com owner/repo");
+        }
+        if (blankToNull(commitSha) == null) {
+            throw ApiException.validation("A git snapshot needs a 40-character commit SHA");
+        }
+        GitHubRepositoryValidator.ValidationResult result =
+                gitHubRepositoryValidator.validate(url, Optional.empty());
+        if ("INVALID".equals(result.status())) {
+            throw ApiException.validation(result.message());
+        }
+        return GitHubRepositoryValidator.httpsCloneUrl(GitHubRepositoryValidator.parseGithub(url).orElseThrow());
     }
 
     private void validateRepoSnapshot(UUID orgId, UUID repoSnapshotId) {
@@ -538,6 +613,7 @@ public class BenchmarkService {
                 task.difficulty() == null ? null : task.difficulty().name(),
                 task.languageTags(),
                 task.repoSnapshotId(),
+                task.gitUrl(),
                 task.baselineCommitSha(),
                 task.referencePatch(),
                 task.expectedBehavior(),
