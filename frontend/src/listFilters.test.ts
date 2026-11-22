@@ -11,6 +11,8 @@ import {
   costSearchParams,
   costViewState,
   costsWereReported,
+  FAKE_SAMPLE_USAGE_LABEL,
+  fakeSampleUsageLabel,
   evaluationFiltersActive,
   evaluationSearchParams,
   filterComparisonRows,
@@ -412,4 +414,8 @@ test('comparison and cost filters combine and clear', () => {
   assert.equal(costViewState(true, true, 0), 'filtered')
   assert.equal(costViewState(true, false, 2), 'ready')
   assert.equal(costViewState(true, true, 1), 'ready')
+  assert.equal(fakeSampleUsageLabel(['GROK']), null)
+  assert.equal(fakeSampleUsageLabel(['FAKE']), FAKE_SAMPLE_USAGE_LABEL)
+  assert.match(FAKE_SAMPLE_USAGE_LABEL, /Sample usage from the FAKE adapter/)
+  assert.doesNotMatch(FAKE_SAMPLE_USAGE_LABEL, /No token or cost records yet/)
 })

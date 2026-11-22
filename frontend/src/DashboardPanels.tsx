@@ -8,6 +8,7 @@ import type {
 } from './api'
 import { EMPTY } from './emptyCopy'
 import { StatusChip } from './evaluationUi'
+import { FAKE_SAMPLE_USAGE_LABEL, fakeSampleUsageLabel } from './listFilters'
 
 type LoadState = 'idle' | 'loading' | 'ready' | 'empty' | 'error'
 
@@ -322,6 +323,11 @@ export function LeaderboardPanel({
               Profile {board.scoringProfileKey} · page {board.page.page + 1} · {board.page.total}{' '}
               entries
             </p>
+            {board.entries.some(
+              (entry) =>
+                entry.adapterType === 'FAKE' &&
+                ((entry.totalTokens ?? 0) > 0 || entry.estimatedCostUsd != null),
+            ) && <p className="muted small">{FAKE_SAMPLE_USAGE_LABEL}</p>}
             <div className="table-scroll">
               <table className="metrics-table">
                 <thead>
@@ -434,6 +440,9 @@ export function CostsPanel({
   error: string | null
   emptyMessage?: string
 }) {
+  const sampleUsage = costs
+    ? fakeSampleUsageLabel(costs.byAgent.map((row) => row.adapterType))
+    : null
   return (
     <div className="dash-stack">
       <StateBlock state={state} error={error} emptyMessage={emptyMessage}>
@@ -463,6 +472,9 @@ export function CostsPanel({
                 </strong>
               </div>
             </div>
+            {sampleUsage && (
+              <p className="muted small">{sampleUsage}</p>
+            )}
             <h3>By agent</h3>
             {costs.byAgent.length === 0 ? (
               <p className="empty-state" role="status">

@@ -209,6 +209,27 @@ class GrokAgentProviderTest {
         assertEquals(AgentInvocationStatus.SUCCEEDED, result.status());
         assertNotNull(result.patchContent());
         assertTrue(result.patchContent().contains("diff --git"));
+        assertEquals(FakeAgentProvider.SAMPLE_PROMPT_TOKENS, result.promptTokens());
+        assertEquals(FakeAgentProvider.SAMPLE_COMPLETION_TOKENS, result.completionTokens());
+        assertEquals(FakeAgentProvider.SAMPLE_TOTAL_TOKENS, result.totalTokens());
+        assertEquals(0, FakeAgentProvider.SAMPLE_ESTIMATED_COST_USD.compareTo(result.estimatedCostUsd()));
+        assertEquals("sample", result.metadata().get("usageKind"));
+        assertEquals(FakeAgentProvider.SAMPLE_USAGE_LABEL, result.metadata().get("usageLabel"));
+    }
+
+    @Test
+    void fakeProviderFailureDoesNotStoreSampleUsage() {
+        FakeAgentProvider fake = new FakeAgentProvider(objectMapper);
+        Agent agent = new Agent(
+                UUID.randomUUID(), UUID.randomUUID(), "fake", "FAKE",
+                null, "{\"fail\":true}", true, UUID.randomUUID(), Instant.now(), Instant.now());
+        AgentInvocationResult result = fake.invoke(request(agent, null));
+        assertEquals(AgentInvocationStatus.FAILED, result.status());
+        assertNull(result.promptTokens());
+        assertNull(result.completionTokens());
+        assertNull(result.totalTokens());
+        assertNull(result.estimatedCostUsd());
+        assertFalse(result.metadata().containsKey("usageLabel"));
     }
 
     private GrokAgentProvider provider(String baseUrl, String model) {
