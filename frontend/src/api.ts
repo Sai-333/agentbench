@@ -1,5 +1,23 @@
-const TOKEN_KEY = 'agentbench.accessToken'
-const REFRESH_KEY = 'agentbench.refreshToken'
+import {
+  createSessionClient,
+  isSessionEndedError,
+  readProblemDetail,
+  signInCopy,
+} from './session'
+
+const session = createSessionClient({
+  store: {
+    getItem: (key) => localStorage.getItem(key),
+    setItem: (key, value) => {
+      localStorage.setItem(key, value)
+    },
+    removeItem: (key) => {
+      localStorage.removeItem(key)
+    },
+  },
+})
+
+export { isSessionEndedError, signInCopy }
 
 export type TokenResponse = {
   accessToken: string
@@ -492,58 +510,37 @@ export type RegressionRunDetail = RegressionRunSummary & {
 }
 
 export function getAccessToken(): string | null {
-  return localStorage.getItem(TOKEN_KEY)
+  return session.getAccessToken()
+}
+
+export function getRefreshToken(): string | null {
+  return session.getRefreshToken()
 }
 
 export function clearTokens(): void {
-  localStorage.removeItem(TOKEN_KEY)
-  localStorage.removeItem(REFRESH_KEY)
+  session.clearTokens()
 }
 
 export function storeTokens(tokens: TokenResponse): void {
-  localStorage.setItem(TOKEN_KEY, tokens.accessToken)
-  localStorage.setItem(REFRESH_KEY, tokens.refreshToken)
+  session.storeTokens(tokens)
 }
 
-async function readError(response: Response): Promise<string> {
-  try {
-    const body = (await response.json()) as { detail?: string; title?: string }
-    return body.detail || body.title || `HTTP ${response.status}`
-  } catch {
-    return `HTTP ${response.status}`
-  }
+export function onSessionEnded(listener: () => void): () => void {
+  return session.onSessionEnded(listener)
+}
+
+export function startSessionKeeper(): () => void {
+  return session.startKeeper()
 }
 
 export async function api<T>(path: string, options: RequestInit = {}, auth = true): Promise<T> {
-  const headers = new Headers(options.headers)
-  if (!headers.has('Content-Type') && options.body) {
-    headers.set('Content-Type', 'application/json')
-  }
-  if (auth) {
-    const token = getAccessToken()
-    if (token) {
-      headers.set('Authorization', `Bearer ${token}`)
-    }
-  }
-  const response = await fetch(path, { ...options, headers })
-  if (!response.ok) {
-    throw new Error(await readError(response))
-  }
-  if (response.status === 204) {
-    return undefined as T
-  }
-  return (await response.json()) as T
+  return session.api<T>(path, options, auth)
 }
 
 export async function downloadAuthenticated(path: string, filename: string): Promise<void> {
-  const headers = new Headers()
-  const token = getAccessToken()
-  if (token) {
-    headers.set('Authorization', `Bearer ${token}`)
-  }
-  const response = await fetch(path, { headers })
+  const response = await session.authorizedFetch(path, { method: 'GET' })
   if (!response.ok) {
-    throw new Error(await readError(response))
+    throw new Error(await readProblemDetail(response))
   }
   const blob = await response.blob()
   const url = URL.createObjectURL(blob)
