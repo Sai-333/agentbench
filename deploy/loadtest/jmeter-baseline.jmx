@@ -1,0 +1,888 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<jmeterTestPlan version="1.2" properties="5.0" jmeter="5.6.3">
+<hashTree>
+<TestPlan guiclass="TestPlanGui" testclass="TestPlan" testname="AgentBench baseline (login, benchmarks, results)" enabled="true">
+<stringProp name="TestPlan.comments">Baseline script for three workflows that already exist: login, benchmark listing, and evaluation result retrieval.
+Not a pass/fail capacity gate. No latency, throughput, or error-rate thresholds are defined.
+Not a GitHub Actions check. k6-smoke.js remains the load script already in this directory.
+No GPU thread group. There is no GPU execution path.
+No host is baked into the samplers. Required property: -JBASE_URL=http://host:port
+Optional: -Jthreads (default 1), -Jloops (default 1). Raising them only repeats the same reads.
+Setup registers one local user and seeds one benchmark plus one FAKE evaluation so the result GET has an id.
+The measured thread logs in, lists benchmarks, and reads the evaluation detail and report.
+Assertions check HTTP status and a field the API returns (accessToken, tokenType, benchmark name, evaluation.state).
+Do not treat a run of this file as a capacity result. Do not check numbers from a run into git until a run produces them.
+Example (not a default host): jmeter -n -t deploy/loadtest/jmeter-baseline.jmx -JBASE_URL=http://127.0.0.1:8080
+</stringProp>
+<boolProp name="TestPlan.functional_mode">false</boolProp>
+<boolProp name="TestPlan.tearDown_on_shutdown">true</boolProp>
+<boolProp name="TestPlan.serialize_threadgroups">true</boolProp>
+<elementProp name="TestPlan.user_defined_variables" elementType="Arguments" guiclass="ArgumentsPanel" testclass="Arguments" testname="User Defined Variables" enabled="true">
+<collectionProp name="Arguments.arguments" />
+</elementProp>
+<stringProp name="TestPlan.user_define_classpath" />
+</TestPlan>
+<hashTree>
+<ConfigTestElement guiclass="HttpDefaultsGui" testclass="ConfigTestElement" testname="HTTP Request Defaults" enabled="true">
+<stringProp name="HTTPSampler.domain">${__P(HOST)}</stringProp>
+<stringProp name="HTTPSampler.port">${__P(PORT)}</stringProp>
+<stringProp name="HTTPSampler.protocol">${__P(PROTOCOL)}</stringProp>
+<stringProp name="HTTPSampler.contentEncoding">UTF-8</stringProp>
+<stringProp name="HTTPSampler.path" />
+<stringProp name="HTTPSampler.concurrentPool">6</stringProp>
+<stringProp name="HTTPSampler.connect_timeout" />
+<stringProp name="HTTPSampler.response_timeout" />
+</ConfigTestElement>
+<hashTree />
+<SetupThreadGroup guiclass="SetupThreadGroupGui" testclass="SetupThreadGroup" testname="Setup user, benchmark, and one evaluation" enabled="true">
+<stringProp name="ThreadGroup.on_sample_error">stoptest</stringProp>
+<stringProp name="ThreadGroup.num_threads">1</stringProp>
+<stringProp name="ThreadGroup.ramp_time">0</stringProp>
+<boolProp name="ThreadGroup.scheduler">false</boolProp>
+<stringProp name="ThreadGroup.duration" />
+<stringProp name="ThreadGroup.delay" />
+<boolProp name="ThreadGroup.same_user_on_next_iteration">true</boolProp>
+<elementProp name="ThreadGroup.main_controller" elementType="LoopController" guiclass="LoopControlPanel" testclass="LoopController" testname="Loop Controller" enabled="true">
+<boolProp name="LoopController.continue_forever">false</boolProp>
+<stringProp name="LoopController.loops">1</stringProp>
+</elementProp>
+</SetupThreadGroup>
+<hashTree>
+<JSR223Sampler guiclass="TestBeanGUI" testclass="JSR223Sampler" testname="Resolve BASE_URL" enabled="true">
+<stringProp name="scriptLanguage">groovy</stringProp>
+<stringProp name="parameters" />
+<stringProp name="filename" />
+<stringProp name="cacheKey">true</stringProp>
+<stringProp name="script">def raw = props.getProperty("BASE_URL")
+if (raw == null || raw.trim().isEmpty()) {
+    throw new IllegalStateException("Pass -JBASE_URL=http://host:port. This plan does not bake a host.")
+}
+raw = raw.trim()
+if (raw.endsWith("/")) {
+    raw = raw.substring(0, raw.length() - 1)
+}
+def uri = new URI(raw)
+if (uri.scheme == null || uri.host == null) {
+    throw new IllegalStateException("BASE_URL must be an absolute http(s) URL")
+}
+props.put("PROTOCOL", uri.scheme)
+props.put("HOST", uri.host)
+int port = uri.port
+if (port &lt; 0) {
+    port = "https".equalsIgnoreCase(uri.scheme) ? 443 : 80
+}
+props.put("PORT", String.valueOf(port))
+props.put("loginEmail", "jmeter-" + java.util.UUID.randomUUID().toString() + "@example.com")
+props.put("loginPassword", "password123")
+props.put("orgSlug", "jm-" + java.util.UUID.randomUUID().toString().substring(0, 8))
+"resolved " + props.get("PROTOCOL") + "://" + props.get("HOST") + ":" + props.get("PORT")
+</stringProp>
+</JSR223Sampler>
+<hashTree />
+<HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="POST /api/v1/auth/register" enabled="true">
+<stringProp name="HTTPSampler.path">/api/v1/auth/register</stringProp>
+<stringProp name="HTTPSampler.method">POST</stringProp>
+<boolProp name="HTTPSampler.follow_redirects">false</boolProp>
+<boolProp name="HTTPSampler.auto_redirects">false</boolProp>
+<boolProp name="HTTPSampler.use_keepalive">true</boolProp>
+<boolProp name="HTTPSampler.DO_MULTIPART_POST">false</boolProp>
+<boolProp name="HTTPSampler.postBodyRaw">true</boolProp>
+<elementProp name="HTTPsampler.Arguments" elementType="Arguments">
+<collectionProp name="Arguments.arguments">
+<elementProp name="" elementType="HTTPArgument">
+<boolProp name="HTTPArgument.always_encode">false</boolProp>
+<stringProp name="Argument.value">{"email":"${__P(loginEmail)}","password":"${__P(loginPassword)}","displayName":"JMeter Baseline"}</stringProp>
+<stringProp name="Argument.metadata">=</stringProp>
+</elementProp>
+</collectionProp>
+</elementProp>
+</HTTPSamplerProxy>
+<hashTree>
+<HeaderManager guiclass="HeaderPanel" testclass="HeaderManager" testname="Headers" enabled="true">
+<collectionProp name="HeaderManager.headers">
+<elementProp name="" elementType="Header">
+<stringProp name="Header.name">Content-Type</stringProp>
+<stringProp name="Header.value">application/json</stringProp>
+</elementProp>
+<elementProp name="" elementType="Header">
+<stringProp name="Header.name">Accept</stringProp>
+<stringProp name="Header.value">application/json</stringProp>
+</elementProp>
+</collectionProp>
+</HeaderManager>
+<hashTree />
+<ResponseAssertion guiclass="AssertionGui" testclass="ResponseAssertion" testname="Register returns 201" enabled="true">
+<collectionProp name="Asserion.test_strings">
+<stringProp name="code">201</stringProp>
+</collectionProp>
+<stringProp name="Assertion.custom_message" />
+<stringProp name="Assertion.test_field">Assertion.response_code</stringProp>
+<boolProp name="Assertion.assume_success">false</boolProp>
+<intProp name="Assertion.test_type">8</intProp>
+</ResponseAssertion>
+<hashTree />
+<JSONPostProcessor guiclass="JSONPostProcessorGui" testclass="JSONPostProcessor" testname="Extract accessToken" enabled="true">
+<stringProp name="JSONPostProcessor.referenceNames">accessToken</stringProp>
+<stringProp name="JSONPostProcessor.jsonPathExprs">$.accessToken</stringProp>
+<stringProp name="JSONPostProcessor.match_numbers">1</stringProp>
+<stringProp name="JSONPostProcessor.defaultValues">NOT_FOUND</stringProp>
+</JSONPostProcessor>
+<hashTree />
+</hashTree>
+<HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="POST /api/v1/orgs" enabled="true">
+<stringProp name="HTTPSampler.path">/api/v1/orgs</stringProp>
+<stringProp name="HTTPSampler.method">POST</stringProp>
+<boolProp name="HTTPSampler.follow_redirects">false</boolProp>
+<boolProp name="HTTPSampler.auto_redirects">false</boolProp>
+<boolProp name="HTTPSampler.use_keepalive">true</boolProp>
+<boolProp name="HTTPSampler.DO_MULTIPART_POST">false</boolProp>
+<boolProp name="HTTPSampler.postBodyRaw">true</boolProp>
+<elementProp name="HTTPsampler.Arguments" elementType="Arguments">
+<collectionProp name="Arguments.arguments">
+<elementProp name="" elementType="HTTPArgument">
+<boolProp name="HTTPArgument.always_encode">false</boolProp>
+<stringProp name="Argument.value">{"name":"JMeter Org","slug":"${__P(orgSlug)}"}</stringProp>
+<stringProp name="Argument.metadata">=</stringProp>
+</elementProp>
+</collectionProp>
+</elementProp>
+</HTTPSamplerProxy>
+<hashTree>
+<HeaderManager guiclass="HeaderPanel" testclass="HeaderManager" testname="Headers" enabled="true">
+<collectionProp name="HeaderManager.headers">
+<elementProp name="" elementType="Header">
+<stringProp name="Header.name">Content-Type</stringProp>
+<stringProp name="Header.value">application/json</stringProp>
+</elementProp>
+<elementProp name="" elementType="Header">
+<stringProp name="Header.name">Accept</stringProp>
+<stringProp name="Header.value">application/json</stringProp>
+</elementProp>
+<elementProp name="" elementType="Header">
+<stringProp name="Header.name">Authorization</stringProp>
+<stringProp name="Header.value">Bearer ${accessToken}</stringProp>
+</elementProp>
+</collectionProp>
+</HeaderManager>
+<hashTree />
+<ResponseAssertion guiclass="AssertionGui" testclass="ResponseAssertion" testname="Create org returns 201" enabled="true">
+<collectionProp name="Asserion.test_strings">
+<stringProp name="code">201</stringProp>
+</collectionProp>
+<stringProp name="Assertion.custom_message" />
+<stringProp name="Assertion.test_field">Assertion.response_code</stringProp>
+<boolProp name="Assertion.assume_success">false</boolProp>
+<intProp name="Assertion.test_type">8</intProp>
+</ResponseAssertion>
+<hashTree />
+<JSONPostProcessor guiclass="JSONPostProcessorGui" testclass="JSONPostProcessor" testname="Extract orgId" enabled="true">
+<stringProp name="JSONPostProcessor.referenceNames">orgId</stringProp>
+<stringProp name="JSONPostProcessor.jsonPathExprs">$.id</stringProp>
+<stringProp name="JSONPostProcessor.match_numbers">1</stringProp>
+<stringProp name="JSONPostProcessor.defaultValues">NOT_FOUND</stringProp>
+</JSONPostProcessor>
+<hashTree />
+<JSR223PostProcessor guiclass="TestBeanGUI" testclass="JSR223PostProcessor" testname="Store orgId" enabled="true">
+<stringProp name="scriptLanguage">groovy</stringProp>
+<stringProp name="parameters" />
+<stringProp name="filename" />
+<stringProp name="cacheKey">true</stringProp>
+<stringProp name="script">def value = vars.get("orgId")
+if (value == null || value == "NOT_FOUND" || value.trim().isEmpty()) {
+    throw new IllegalStateException("orgId was not returned")
+}
+props.put("orgId", value)
+</stringProp>
+</JSR223PostProcessor>
+<hashTree />
+</hashTree>
+<HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="POST /api/v1/orgs/{orgId}/benchmarks" enabled="true">
+<stringProp name="HTTPSampler.path">/api/v1/orgs/${__P(orgId)}/benchmarks</stringProp>
+<stringProp name="HTTPSampler.method">POST</stringProp>
+<boolProp name="HTTPSampler.follow_redirects">false</boolProp>
+<boolProp name="HTTPSampler.auto_redirects">false</boolProp>
+<boolProp name="HTTPSampler.use_keepalive">true</boolProp>
+<boolProp name="HTTPSampler.DO_MULTIPART_POST">false</boolProp>
+<boolProp name="HTTPSampler.postBodyRaw">true</boolProp>
+<elementProp name="HTTPsampler.Arguments" elementType="Arguments">
+<collectionProp name="Arguments.arguments">
+<elementProp name="" elementType="HTTPArgument">
+<boolProp name="HTTPArgument.always_encode">false</boolProp>
+<stringProp name="Argument.value">{"name":"JMeter Bench","description":"baseline"}</stringProp>
+<stringProp name="Argument.metadata">=</stringProp>
+</elementProp>
+</collectionProp>
+</elementProp>
+</HTTPSamplerProxy>
+<hashTree>
+<HeaderManager guiclass="HeaderPanel" testclass="HeaderManager" testname="Headers" enabled="true">
+<collectionProp name="HeaderManager.headers">
+<elementProp name="" elementType="Header">
+<stringProp name="Header.name">Content-Type</stringProp>
+<stringProp name="Header.value">application/json</stringProp>
+</elementProp>
+<elementProp name="" elementType="Header">
+<stringProp name="Header.name">Accept</stringProp>
+<stringProp name="Header.value">application/json</stringProp>
+</elementProp>
+<elementProp name="" elementType="Header">
+<stringProp name="Header.name">Authorization</stringProp>
+<stringProp name="Header.value">Bearer ${accessToken}</stringProp>
+</elementProp>
+</collectionProp>
+</HeaderManager>
+<hashTree />
+<ResponseAssertion guiclass="AssertionGui" testclass="ResponseAssertion" testname="Create benchmark returns 201" enabled="true">
+<collectionProp name="Asserion.test_strings">
+<stringProp name="code">201</stringProp>
+</collectionProp>
+<stringProp name="Assertion.custom_message" />
+<stringProp name="Assertion.test_field">Assertion.response_code</stringProp>
+<boolProp name="Assertion.assume_success">false</boolProp>
+<intProp name="Assertion.test_type">8</intProp>
+</ResponseAssertion>
+<hashTree />
+<JSONPostProcessor guiclass="JSONPostProcessorGui" testclass="JSONPostProcessor" testname="Extract benchmarkId" enabled="true">
+<stringProp name="JSONPostProcessor.referenceNames">benchmarkId</stringProp>
+<stringProp name="JSONPostProcessor.jsonPathExprs">$.id</stringProp>
+<stringProp name="JSONPostProcessor.match_numbers">1</stringProp>
+<stringProp name="JSONPostProcessor.defaultValues">NOT_FOUND</stringProp>
+</JSONPostProcessor>
+<hashTree />
+</hashTree>
+<HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="POST benchmark version" enabled="true">
+<stringProp name="HTTPSampler.path">/api/v1/orgs/${__P(orgId)}/benchmarks/${benchmarkId}/versions</stringProp>
+<stringProp name="HTTPSampler.method">POST</stringProp>
+<boolProp name="HTTPSampler.follow_redirects">false</boolProp>
+<boolProp name="HTTPSampler.auto_redirects">false</boolProp>
+<boolProp name="HTTPSampler.use_keepalive">true</boolProp>
+<boolProp name="HTTPSampler.DO_MULTIPART_POST">false</boolProp>
+<boolProp name="HTTPSampler.postBodyRaw">true</boolProp>
+<elementProp name="HTTPsampler.Arguments" elementType="Arguments">
+<collectionProp name="Arguments.arguments">
+<elementProp name="" elementType="HTTPArgument">
+<boolProp name="HTTPArgument.always_encode">false</boolProp>
+<stringProp name="Argument.value">{"version":"1.0.0","changelog":"baseline"}</stringProp>
+<stringProp name="Argument.metadata">=</stringProp>
+</elementProp>
+</collectionProp>
+</elementProp>
+</HTTPSamplerProxy>
+<hashTree>
+<HeaderManager guiclass="HeaderPanel" testclass="HeaderManager" testname="Headers" enabled="true">
+<collectionProp name="HeaderManager.headers">
+<elementProp name="" elementType="Header">
+<stringProp name="Header.name">Content-Type</stringProp>
+<stringProp name="Header.value">application/json</stringProp>
+</elementProp>
+<elementProp name="" elementType="Header">
+<stringProp name="Header.name">Accept</stringProp>
+<stringProp name="Header.value">application/json</stringProp>
+</elementProp>
+<elementProp name="" elementType="Header">
+<stringProp name="Header.name">Authorization</stringProp>
+<stringProp name="Header.value">Bearer ${accessToken}</stringProp>
+</elementProp>
+</collectionProp>
+</HeaderManager>
+<hashTree />
+<ResponseAssertion guiclass="AssertionGui" testclass="ResponseAssertion" testname="Create version returns 201" enabled="true">
+<collectionProp name="Asserion.test_strings">
+<stringProp name="code">201</stringProp>
+</collectionProp>
+<stringProp name="Assertion.custom_message" />
+<stringProp name="Assertion.test_field">Assertion.response_code</stringProp>
+<boolProp name="Assertion.assume_success">false</boolProp>
+<intProp name="Assertion.test_type">8</intProp>
+</ResponseAssertion>
+<hashTree />
+<JSONPostProcessor guiclass="JSONPostProcessorGui" testclass="JSONPostProcessor" testname="Extract versionId" enabled="true">
+<stringProp name="JSONPostProcessor.referenceNames">versionId</stringProp>
+<stringProp name="JSONPostProcessor.jsonPathExprs">$.id</stringProp>
+<stringProp name="JSONPostProcessor.match_numbers">1</stringProp>
+<stringProp name="JSONPostProcessor.defaultValues">NOT_FOUND</stringProp>
+</JSONPostProcessor>
+<hashTree />
+<JSR223PostProcessor guiclass="TestBeanGUI" testclass="JSR223PostProcessor" testname="Store versionId" enabled="true">
+<stringProp name="scriptLanguage">groovy</stringProp>
+<stringProp name="parameters" />
+<stringProp name="filename" />
+<stringProp name="cacheKey">true</stringProp>
+<stringProp name="script">def value = vars.get("versionId")
+if (value == null || value == "NOT_FOUND" || value.trim().isEmpty()) {
+    throw new IllegalStateException("versionId was not returned")
+}
+props.put("versionId", value)
+</stringProp>
+</JSR223PostProcessor>
+<hashTree />
+</hashTree>
+<HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="POST task" enabled="true">
+<stringProp name="HTTPSampler.path">/api/v1/orgs/${__P(orgId)}/benchmark-versions/${__P(versionId)}/tasks</stringProp>
+<stringProp name="HTTPSampler.method">POST</stringProp>
+<boolProp name="HTTPSampler.follow_redirects">false</boolProp>
+<boolProp name="HTTPSampler.auto_redirects">false</boolProp>
+<boolProp name="HTTPSampler.use_keepalive">true</boolProp>
+<boolProp name="HTTPSampler.DO_MULTIPART_POST">false</boolProp>
+<boolProp name="HTTPSampler.postBodyRaw">true</boolProp>
+<elementProp name="HTTPsampler.Arguments" elementType="Arguments">
+<collectionProp name="Arguments.arguments">
+<elementProp name="" elementType="HTTPArgument">
+<boolProp name="HTTPArgument.always_encode">false</boolProp>
+<stringProp name="Argument.value">{"slug":"jmeter-task","title":"JMeter task","prompt":"Leave the file alone"}</stringProp>
+<stringProp name="Argument.metadata">=</stringProp>
+</elementProp>
+</collectionProp>
+</elementProp>
+</HTTPSamplerProxy>
+<hashTree>
+<HeaderManager guiclass="HeaderPanel" testclass="HeaderManager" testname="Headers" enabled="true">
+<collectionProp name="HeaderManager.headers">
+<elementProp name="" elementType="Header">
+<stringProp name="Header.name">Content-Type</stringProp>
+<stringProp name="Header.value">application/json</stringProp>
+</elementProp>
+<elementProp name="" elementType="Header">
+<stringProp name="Header.name">Accept</stringProp>
+<stringProp name="Header.value">application/json</stringProp>
+</elementProp>
+<elementProp name="" elementType="Header">
+<stringProp name="Header.name">Authorization</stringProp>
+<stringProp name="Header.value">Bearer ${accessToken}</stringProp>
+</elementProp>
+</collectionProp>
+</HeaderManager>
+<hashTree />
+<ResponseAssertion guiclass="AssertionGui" testclass="ResponseAssertion" testname="Create task returns 201" enabled="true">
+<collectionProp name="Asserion.test_strings">
+<stringProp name="code">201</stringProp>
+</collectionProp>
+<stringProp name="Assertion.custom_message" />
+<stringProp name="Assertion.test_field">Assertion.response_code</stringProp>
+<boolProp name="Assertion.assume_success">false</boolProp>
+<intProp name="Assertion.test_type">8</intProp>
+</ResponseAssertion>
+<hashTree />
+<JSONPostProcessor guiclass="JSONPostProcessorGui" testclass="JSONPostProcessor" testname="Extract taskId" enabled="true">
+<stringProp name="JSONPostProcessor.referenceNames">taskId</stringProp>
+<stringProp name="JSONPostProcessor.jsonPathExprs">$.id</stringProp>
+<stringProp name="JSONPostProcessor.match_numbers">1</stringProp>
+<stringProp name="JSONPostProcessor.defaultValues">NOT_FOUND</stringProp>
+</JSONPostProcessor>
+<hashTree />
+<JSR223PostProcessor guiclass="TestBeanGUI" testclass="JSR223PostProcessor" testname="Store taskId" enabled="true">
+<stringProp name="scriptLanguage">groovy</stringProp>
+<stringProp name="parameters" />
+<stringProp name="filename" />
+<stringProp name="cacheKey">true</stringProp>
+<stringProp name="script">def value = vars.get("taskId")
+if (value == null || value == "NOT_FOUND" || value.trim().isEmpty()) {
+    throw new IllegalStateException("taskId was not returned")
+}
+props.put("taskId", value)
+</stringProp>
+</JSR223PostProcessor>
+<hashTree />
+</hashTree>
+<HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="PUT visible suite" enabled="true">
+<stringProp name="HTTPSampler.path">/api/v1/orgs/${__P(orgId)}/tasks/${__P(taskId)}/suites/visible</stringProp>
+<stringProp name="HTTPSampler.method">PUT</stringProp>
+<boolProp name="HTTPSampler.follow_redirects">false</boolProp>
+<boolProp name="HTTPSampler.auto_redirects">false</boolProp>
+<boolProp name="HTTPSampler.use_keepalive">true</boolProp>
+<boolProp name="HTTPSampler.DO_MULTIPART_POST">false</boolProp>
+<boolProp name="HTTPSampler.postBodyRaw">true</boolProp>
+<elementProp name="HTTPsampler.Arguments" elementType="Arguments">
+<collectionProp name="Arguments.arguments">
+<elementProp name="" elementType="HTTPArgument">
+<boolProp name="HTTPArgument.always_encode">false</boolProp>
+<stringProp name="Argument.value">{"framework":"fixture-v1","entryCommand":"fixture","fixtureContent":"{}","caseCount":0,"expectedOutcomes":{}}</stringProp>
+<stringProp name="Argument.metadata">=</stringProp>
+</elementProp>
+</collectionProp>
+</elementProp>
+</HTTPSamplerProxy>
+<hashTree>
+<HeaderManager guiclass="HeaderPanel" testclass="HeaderManager" testname="Headers" enabled="true">
+<collectionProp name="HeaderManager.headers">
+<elementProp name="" elementType="Header">
+<stringProp name="Header.name">Content-Type</stringProp>
+<stringProp name="Header.value">application/json</stringProp>
+</elementProp>
+<elementProp name="" elementType="Header">
+<stringProp name="Header.name">Accept</stringProp>
+<stringProp name="Header.value">application/json</stringProp>
+</elementProp>
+<elementProp name="" elementType="Header">
+<stringProp name="Header.name">Authorization</stringProp>
+<stringProp name="Header.value">Bearer ${accessToken}</stringProp>
+</elementProp>
+</collectionProp>
+</HeaderManager>
+<hashTree />
+<ResponseAssertion guiclass="AssertionGui" testclass="ResponseAssertion" testname="Visible suite returns 200" enabled="true">
+<collectionProp name="Asserion.test_strings">
+<stringProp name="code">200</stringProp>
+</collectionProp>
+<stringProp name="Assertion.custom_message" />
+<stringProp name="Assertion.test_field">Assertion.response_code</stringProp>
+<boolProp name="Assertion.assume_success">false</boolProp>
+<intProp name="Assertion.test_type">8</intProp>
+</ResponseAssertion>
+<hashTree />
+</hashTree>
+<HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="POST publish version" enabled="true">
+<stringProp name="HTTPSampler.path">/api/v1/orgs/${__P(orgId)}/benchmark-versions/${__P(versionId)}/publish</stringProp>
+<stringProp name="HTTPSampler.method">POST</stringProp>
+<boolProp name="HTTPSampler.follow_redirects">false</boolProp>
+<boolProp name="HTTPSampler.auto_redirects">false</boolProp>
+<boolProp name="HTTPSampler.use_keepalive">true</boolProp>
+<boolProp name="HTTPSampler.DO_MULTIPART_POST">false</boolProp>
+<boolProp name="HTTPSampler.postBodyRaw">false</boolProp>
+<elementProp name="HTTPsampler.Arguments" elementType="Arguments">
+<collectionProp name="Arguments.arguments" />
+</elementProp>
+</HTTPSamplerProxy>
+<hashTree>
+<HeaderManager guiclass="HeaderPanel" testclass="HeaderManager" testname="Headers" enabled="true">
+<collectionProp name="HeaderManager.headers">
+<elementProp name="" elementType="Header">
+<stringProp name="Header.name">Accept</stringProp>
+<stringProp name="Header.value">application/json</stringProp>
+</elementProp>
+<elementProp name="" elementType="Header">
+<stringProp name="Header.name">Authorization</stringProp>
+<stringProp name="Header.value">Bearer ${accessToken}</stringProp>
+</elementProp>
+</collectionProp>
+</HeaderManager>
+<hashTree />
+<ResponseAssertion guiclass="AssertionGui" testclass="ResponseAssertion" testname="Publish returns 200" enabled="true">
+<collectionProp name="Asserion.test_strings">
+<stringProp name="code">200</stringProp>
+</collectionProp>
+<stringProp name="Assertion.custom_message" />
+<stringProp name="Assertion.test_field">Assertion.response_code</stringProp>
+<boolProp name="Assertion.assume_success">false</boolProp>
+<intProp name="Assertion.test_type">8</intProp>
+</ResponseAssertion>
+<hashTree />
+<JSONPathAssertion guiclass="JSONPathAssertionGui" testclass="JSONPathAssertion" testname="Published status" enabled="true">
+<stringProp name="JSON_PATH">$.status</stringProp>
+<stringProp name="EXPECTED_VALUE">PUBLISHED</stringProp>
+<boolProp name="JSONVALIDATION">true</boolProp>
+<boolProp name="EXPECT_NULL">false</boolProp>
+<boolProp name="INVERT">false</boolProp>
+<boolProp name="ISREGEX">false</boolProp>
+</JSONPathAssertion>
+<hashTree />
+</hashTree>
+<HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="POST FAKE agent" enabled="true">
+<stringProp name="HTTPSampler.path">/api/v1/orgs/${__P(orgId)}/agents</stringProp>
+<stringProp name="HTTPSampler.method">POST</stringProp>
+<boolProp name="HTTPSampler.follow_redirects">false</boolProp>
+<boolProp name="HTTPSampler.auto_redirects">false</boolProp>
+<boolProp name="HTTPSampler.use_keepalive">true</boolProp>
+<boolProp name="HTTPSampler.DO_MULTIPART_POST">false</boolProp>
+<boolProp name="HTTPSampler.postBodyRaw">true</boolProp>
+<elementProp name="HTTPsampler.Arguments" elementType="Arguments">
+<collectionProp name="Arguments.arguments">
+<elementProp name="" elementType="HTTPArgument">
+<boolProp name="HTTPArgument.always_encode">false</boolProp>
+<stringProp name="Argument.value">{"name":"JMeter Fake","adapterType":"FAKE","config":{"patch":"diff --git a/A.java b/A.java"}}</stringProp>
+<stringProp name="Argument.metadata">=</stringProp>
+</elementProp>
+</collectionProp>
+</elementProp>
+</HTTPSamplerProxy>
+<hashTree>
+<HeaderManager guiclass="HeaderPanel" testclass="HeaderManager" testname="Headers" enabled="true">
+<collectionProp name="HeaderManager.headers">
+<elementProp name="" elementType="Header">
+<stringProp name="Header.name">Content-Type</stringProp>
+<stringProp name="Header.value">application/json</stringProp>
+</elementProp>
+<elementProp name="" elementType="Header">
+<stringProp name="Header.name">Accept</stringProp>
+<stringProp name="Header.value">application/json</stringProp>
+</elementProp>
+<elementProp name="" elementType="Header">
+<stringProp name="Header.name">Authorization</stringProp>
+<stringProp name="Header.value">Bearer ${accessToken}</stringProp>
+</elementProp>
+</collectionProp>
+</HeaderManager>
+<hashTree />
+<ResponseAssertion guiclass="AssertionGui" testclass="ResponseAssertion" testname="Create agent returns 201" enabled="true">
+<collectionProp name="Asserion.test_strings">
+<stringProp name="code">201</stringProp>
+</collectionProp>
+<stringProp name="Assertion.custom_message" />
+<stringProp name="Assertion.test_field">Assertion.response_code</stringProp>
+<boolProp name="Assertion.assume_success">false</boolProp>
+<intProp name="Assertion.test_type">8</intProp>
+</ResponseAssertion>
+<hashTree />
+<JSONPostProcessor guiclass="JSONPostProcessorGui" testclass="JSONPostProcessor" testname="Extract agentId" enabled="true">
+<stringProp name="JSONPostProcessor.referenceNames">agentId</stringProp>
+<stringProp name="JSONPostProcessor.jsonPathExprs">$.id</stringProp>
+<stringProp name="JSONPostProcessor.match_numbers">1</stringProp>
+<stringProp name="JSONPostProcessor.defaultValues">NOT_FOUND</stringProp>
+</JSONPostProcessor>
+<hashTree />
+<JSR223PostProcessor guiclass="TestBeanGUI" testclass="JSR223PostProcessor" testname="Store agentId" enabled="true">
+<stringProp name="scriptLanguage">groovy</stringProp>
+<stringProp name="parameters" />
+<stringProp name="filename" />
+<stringProp name="cacheKey">true</stringProp>
+<stringProp name="script">def value = vars.get("agentId")
+if (value == null || value == "NOT_FOUND" || value.trim().isEmpty()) {
+    throw new IllegalStateException("agentId was not returned")
+}
+props.put("agentId", value)
+</stringProp>
+</JSR223PostProcessor>
+<hashTree />
+</hashTree>
+<HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="POST one evaluation so result retrieval has an id" enabled="true">
+<stringProp name="HTTPSampler.path">/api/v1/orgs/${__P(orgId)}/evaluations</stringProp>
+<stringProp name="HTTPSampler.method">POST</stringProp>
+<boolProp name="HTTPSampler.follow_redirects">false</boolProp>
+<boolProp name="HTTPSampler.auto_redirects">false</boolProp>
+<boolProp name="HTTPSampler.use_keepalive">true</boolProp>
+<boolProp name="HTTPSampler.DO_MULTIPART_POST">false</boolProp>
+<boolProp name="HTTPSampler.postBodyRaw">true</boolProp>
+<elementProp name="HTTPsampler.Arguments" elementType="Arguments">
+<collectionProp name="Arguments.arguments">
+<elementProp name="" elementType="HTTPArgument">
+<boolProp name="HTTPArgument.always_encode">false</boolProp>
+<stringProp name="Argument.value">{"benchmarkVersionId":"${__P(versionId)}","taskId":"${__P(taskId)}","agentId":"${__P(agentId)}"}</stringProp>
+<stringProp name="Argument.metadata">=</stringProp>
+</elementProp>
+</collectionProp>
+</elementProp>
+</HTTPSamplerProxy>
+<hashTree>
+<HeaderManager guiclass="HeaderPanel" testclass="HeaderManager" testname="Headers" enabled="true">
+<collectionProp name="HeaderManager.headers">
+<elementProp name="" elementType="Header">
+<stringProp name="Header.name">Content-Type</stringProp>
+<stringProp name="Header.value">application/json</stringProp>
+</elementProp>
+<elementProp name="" elementType="Header">
+<stringProp name="Header.name">Accept</stringProp>
+<stringProp name="Header.value">application/json</stringProp>
+</elementProp>
+<elementProp name="" elementType="Header">
+<stringProp name="Header.name">Authorization</stringProp>
+<stringProp name="Header.value">Bearer ${accessToken}</stringProp>
+</elementProp>
+<elementProp name="" elementType="Header">
+<stringProp name="Header.name">Idempotency-Key</stringProp>
+<stringProp name="Header.value">jmeter-${__UUID()}</stringProp>
+</elementProp>
+</collectionProp>
+</HeaderManager>
+<hashTree />
+<ResponseAssertion guiclass="AssertionGui" testclass="ResponseAssertion" testname="Enqueue returns 201" enabled="true">
+<collectionProp name="Asserion.test_strings">
+<stringProp name="code">201</stringProp>
+</collectionProp>
+<stringProp name="Assertion.custom_message" />
+<stringProp name="Assertion.test_field">Assertion.response_code</stringProp>
+<boolProp name="Assertion.assume_success">false</boolProp>
+<intProp name="Assertion.test_type">8</intProp>
+</ResponseAssertion>
+<hashTree />
+<JSONPostProcessor guiclass="JSONPostProcessorGui" testclass="JSONPostProcessor" testname="Extract evaluationId" enabled="true">
+<stringProp name="JSONPostProcessor.referenceNames">evaluationId</stringProp>
+<stringProp name="JSONPostProcessor.jsonPathExprs">$.id</stringProp>
+<stringProp name="JSONPostProcessor.match_numbers">1</stringProp>
+<stringProp name="JSONPostProcessor.defaultValues">NOT_FOUND</stringProp>
+</JSONPostProcessor>
+<hashTree />
+<JSR223PostProcessor guiclass="TestBeanGUI" testclass="JSR223PostProcessor" testname="Store evaluationId" enabled="true">
+<stringProp name="scriptLanguage">groovy</stringProp>
+<stringProp name="parameters" />
+<stringProp name="filename" />
+<stringProp name="cacheKey">true</stringProp>
+<stringProp name="script">def value = vars.get("evaluationId")
+if (value == null || value == "NOT_FOUND" || value.trim().isEmpty()) {
+    throw new IllegalStateException("evaluationId was not returned")
+}
+props.put("evaluationId", value)
+</stringProp>
+</JSR223PostProcessor>
+<hashTree />
+<JSONPathAssertion guiclass="JSONPathAssertionGui" testclass="JSONPathAssertion" testname="Enqueued evaluation has a state" enabled="true">
+<stringProp name="JSON_PATH">$.state</stringProp>
+<stringProp name="EXPECTED_VALUE">QUEUED|PREPARING_REPO|RUNNING_BASELINE|INVOKING_AGENT|COLLECTING_PATCH|VALIDATING_PATCH|APPLYING_PATCH|RUNNING_VISIBLE_TESTS|RUNNING_HIDDEN_TESTS|ANALYZING_QUALITY|SCORING|COMPLETED|FAILED|CANCELLED|TIMED_OUT</stringProp>
+<boolProp name="JSONVALIDATION">true</boolProp>
+<boolProp name="EXPECT_NULL">false</boolProp>
+<boolProp name="INVERT">false</boolProp>
+<boolProp name="ISREGEX">true</boolProp>
+</JSONPathAssertion>
+<hashTree />
+</hashTree>
+</hashTree>
+<ThreadGroup guiclass="ThreadGroupGui" testclass="ThreadGroup" testname="Baseline login, benchmark listing, result retrieval" enabled="true">
+<stringProp name="ThreadGroup.on_sample_error">stoptest</stringProp>
+<stringProp name="ThreadGroup.num_threads">${__P(threads,1)}</stringProp>
+<stringProp name="ThreadGroup.ramp_time">0</stringProp>
+<boolProp name="ThreadGroup.scheduler">false</boolProp>
+<stringProp name="ThreadGroup.duration" />
+<stringProp name="ThreadGroup.delay" />
+<boolProp name="ThreadGroup.same_user_on_next_iteration">true</boolProp>
+<elementProp name="ThreadGroup.main_controller" elementType="LoopController" guiclass="LoopControlPanel" testclass="LoopController" testname="Loop Controller" enabled="true">
+<boolProp name="LoopController.continue_forever">false</boolProp>
+<stringProp name="LoopController.loops">${__P(loops,1)}</stringProp>
+</elementProp>
+</ThreadGroup>
+<hashTree>
+<HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="POST /api/v1/auth/login" enabled="true">
+<stringProp name="HTTPSampler.path">/api/v1/auth/login</stringProp>
+<stringProp name="HTTPSampler.method">POST</stringProp>
+<boolProp name="HTTPSampler.follow_redirects">false</boolProp>
+<boolProp name="HTTPSampler.auto_redirects">false</boolProp>
+<boolProp name="HTTPSampler.use_keepalive">true</boolProp>
+<boolProp name="HTTPSampler.DO_MULTIPART_POST">false</boolProp>
+<boolProp name="HTTPSampler.postBodyRaw">true</boolProp>
+<elementProp name="HTTPsampler.Arguments" elementType="Arguments">
+<collectionProp name="Arguments.arguments">
+<elementProp name="" elementType="HTTPArgument">
+<boolProp name="HTTPArgument.always_encode">false</boolProp>
+<stringProp name="Argument.value">{"email":"${__P(loginEmail)}","password":"${__P(loginPassword)}"}</stringProp>
+<stringProp name="Argument.metadata">=</stringProp>
+</elementProp>
+</collectionProp>
+</elementProp>
+</HTTPSamplerProxy>
+<hashTree>
+<HeaderManager guiclass="HeaderPanel" testclass="HeaderManager" testname="Headers" enabled="true">
+<collectionProp name="HeaderManager.headers">
+<elementProp name="" elementType="Header">
+<stringProp name="Header.name">Content-Type</stringProp>
+<stringProp name="Header.value">application/json</stringProp>
+</elementProp>
+<elementProp name="" elementType="Header">
+<stringProp name="Header.name">Accept</stringProp>
+<stringProp name="Header.value">application/json</stringProp>
+</elementProp>
+</collectionProp>
+</HeaderManager>
+<hashTree />
+<ResponseAssertion guiclass="AssertionGui" testclass="ResponseAssertion" testname="Login returns 200" enabled="true">
+<collectionProp name="Asserion.test_strings">
+<stringProp name="code">200</stringProp>
+</collectionProp>
+<stringProp name="Assertion.custom_message" />
+<stringProp name="Assertion.test_field">Assertion.response_code</stringProp>
+<boolProp name="Assertion.assume_success">false</boolProp>
+<intProp name="Assertion.test_type">8</intProp>
+</ResponseAssertion>
+<hashTree />
+<JSONPostProcessor guiclass="JSONPostProcessorGui" testclass="JSONPostProcessor" testname="Extract accessToken" enabled="true">
+<stringProp name="JSONPostProcessor.referenceNames">accessToken</stringProp>
+<stringProp name="JSONPostProcessor.jsonPathExprs">$.accessToken</stringProp>
+<stringProp name="JSONPostProcessor.match_numbers">1</stringProp>
+<stringProp name="JSONPostProcessor.defaultValues">NOT_FOUND</stringProp>
+</JSONPostProcessor>
+<hashTree />
+<JSONPathAssertion guiclass="JSONPathAssertionGui" testclass="JSONPathAssertion" testname="accessToken is present" enabled="true">
+<stringProp name="JSON_PATH">$.accessToken</stringProp>
+<stringProp name="EXPECTED_VALUE">.+</stringProp>
+<boolProp name="JSONVALIDATION">true</boolProp>
+<boolProp name="EXPECT_NULL">false</boolProp>
+<boolProp name="INVERT">false</boolProp>
+<boolProp name="ISREGEX">true</boolProp>
+</JSONPathAssertion>
+<hashTree />
+<JSONPathAssertion guiclass="JSONPathAssertionGui" testclass="JSONPathAssertion" testname="tokenType is Bearer" enabled="true">
+<stringProp name="JSON_PATH">$.tokenType</stringProp>
+<stringProp name="EXPECTED_VALUE">Bearer</stringProp>
+<boolProp name="JSONVALIDATION">true</boolProp>
+<boolProp name="EXPECT_NULL">false</boolProp>
+<boolProp name="INVERT">false</boolProp>
+<boolProp name="ISREGEX">false</boolProp>
+</JSONPathAssertion>
+<hashTree />
+</hashTree>
+<HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="GET benchmark listing" enabled="true">
+<stringProp name="HTTPSampler.path">/api/v1/orgs/${__P(orgId)}/benchmarks</stringProp>
+<stringProp name="HTTPSampler.method">GET</stringProp>
+<boolProp name="HTTPSampler.follow_redirects">false</boolProp>
+<boolProp name="HTTPSampler.auto_redirects">false</boolProp>
+<boolProp name="HTTPSampler.use_keepalive">true</boolProp>
+<boolProp name="HTTPSampler.DO_MULTIPART_POST">false</boolProp>
+<boolProp name="HTTPSampler.postBodyRaw">false</boolProp>
+<elementProp name="HTTPsampler.Arguments" elementType="Arguments">
+<collectionProp name="Arguments.arguments" />
+</elementProp>
+</HTTPSamplerProxy>
+<hashTree>
+<HeaderManager guiclass="HeaderPanel" testclass="HeaderManager" testname="Headers" enabled="true">
+<collectionProp name="HeaderManager.headers">
+<elementProp name="" elementType="Header">
+<stringProp name="Header.name">Accept</stringProp>
+<stringProp name="Header.value">application/json</stringProp>
+</elementProp>
+<elementProp name="" elementType="Header">
+<stringProp name="Header.name">Authorization</stringProp>
+<stringProp name="Header.value">Bearer ${accessToken}</stringProp>
+</elementProp>
+</collectionProp>
+</HeaderManager>
+<hashTree />
+<ResponseAssertion guiclass="AssertionGui" testclass="ResponseAssertion" testname="Benchmark list returns 200" enabled="true">
+<collectionProp name="Asserion.test_strings">
+<stringProp name="code">200</stringProp>
+</collectionProp>
+<stringProp name="Assertion.custom_message" />
+<stringProp name="Assertion.test_field">Assertion.response_code</stringProp>
+<boolProp name="Assertion.assume_success">false</boolProp>
+<intProp name="Assertion.test_type">8</intProp>
+</ResponseAssertion>
+<hashTree />
+<JSONPathAssertion guiclass="JSONPathAssertionGui" testclass="JSONPathAssertion" testname="Listed benchmark name" enabled="true">
+<stringProp name="JSON_PATH">$[0].name</stringProp>
+<stringProp name="EXPECTED_VALUE">JMeter Bench</stringProp>
+<boolProp name="JSONVALIDATION">true</boolProp>
+<boolProp name="EXPECT_NULL">false</boolProp>
+<boolProp name="INVERT">false</boolProp>
+<boolProp name="ISREGEX">false</boolProp>
+</JSONPathAssertion>
+<hashTree />
+</hashTree>
+<HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="GET evaluation result" enabled="true">
+<stringProp name="HTTPSampler.path">/api/v1/orgs/${__P(orgId)}/evaluations/${__P(evaluationId)}</stringProp>
+<stringProp name="HTTPSampler.method">GET</stringProp>
+<boolProp name="HTTPSampler.follow_redirects">false</boolProp>
+<boolProp name="HTTPSampler.auto_redirects">false</boolProp>
+<boolProp name="HTTPSampler.use_keepalive">true</boolProp>
+<boolProp name="HTTPSampler.DO_MULTIPART_POST">false</boolProp>
+<boolProp name="HTTPSampler.postBodyRaw">false</boolProp>
+<elementProp name="HTTPsampler.Arguments" elementType="Arguments">
+<collectionProp name="Arguments.arguments" />
+</elementProp>
+</HTTPSamplerProxy>
+<hashTree>
+<HeaderManager guiclass="HeaderPanel" testclass="HeaderManager" testname="Headers" enabled="true">
+<collectionProp name="HeaderManager.headers">
+<elementProp name="" elementType="Header">
+<stringProp name="Header.name">Accept</stringProp>
+<stringProp name="Header.value">application/json</stringProp>
+</elementProp>
+<elementProp name="" elementType="Header">
+<stringProp name="Header.name">Authorization</stringProp>
+<stringProp name="Header.value">Bearer ${accessToken}</stringProp>
+</elementProp>
+</collectionProp>
+</HeaderManager>
+<hashTree />
+<ResponseAssertion guiclass="AssertionGui" testclass="ResponseAssertion" testname="Evaluation detail returns 200" enabled="true">
+<collectionProp name="Asserion.test_strings">
+<stringProp name="code">200</stringProp>
+</collectionProp>
+<stringProp name="Assertion.custom_message" />
+<stringProp name="Assertion.test_field">Assertion.response_code</stringProp>
+<boolProp name="Assertion.assume_success">false</boolProp>
+<intProp name="Assertion.test_type">8</intProp>
+</ResponseAssertion>
+<hashTree />
+<JSONPathAssertion guiclass="JSONPathAssertionGui" testclass="JSONPathAssertion" testname="Result state" enabled="true">
+<stringProp name="JSON_PATH">$.evaluation.state</stringProp>
+<stringProp name="EXPECTED_VALUE">QUEUED|PREPARING_REPO|RUNNING_BASELINE|INVOKING_AGENT|COLLECTING_PATCH|VALIDATING_PATCH|APPLYING_PATCH|RUNNING_VISIBLE_TESTS|RUNNING_HIDDEN_TESTS|ANALYZING_QUALITY|SCORING|COMPLETED|FAILED|CANCELLED|TIMED_OUT</stringProp>
+<boolProp name="JSONVALIDATION">true</boolProp>
+<boolProp name="EXPECT_NULL">false</boolProp>
+<boolProp name="INVERT">false</boolProp>
+<boolProp name="ISREGEX">true</boolProp>
+</JSONPathAssertion>
+<hashTree />
+</hashTree>
+<HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="GET evaluation report" enabled="true">
+<stringProp name="HTTPSampler.path">/api/v1/orgs/${__P(orgId)}/evaluations/${__P(evaluationId)}/report</stringProp>
+<stringProp name="HTTPSampler.method">GET</stringProp>
+<boolProp name="HTTPSampler.follow_redirects">false</boolProp>
+<boolProp name="HTTPSampler.auto_redirects">false</boolProp>
+<boolProp name="HTTPSampler.use_keepalive">true</boolProp>
+<boolProp name="HTTPSampler.DO_MULTIPART_POST">false</boolProp>
+<boolProp name="HTTPSampler.postBodyRaw">false</boolProp>
+<elementProp name="HTTPsampler.Arguments" elementType="Arguments">
+<collectionProp name="Arguments.arguments" />
+</elementProp>
+</HTTPSamplerProxy>
+<hashTree>
+<HeaderManager guiclass="HeaderPanel" testclass="HeaderManager" testname="Headers" enabled="true">
+<collectionProp name="HeaderManager.headers">
+<elementProp name="" elementType="Header">
+<stringProp name="Header.name">Accept</stringProp>
+<stringProp name="Header.value">application/json</stringProp>
+</elementProp>
+<elementProp name="" elementType="Header">
+<stringProp name="Header.name">Authorization</stringProp>
+<stringProp name="Header.value">Bearer ${accessToken}</stringProp>
+</elementProp>
+</collectionProp>
+</HeaderManager>
+<hashTree />
+<ResponseAssertion guiclass="AssertionGui" testclass="ResponseAssertion" testname="Evaluation report returns 200" enabled="true">
+<collectionProp name="Asserion.test_strings">
+<stringProp name="code">200</stringProp>
+</collectionProp>
+<stringProp name="Assertion.custom_message" />
+<stringProp name="Assertion.test_field">Assertion.response_code</stringProp>
+<boolProp name="Assertion.assume_success">false</boolProp>
+<intProp name="Assertion.test_type">8</intProp>
+</ResponseAssertion>
+<hashTree />
+<JSONPathAssertion guiclass="JSONPathAssertionGui" testclass="JSONPathAssertion" testname="Report state" enabled="true">
+<stringProp name="JSON_PATH">$.evaluation.state</stringProp>
+<stringProp name="EXPECTED_VALUE">QUEUED|PREPARING_REPO|RUNNING_BASELINE|INVOKING_AGENT|COLLECTING_PATCH|VALIDATING_PATCH|APPLYING_PATCH|RUNNING_VISIBLE_TESTS|RUNNING_HIDDEN_TESTS|ANALYZING_QUALITY|SCORING|COMPLETED|FAILED|CANCELLED|TIMED_OUT</stringProp>
+<boolProp name="JSONVALIDATION">true</boolProp>
+<boolProp name="EXPECT_NULL">false</boolProp>
+<boolProp name="INVERT">false</boolProp>
+<boolProp name="ISREGEX">true</boolProp>
+</JSONPathAssertion>
+<hashTree />
+</hashTree>
+</hashTree>
+<ResultCollector guiclass="ViewResultsFullVisualizer" testclass="ResultCollector" testname="View Results Tree (disabled, writes no file)" enabled="false">
+<boolProp name="ResultCollector.error_logging">false</boolProp>
+<objProp>
+<name>saveConfig</name>
+<value class="SampleSaveConfiguration">
+<time>true</time>
+<latency>true</latency>
+<timestamp>true</timestamp>
+<success>true</success>
+<label>true</label>
+<code>true</code>
+<message>true</message>
+<threadName>true</threadName>
+<dataType>false</dataType>
+<encoding>false</encoding>
+<assertions>true</assertions>
+<subresults>false</subresults>
+<responseData>false</responseData>
+<samplerData>false</samplerData>
+<xml>false</xml>
+<fieldNames>true</fieldNames>
+<responseHeaders>false</responseHeaders>
+<requestHeaders>false</requestHeaders>
+<responseDataOnError>false</responseDataOnError>
+<saveAssertionResultsFailureMessage>true</saveAssertionResultsFailureMessage>
+<assertionsResultsToSave>0</assertionsResultsToSave>
+<bytes>true</bytes>
+<sentBytes>true</sentBytes>
+<url>true</url>
+<threadCounts>true</threadCounts>
+<idleTime>true</idleTime>
+<connectTime>true</connectTime>
+</value>
+</objProp>
+<stringProp name="filename" />
+</ResultCollector>
+<hashTree />
+</hashTree>
+</hashTree>
+</jmeterTestPlan>
