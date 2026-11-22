@@ -27,6 +27,10 @@ export const EMPTY = {
   health: 'Health summary unavailable. Use Refresh health to try again.',
   samlEmpty: 'No SAML IdPs configured for this organization. Add one in the form below.',
   samlForbidden: 'Only OWNER or ADMIN can manage SAML IdPs. Ask an owner to grant that role.',
+  members: 'No members in this organization yet. Add a member in the form below.',
+  membersReadOnly: 'No members in this organization yet. Ask an owner to add one.',
+  membersForbidden:
+    'Only OWNER or ADMIN can add members or change roles. Ask an owner to grant that role.',
   agents:
     'No agents registered yet. Register one in the form below, or enqueue an evaluation and leave the agent on the default Grok adapter.',
   agentsNeedOrg: 'Select or create an organization to manage agents.',

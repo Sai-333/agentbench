@@ -172,6 +172,14 @@ export type SecretMeta = {
   rotatedAt: string | null
 }
 
+export type Member = {
+  userId: string
+  email: string
+  displayName: string
+  role: string
+  createdAt: string
+}
+
 export type SamlIdp = {
   id: string
   orgId: string
