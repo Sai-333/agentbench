@@ -65,7 +65,7 @@ kubectl delete crd agentbenchinstances.agentbench.io
 
 ```bash
 ./scripts/operator/smoke.sh
-# also covered by CI helm job via ./scripts/helm/smoke.sh (calls operator smoke)
+# CI: dedicated "operator" job runs this script; helm smoke also invokes it
 ```
 
 ## Honest limits
