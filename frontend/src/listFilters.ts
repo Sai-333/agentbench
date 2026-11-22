@@ -18,12 +18,28 @@ export const EVALUATION_STATES = [
   'TIMED_OUT',
 ] as const
 
+export const FAILURE_CLASSES = [
+  'INFRASTRUCTURE',
+  'AGENT',
+  'USER',
+  'BASELINE',
+  'INTERNAL',
+] as const
+
+/** Evaluations whose stored failure class is null. */
+export const NO_FAILURE_CLASS = 'NONE'
+
 export type EvaluationFilter = {
   q: string
   state: string
   agentId: string
   taskId: string
   benchmarkVersionId: string
+  failureClass: string
+  minScore: string
+  maxScore: string
+  createdFrom: string
+  createdTo: string
 }
 
 export const EMPTY_EVALUATION_FILTER: EvaluationFilter = {
@@ -32,6 +48,11 @@ export const EMPTY_EVALUATION_FILTER: EvaluationFilter = {
   agentId: '',
   taskId: '',
   benchmarkVersionId: '',
+  failureClass: '',
+  minScore: '',
+  maxScore: '',
+  createdFrom: '',
+  createdTo: '',
 }
 
 export type LeaderboardFilter = {
@@ -78,8 +99,14 @@ export const EMPTY_COMPARISON_FILTER: ComparisonTableFilter = {
   taskId: '',
 }
 
-function trimmed(value: string): string {
-  return value.trim()
+function trimmed(value: string | null | undefined): string {
+  return (value ?? '').trim()
+}
+
+function scoreBound(value: string | null | undefined): number | null {
+  const text = scoreQueryValue(value)
+  if (text == null) return null
+  return Number(text)
 }
 
 export function evaluationFiltersActive(filter: EvaluationFilter): boolean {
@@ -88,7 +115,12 @@ export function evaluationFiltersActive(filter: EvaluationFilter): boolean {
       filter.state ||
       filter.agentId ||
       filter.taskId ||
-      filter.benchmarkVersionId,
+      filter.benchmarkVersionId ||
+      filter.failureClass ||
+      trimmed(filter.minScore) ||
+      trimmed(filter.maxScore) ||
+      trimmed(filter.createdFrom) ||
+      trimmed(filter.createdTo),
   )
 }
 
@@ -108,7 +140,40 @@ export function evaluationSearchParams(
   if (filter.agentId) params.set('agentId', filter.agentId)
   if (filter.taskId) params.set('taskId', filter.taskId)
   if (filter.benchmarkVersionId) params.set('benchmarkVersionId', filter.benchmarkVersionId)
+  if (filter.failureClass) params.set('failureClass', filter.failureClass)
+  const minScore = scoreQueryValue(filter.minScore)
+  const maxScore = scoreQueryValue(filter.maxScore)
+  if (minScore != null) params.set('minScore', minScore)
+  if (maxScore != null) params.set('maxScore', maxScore)
+  const createdFrom = createdQueryValue(filter.createdFrom, false)
+  const createdTo = createdQueryValue(filter.createdTo, true)
+  if (createdFrom) params.set('createdFrom', createdFrom)
+  if (createdTo) params.set('createdTo', createdTo)
   return params
+}
+
+function scoreQueryValue(value: string | null | undefined): string | null {
+  const text = trimmed(value)
+  if (!text) return null
+  const score = Number(text)
+  if (!Number.isFinite(score)) return null
+  return text
+}
+
+/** Minute-precision "to" includes that whole minute. */
+export function createdInstantMs(value: string | null | undefined, end: boolean): number | null {
+  const text = trimmed(value)
+  if (!text) return null
+  const parsed = Date.parse(text)
+  if (Number.isNaN(parsed)) return null
+  if (end && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(text)) return parsed + 60_000 - 1
+  return parsed
+}
+
+function createdQueryValue(value: string | null | undefined, end: boolean): string | null {
+  const ms = createdInstantMs(value, end)
+  if (ms == null) return null
+  return new Date(ms).toISOString()
 }
 
 export type EvaluationLike = {
@@ -121,6 +186,8 @@ export type EvaluationLike = {
   benchmarkVersionId: string
   benchmarkVersion?: string
   failureClass?: string | null
+  weightedTotal?: number | null
+  createdAt?: string | null
 }
 
 export function matchesEvaluationItem(item: EvaluationLike, filter: EvaluationFilter): boolean {
@@ -129,6 +196,27 @@ export function matchesEvaluationItem(item: EvaluationLike, filter: EvaluationFi
   if (filter.taskId && item.taskId !== filter.taskId) return false
   if (filter.benchmarkVersionId && item.benchmarkVersionId !== filter.benchmarkVersionId) {
     return false
+  }
+  if (filter.failureClass === NO_FAILURE_CLASS) {
+    if (item.failureClass) return false
+  } else if (filter.failureClass && item.failureClass !== filter.failureClass) {
+    return false
+  }
+  const minScore = scoreBound(filter.minScore)
+  const maxScore = scoreBound(filter.maxScore)
+  if (minScore != null || maxScore != null) {
+    if (item.weightedTotal == null || !Number.isFinite(Number(item.weightedTotal))) return false
+    const score = Number(item.weightedTotal)
+    if (minScore != null && score < minScore) return false
+    if (maxScore != null && score > maxScore) return false
+  }
+  const createdFrom = createdInstantMs(filter.createdFrom, false)
+  const createdTo = createdInstantMs(filter.createdTo, true)
+  if (createdFrom != null || createdTo != null) {
+    const created = item.createdAt ? Date.parse(item.createdAt) : Number.NaN
+    if (Number.isNaN(created)) return false
+    if (createdFrom != null && created < createdFrom) return false
+    if (createdTo != null && created > createdTo) return false
   }
   const q = trimmed(filter.q).toLowerCase()
   if (!q) return true

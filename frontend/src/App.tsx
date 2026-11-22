@@ -45,6 +45,7 @@ import {
   OverviewPanel,
 } from './DashboardPanels'
 import { RegressionRunsPanel } from './RegressionRunsPanel'
+import { isFailedCaseStatus, visibleCaseResults } from './caseList'
 import { EMPTY } from './emptyCopy'
 import { ScoreBars, StageTimeline, StatusChip } from './evaluationUi'
 import { evaluationProgressHint, showFailureChip } from './evaluationStages'
@@ -54,6 +55,8 @@ import {
   EMPTY_EVALUATION_FILTER,
   EMPTY_LEADERBOARD_FILTER,
   EVALUATION_STATES,
+  FAILURE_CLASSES,
+  NO_FAILURE_CLASS,
   comparisonFiltersActive,
   comparisonSearchParams,
   costSearchParams,
@@ -182,6 +185,7 @@ function App() {
   const [expandedRegression, setExpandedRegression] = useState<RegressionRunDetail | null>(null)
   const [regressionExpanding, setRegressionExpanding] = useState(false)
   const [evalFilters, setEvalFilters] = useState<EvaluationFilter>(EMPTY_EVALUATION_FILTER)
+  const [failedCasesOnly, setFailedCasesOnly] = useState(false)
   const [evalPage, setEvalPage] = useState(0)
   const [evalSearchResult, setEvalSearchResult] = useState<EvaluationSearchResponse | null>(null)
   const [evalSearchError, setEvalSearchError] = useState<string | null>(null)
@@ -572,7 +576,8 @@ function App() {
 
   useEffect(() => {
     if (!selectedOrgId) return
-    const delay = evalFilters.q.trim() ? 250 : 0
+    const delay =
+      evalFilters.q.trim() || evalFilters.minScore.trim() || evalFilters.maxScore.trim() ? 250 : 0
     const timer = window.setTimeout(() => {
       void loadEvaluationSearch(selectedOrgId, 0)
     }, delay)
@@ -584,6 +589,11 @@ function App() {
     evalFilters.agentId,
     evalFilters.taskId,
     evalFilters.benchmarkVersionId,
+    evalFilters.failureClass,
+    evalFilters.minScore,
+    evalFilters.maxScore,
+    evalFilters.createdFrom,
+    evalFilters.createdTo,
     loadEvaluationSearch,
   ])
 
@@ -2474,6 +2484,69 @@ function App() {
                         ))}
                       </select>
                     </label>
+                    <label>
+                      Failure class
+                      <select
+                        value={evalFilters.failureClass}
+                        onChange={(event) =>
+                          setEvalFilters((prev) => ({ ...prev, failureClass: event.target.value }))
+                        }
+                      >
+                        <option value="">Any</option>
+                        <option value={NO_FAILURE_CLASS}>No failure class</option>
+                        {FAILURE_CLASSES.map((failureClass) => (
+                          <option key={failureClass} value={failureClass}>
+                            {failureClass}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label>
+                      Min score
+                      <input
+                        type="number"
+                        min={0}
+                        max={100}
+                        step="0.01"
+                        value={evalFilters.minScore}
+                        onChange={(event) =>
+                          setEvalFilters((prev) => ({ ...prev, minScore: event.target.value }))
+                        }
+                      />
+                    </label>
+                    <label>
+                      Max score
+                      <input
+                        type="number"
+                        min={0}
+                        max={100}
+                        step="0.01"
+                        value={evalFilters.maxScore}
+                        onChange={(event) =>
+                          setEvalFilters((prev) => ({ ...prev, maxScore: event.target.value }))
+                        }
+                      />
+                    </label>
+                    <label>
+                      Created from
+                      <input
+                        type="datetime-local"
+                        value={evalFilters.createdFrom}
+                        onChange={(event) =>
+                          setEvalFilters((prev) => ({ ...prev, createdFrom: event.target.value }))
+                        }
+                      />
+                    </label>
+                    <label>
+                      Created to
+                      <input
+                        type="datetime-local"
+                        value={evalFilters.createdTo}
+                        onChange={(event) =>
+                          setEvalFilters((prev) => ({ ...prev, createdTo: event.target.value }))
+                        }
+                      />
+                    </label>
                     <button
                       type="button"
                       className="cta secondary"
@@ -2979,26 +3052,43 @@ function App() {
           {selectedEvaluation.testRuns.length > 0 && (
             <>
               <h3>Test runs</h3>
+              <label className="check-row">
+                <input
+                  type="checkbox"
+                  checked={failedCasesOnly}
+                  onChange={(event) => setFailedCasesOnly(event.target.checked)}
+                />
+                Failed cases only
+              </label>
               <ul className="list plain">
-                {selectedEvaluation.testRuns.map((run) => (
-                  <li key={run.id}>
-                    <strong>
-                      {run.phase} · {run.status}
-                      {run.phase === 'HIDDEN_POST' ? ' · hidden pass-rate only (never F2P)' : ''}
-                    </strong>
-                    <ul className="muted small">
-                      {run.results.map((result) => (
-                        <li key={result.caseKey}>
-                          {result.caseKey}: {result.status}
-                          {result.transition ? ` (${result.transition})` : ''}
-                          {result.category ? ` · ${result.category}` : ''}
-                          {result.flaky ? ' · flaky' : ''}
-                          {result.quarantined ? ' · quarantined' : ''} · {result.durationMs}ms
-                        </li>
-                      ))}
-                    </ul>
-                  </li>
-                ))}
+                {selectedEvaluation.testRuns.map((run) => {
+                  const results = visibleCaseResults(run.results, failedCasesOnly)
+                  return (
+                    <li key={run.id}>
+                      <strong>
+                        {run.phase} · {run.status}
+                        {run.phase === 'HIDDEN_POST' ? ' · hidden pass-rate only (never F2P)' : ''}
+                      </strong>
+                      <ul className="muted small">
+                        {results.map((result) => (
+                          <li key={result.caseKey}>
+                            <span>
+                              {result.caseKey}: {result.status}
+                              {result.transition ? ` (${result.transition})` : ''}
+                              {result.category ? ` · ${result.category}` : ''}
+                              {result.flaky ? ' · flaky' : ''}
+                              {result.quarantined ? ' · quarantined' : ''} · {result.durationMs}ms
+                            </span>
+                            {isFailedCaseStatus(result.status) && result.message ? (
+                              <span className="case-message">{result.message}</span>
+                            ) : null}
+                          </li>
+                        ))}
+                        {failedCasesOnly && results.length === 0 ? <li>No failed cases</li> : null}
+                      </ul>
+                    </li>
+                  )
+                })}
               </ul>
             </>
           )}

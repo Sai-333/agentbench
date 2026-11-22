@@ -70,7 +70,7 @@ class AnalyticsDashboardTest {
         UUID orgB = createOrg(tokenB, "Analytics Org B", "analytics-org-b");
 
         Fixture fixtureA = seedCompletedEvaluation(orgA, "agent-alpha", "90.0000", "0.12");
-        seedCompletedEvaluation(orgA, "agent-beta", "70.0000", "0.05");
+        Fixture fixtureB = seedCompletedEvaluation(orgA, "agent-beta", "70.0000", "0.05");
 
         mockMvc.perform(get("/api/v1/orgs/{orgId}/analytics/overview", orgA)
                         .header("Authorization", "Bearer " + tokenA))
@@ -108,6 +108,53 @@ class AnalyticsDashboardTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.page.total").value(1))
                 .andExpect(jsonPath("$.items[0].agentName").value("agent-alpha"));
+
+        mockMvc.perform(get("/api/v1/orgs/{orgId}/analytics/evaluations", orgA)
+                        .param("taskId", fixtureA.taskId().toString())
+                        .param("benchmarkVersionId", fixtureA.benchmarkVersionId().toString())
+                        .header("Authorization", "Bearer " + tokenA))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.page.total").value(1))
+                .andExpect(jsonPath("$.items[0].agentName").value("agent-alpha"));
+
+        mockMvc.perform(get("/api/v1/orgs/{orgId}/analytics/evaluations", orgA)
+                        .param("taskId", fixtureA.taskId().toString())
+                        .param("benchmarkVersionId", fixtureB.benchmarkVersionId().toString())
+                        .header("Authorization", "Bearer " + tokenA))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.page.total").value(0));
+
+        mockMvc.perform(get("/api/v1/orgs/{orgId}/analytics/evaluations", orgA)
+                        .param("state", "COMPLETED")
+                        .param("agentId", fixtureA.agentId().toString())
+                        .header("Authorization", "Bearer " + tokenA))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.page.total").value(1));
+
+        mockMvc.perform(get("/api/v1/orgs/{orgId}/analytics/evaluations", orgA)
+                        .param("minScore", "80")
+                        .param("maxScore", "95")
+                        .header("Authorization", "Bearer " + tokenA))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.page.total").value(1))
+                .andExpect(jsonPath("$.items[0].agentName").value("agent-alpha"));
+
+        mockMvc.perform(get("/api/v1/orgs/{orgId}/analytics/evaluations", orgA)
+                        .param("failureClass", "NONE")
+                        .header("Authorization", "Bearer " + tokenA))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.page.total").value(2));
+
+        mockMvc.perform(get("/api/v1/orgs/{orgId}/analytics/evaluations", orgA)
+                        .param("failureClass", "NOT_A_CLASS")
+                        .header("Authorization", "Bearer " + tokenA))
+                .andExpect(status().isBadRequest());
+
+        mockMvc.perform(get("/api/v1/orgs/{orgId}/analytics/evaluations", orgA)
+                        .param("createdFrom", "not-a-time")
+                        .header("Authorization", "Bearer " + tokenA))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.detail").value("Invalid value for createdFrom"));
 
         mockMvc.perform(get("/api/v1/orgs/{orgId}/evaluations/{evaluationId}/export",
                         orgA, fixtureA.evaluationId())
@@ -176,6 +223,72 @@ class AnalyticsDashboardTest {
                         .header("Authorization", "Bearer " + tokenB))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.totalEvaluations").value(0));
+
+        Instant old = Instant.parse("2020-01-15T12:00:00Z");
+        RlsContext.runWithOrg(orgA, () -> {
+            UUID userId = jdbc.queryForObject(
+                    "SELECT id FROM identity.users ORDER BY created_at DESC LIMIT 1",
+                    Map.of(),
+                    UUID.class);
+            jdbc.update("""
+                            INSERT INTO evaluations.evaluations
+                                (id, org_id, benchmark_version_id, task_id, agent_id, state, attempt,
+                                 failure_class, snapshot_json, cancel_requested, created_by, created_at, updated_at)
+                            VALUES
+                                (:id, :orgId, :versionId, :taskId, :agentId, 'FAILED', 1,
+                                 'AGENT', '{}'::jsonb, FALSE, :userId, :createdAt, :createdAt)
+                            """,
+                    new MapSqlParameterSource()
+                            .addValue("id", UUID.randomUUID())
+                            .addValue("orgId", orgA)
+                            .addValue("versionId", fixtureA.benchmarkVersionId())
+                            .addValue("taskId", fixtureA.taskId())
+                            .addValue("agentId", fixtureA.agentId())
+                            .addValue("userId", userId)
+                            .addValue("createdAt", Timestamp.from(old)));
+        });
+
+        mockMvc.perform(get("/api/v1/orgs/{orgId}/analytics/evaluations", orgA)
+                        .param("taskId", fixtureA.taskId().toString())
+                        .param("benchmarkVersionId", fixtureA.benchmarkVersionId().toString())
+                        .header("Authorization", "Bearer " + tokenA))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.page.total").value(2));
+
+        mockMvc.perform(get("/api/v1/orgs/{orgId}/analytics/evaluations", orgA)
+                        .param("minScore", "0")
+                        .param("maxScore", "100")
+                        .header("Authorization", "Bearer " + tokenA))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.page.total").value(2));
+
+        mockMvc.perform(get("/api/v1/orgs/{orgId}/analytics/evaluations", orgA)
+                        .header("Authorization", "Bearer " + tokenA))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.page.total").value(3));
+
+        mockMvc.perform(get("/api/v1/orgs/{orgId}/analytics/evaluations", orgA)
+                        .param("failureClass", "AGENT")
+                        .header("Authorization", "Bearer " + tokenA))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.page.total").value(1))
+                .andExpect(jsonPath("$.items[0].failureClass").value("AGENT"));
+
+        mockMvc.perform(get("/api/v1/orgs/{orgId}/analytics/evaluations", orgA)
+                        .param("failureClass", "NONE")
+                        .param("minScore", "80")
+                        .param("createdFrom", "2024-01-01T00:00:00Z")
+                        .header("Authorization", "Bearer " + tokenA))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.page.total").value(1))
+                .andExpect(jsonPath("$.items[0].agentName").value("agent-alpha"));
+
+        mockMvc.perform(get("/api/v1/orgs/{orgId}/analytics/evaluations", orgA)
+                        .param("createdTo", "2021-01-01T00:00:00Z")
+                        .header("Authorization", "Bearer " + tokenA))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.page.total").value(1))
+                .andExpect(jsonPath("$.items[0].failureClass").value("AGENT"));
     }
 
     private String register(String email, String displayName) throws Exception {

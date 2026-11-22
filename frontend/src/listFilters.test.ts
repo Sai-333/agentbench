@@ -68,6 +68,11 @@ test('empty evaluation filters omit every constraint and keep the full list', ()
   assert.equal(params.get('agentId'), null)
   assert.equal(params.get('taskId'), null)
   assert.equal(params.get('benchmarkVersionId'), null)
+  assert.equal(params.get('failureClass'), null)
+  assert.equal(params.get('minScore'), null)
+  assert.equal(params.get('maxScore'), null)
+  assert.equal(params.get('createdFrom'), null)
+  assert.equal(params.get('createdTo'), null)
   assert.equal(evaluationFiltersActive(EMPTY_EVALUATION_FILTER), false)
   assert.deepEqual(filterEvaluationItems(evalItems, EMPTY_EVALUATION_FILTER), evalItems)
 })
@@ -115,6 +120,160 @@ test('evaluation search matches agent, task, and id without dropping other const
       q: 'fixer',
       state: 'FAILED',
     }).length,
+    0,
+  )
+})
+
+test('task and version are separate query parameters', () => {
+  const taskId = '11111111-1111-4111-8111-111111111111'
+  const benchmarkVersionId = '22222222-2222-4222-8222-222222222222'
+  const params = evaluationSearchParams(
+    { ...EMPTY_EVALUATION_FILTER, taskId, benchmarkVersionId },
+    0,
+  )
+  assert.equal(params.get('taskId'), taskId)
+  assert.equal(params.get('benchmarkVersionId'), benchmarkVersionId)
+  const query = params.toString()
+  assert.equal(query.includes(`${taskId}${benchmarkVersionId}`), false)
+  assert.equal(query.includes(`taskId=${taskId}`), true)
+  assert.equal(query.includes(`benchmarkVersionId=${benchmarkVersionId}`), true)
+})
+
+const scoredItems = [
+  {
+    ...evalItems[0],
+    weightedTotal: 90,
+    createdAt: '2026-11-01T00:00:00.000Z',
+    failureClass: null,
+  },
+  {
+    ...evalItems[1],
+    weightedTotal: 40,
+    createdAt: '2026-11-02T00:00:00.000Z',
+    failureClass: 'AGENT',
+  },
+  {
+    ...evalItems[2],
+    weightedTotal: null,
+    createdAt: '2026-11-03T00:00:00.000Z',
+    failureClass: null,
+  },
+]
+
+test('failure class, score, and created time combine and clear back to the other filters', () => {
+  const cuts = {
+    ...EMPTY_EVALUATION_FILTER,
+    state: 'COMPLETED',
+    agentId: 'agent-a',
+    failureClass: 'NONE',
+    minScore: '50',
+    maxScore: '100',
+    createdFrom: '2026-11-01T00:00:00.000Z',
+    createdTo: '2026-11-01T23:59:59.000Z',
+  }
+  const params = evaluationSearchParams(cuts, 0)
+  assert.equal(params.get('failureClass'), 'NONE')
+  assert.equal(params.get('minScore'), '50')
+  assert.equal(params.get('maxScore'), '100')
+  assert.equal(params.get('createdFrom'), '2026-11-01T00:00:00.000Z')
+  assert.equal(params.get('createdTo'), '2026-11-01T23:59:59.000Z')
+  assert.equal(params.get('state'), 'COMPLETED')
+  assert.deepEqual(
+    filterEvaluationItems(scoredItems, cuts).map((item) => item.id),
+    ['aaaaaaaa-1111'],
+  )
+  assert.equal(
+    filterEvaluationItems(scoredItems, { ...cuts, minScore: '95' }).length,
+    0,
+  )
+  assert.equal(
+    filterEvaluationItems(scoredItems, {
+      ...EMPTY_EVALUATION_FILTER,
+      failureClass: 'AGENT',
+    }).map((item) => item.id)[0],
+    'bbbbbbbb-2222',
+  )
+  assert.equal(
+    filterEvaluationItems(scoredItems, { ...EMPTY_EVALUATION_FILTER, minScore: '0' }).length,
+    2,
+  )
+  assert.equal(
+    filterEvaluationItems(scoredItems, { ...EMPTY_EVALUATION_FILTER, maxScore: '100' }).length,
+    2,
+  )
+
+  const clearedCuts = {
+    ...cuts,
+    failureClass: '',
+    minScore: '',
+    maxScore: '',
+    createdFrom: '',
+    createdTo: '',
+  }
+  const clearedParams = evaluationSearchParams(clearedCuts, 0)
+  assert.equal(clearedParams.get('failureClass'), null)
+  assert.equal(clearedParams.get('minScore'), null)
+  assert.equal(clearedParams.get('maxScore'), null)
+  assert.equal(clearedParams.get('createdFrom'), null)
+  assert.equal(clearedParams.get('createdTo'), null)
+  assert.equal(clearedParams.get('state'), 'COMPLETED')
+  assert.equal(clearedParams.get('agentId'), 'agent-a')
+  assert.deepEqual(
+    filterEvaluationItems(scoredItems, clearedCuts).map((item) => item.id),
+    filterEvaluationItems(scoredItems, {
+      ...EMPTY_EVALUATION_FILTER,
+      state: 'COMPLETED',
+      agentId: 'agent-a',
+    }).map((item) => item.id),
+  )
+})
+
+test('invalid score and time values stay out of the query', () => {
+  const filter = {
+    ...EMPTY_EVALUATION_FILTER,
+    minScore: '  ',
+    maxScore: 'nope',
+    createdFrom: 'not-a-time',
+    createdTo: '',
+  }
+  assert.equal(
+    evaluationFiltersActive({ ...EMPTY_EVALUATION_FILTER, minScore: '   ', maxScore: '' }),
+    false,
+  )
+  const params = evaluationSearchParams(filter, 0)
+  assert.equal(params.get('minScore'), null)
+  assert.equal(params.get('maxScore'), null)
+  assert.equal(params.get('createdFrom'), null)
+  assert.equal(params.get('createdTo'), null)
+  assert.equal(filterEvaluationItems(scoredItems, filter).length, scoredItems.length)
+})
+
+test('a minute-precision created-to includes that minute', () => {
+  const params = evaluationSearchParams(
+    {
+      ...EMPTY_EVALUATION_FILTER,
+      createdFrom: '2026-11-02T00:00',
+      createdTo: '2026-11-02T00:00',
+    },
+    0,
+  )
+  const from = Date.parse(params.get('createdFrom') ?? '')
+  const to = Date.parse(params.get('createdTo') ?? '')
+  assert.equal(to - from, 60_000 - 1)
+  const inside = new Date(from + 30_000).toISOString()
+  const outside = new Date(from + 60_000).toISOString()
+  assert.equal(
+    filterEvaluationItems(
+      [{ ...scoredItems[1], createdAt: inside }],
+      { ...EMPTY_EVALUATION_FILTER, createdFrom: '2026-11-02T00:00', createdTo: '2026-11-02T00:00' },
+    ).length,
+    1,
+  )
+  assert.equal(
+    filterEvaluationItems(
+      [{ ...scoredItems[1], createdAt: outside }],
+      { ...EMPTY_EVALUATION_FILTER, createdFrom: '2026-11-02T00:00', createdTo: '2026-11-02T00:00' },
+    ).length,
     0,
   )
 })

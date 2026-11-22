@@ -5,6 +5,7 @@ import com.agentbench.analytics.domain.LeaderboardPublication;
 import com.agentbench.analytics.infra.AnalyticsRepository;
 import com.agentbench.analytics.infra.PublicLeaderboardRepository;
 import com.agentbench.evaluation.api.dto.EvaluationDtos;
+import com.agentbench.evaluation.domain.FailureClass;
 import com.agentbench.evaluation.service.EvaluationService;
 import com.agentbench.identity.domain.Membership;
 import com.agentbench.identity.domain.OrgRole;
@@ -192,20 +193,47 @@ public class AnalyticsService {
             UUID agentId,
             UUID taskId,
             UUID benchmarkVersionId,
+            String failureClass,
+            BigDecimal minScore,
+            BigDecimal maxScore,
+            Instant createdFrom,
+            Instant createdTo,
             String q,
             Integer page,
             Integer size) {
         orgAccessService.requireMembership(orgId, OrgRole.VIEWER);
+        String normalizedFailure = normalizeFailureClass(failureClass);
         int pageNum = page == null || page < 0 ? 0 : page;
         int pageSize = size == null ? 25 : Math.min(Math.max(size, 1), 100);
         long total = analyticsRepository.countEvaluations(
-                orgId, state, agentId, taskId, benchmarkVersionId, q);
+                orgId, state, agentId, taskId, benchmarkVersionId, normalizedFailure,
+                minScore, maxScore, createdFrom, createdTo, q);
         List<AnalyticsDtos.EvaluationSearchItem> items = analyticsRepository.searchEvaluations(
-                orgId, state, agentId, taskId, benchmarkVersionId, q, pageSize, pageNum * pageSize);
+                orgId, state, agentId, taskId, benchmarkVersionId, normalizedFailure,
+                minScore, maxScore, createdFrom, createdTo, q, pageSize, pageNum * pageSize);
         return new AnalyticsDtos.EvaluationSearchResponse(
                 items,
                 new AnalyticsDtos.PageMeta(pageNum, pageSize, total)
         );
+    }
+
+    /**
+     * {@code NONE} selects evaluations that have no stored failure class.
+     * Any other non-blank value must be a stored {@link FailureClass}.
+     */
+    static String normalizeFailureClass(String failureClass) {
+        if (failureClass == null || failureClass.isBlank()) {
+            return null;
+        }
+        String value = failureClass.trim();
+        if (value.equalsIgnoreCase(AnalyticsRepository.NO_FAILURE_CLASS)) {
+            return AnalyticsRepository.NO_FAILURE_CLASS;
+        }
+        try {
+            return FailureClass.fromString(value).name();
+        } catch (IllegalArgumentException ex) {
+            throw ApiException.validation("Unknown failure class");
+        }
     }
 
     @Transactional(readOnly = true)
