@@ -559,8 +559,9 @@ public class EvaluationStageProcessor {
     }
 
     /**
-     * Checkstyle + SpotBugs + PMD (XML or builtin heuristics), plus optional Sonar / ruff / eslint
-     * when enabled. Separates new vs pre-existing; never invents quality scores.
+     * Checkstyle, SpotBugs, and PMD on the prepared tree, plus optional Sonar / ruff / eslint
+     * when enabled. A tool that does not run is named as such. The in-process heuristic is
+     * labeled {@code builtin_java_heuristics}. Separates new vs pre-existing.
      */
     private void analyzeQuality(Evaluation evaluation, JsonNode task) {
         if (!evaluationRepository.findQualityReports(evaluation.id()).isEmpty()) {

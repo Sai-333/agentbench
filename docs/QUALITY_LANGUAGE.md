@@ -17,7 +17,7 @@ When disabled, metrics include `ruff` / `eslint` nodes with `stub=true` and note
 
 For each evaluation quality stage (baseline workspace + post-patch workspace):
 
-1. **Primary Java path** (always): Checkstyle / SpotBugs / PMD XML under `target/`, else builtin Java heuristics.
+1. **Primary Java path** (always): Checkstyle, PMD, and SpotBugs. An XML report already in `target/` is read. Otherwise the quality stage runs that tool. When one of the three does not run, the run page says so. The in-process heuristic runs only when all three are absent, and its findings are labeled `builtin_java_heuristics`.
 2. **Optional Sonar** (separate; see `docs/QUALITY_SONAR.md`).
 3. **Optional Python (ruff)** when enabled and `.py` / `.pyi` sources exist:
    - Prefer workspace JSON import (ruff `--output-format=json` shape) at:
@@ -73,7 +73,7 @@ For honest new-vs-pre-existing scoring without Docker images, drop ruff/eslint J
 | Claim | Status |
 |---|---|
 | Opt-in ruff / eslint scanners | Done when enabled |
-| Checkstyle / SpotBugs / PMD primary for Java | Unchanged |
+| Checkstyle / SpotBugs / PMD primary for Java | Real tool findings. Heuristics are labeled `builtin_java_heuristics` |
 | Sonar as sole scoring authority | **Not claimed** |
 | Language scanners as sole scoring authority | **Not claimed** |
 | Builtin heuristics equal full ruff/eslint | **Not claimed** — heuristics are a fallback observation path |

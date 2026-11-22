@@ -32,6 +32,7 @@ import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -99,6 +100,59 @@ class ScoringQualityMetricTest {
                 .orElseThrow();
         assertEquals(0, quality.rawValue().compareTo(new BigDecimal("1.000000")));
         assertFalse(quality.metaJson().contains("\"stub\":true"));
+        assertEquals(ScoringProfile.MetricKeys.CODE_QUALITY, quality.metricKey());
+        assertEquals(0, quality.weight().compareTo(new BigDecimal("0.100000")));
+    }
+
+    @Test
+    void heuristicReportStillUsesTheCodeQualityRule() {
+        UUID evalId = UUID.randomUUID();
+        UUID orgId = UUID.randomUUID();
+        Evaluation evaluation = evaluation(evalId, orgId);
+        TestRun baseline = run(evalId, orgId, TestPhase.BASELINE);
+        TestRun visible = run(evalId, orgId, TestPhase.VISIBLE_POST);
+
+        when(evaluationRepository.findScore(evalId)).thenReturn(Optional.empty());
+        when(evaluationRepository.findScoringProfile(ScoringProfile.DEFAULT_KEY))
+                .thenReturn(Optional.of(defaultProfile()));
+        when(evaluationRepository.findTestRun(evalId, TestPhase.BASELINE)).thenReturn(Optional.of(baseline));
+        when(evaluationRepository.findTestRun(evalId, TestPhase.VISIBLE_POST)).thenReturn(Optional.of(visible));
+        when(evaluationRepository.findTestRun(evalId, TestPhase.HIDDEN_POST)).thenReturn(Optional.empty());
+        when(evaluationRepository.listTestCaseResults(baseline.id())).thenReturn(List.of(
+                caseResult(baseline.id(), orgId, "target.a", TestCaseStatus.FAIL, null, CaseCategory.TARGET),
+                caseResult(baseline.id(), orgId, "control.b", TestCaseStatus.PASS, null, CaseCategory.CONTROL)
+        ));
+        when(evaluationRepository.listTestCaseResults(visible.id())).thenReturn(List.of(
+                caseResult(visible.id(), orgId, "target.a", TestCaseStatus.PASS, "F2P", CaseCategory.TARGET),
+                caseResult(visible.id(), orgId, "control.b", TestCaseStatus.PASS, "P2P", CaseCategory.CONTROL)
+        ));
+        when(evaluationRepository.findQualityReports(evalId)).thenReturn(List.of(
+                new QualityReport(
+                        UUID.randomUUID(), evalId, orgId, "builtin_java_heuristics",
+                        "{\"stub\":false,\"newFindingCount\":2}",
+                        new BigDecimal("0.3333"),
+                        Instant.now()
+                )
+        ));
+
+        ObjectNode task = objectMapper.createObjectNode();
+        task.putObject("evalConfig").put("requireTargetFailAtBaseline", true);
+        scoringService.score(evaluation, task);
+
+        ArgumentCaptor<EvaluationScore> scoreCaptor = ArgumentCaptor.forClass(EvaluationScore.class);
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<ScoreMetric>> metricsCaptor = ArgumentCaptor.forClass(List.class);
+        verify(evaluationRepository).insertScore(scoreCaptor.capture(), metricsCaptor.capture());
+        ScoreMetric quality = metricsCaptor.getValue().stream()
+                .filter(metric -> ScoringProfile.MetricKeys.CODE_QUALITY.equals(metric.metricKey()))
+                .findFirst()
+                .orElseThrow();
+        assertEquals(ScoringProfile.MetricKeys.CODE_QUALITY, quality.metricKey());
+        assertEquals(0, quality.weight().compareTo(new BigDecimal("0.100000")));
+        assertTrue(quality.metaJson().contains("builtin_java_heuristics"));
+        assertFalse(quality.metaJson().contains("\"stub\":true"));
+        assertTrue(quality.rawValue().doubleValue() > 0.0);
+        assertFalse(metricsCaptor.getValue().stream().anyMatch(metric -> "static_analysis".equals(metric.metricKey())));
     }
 
     private static ScoringProfile defaultProfile() {

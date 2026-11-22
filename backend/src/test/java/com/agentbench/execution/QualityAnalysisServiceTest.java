@@ -1,6 +1,8 @@
 package com.agentbench.execution;
 
+import com.agentbench.execution.quality.BuiltinJavaQualityScanner;
 import com.agentbench.execution.quality.CheckstyleReportParser;
+import com.agentbench.execution.quality.JavaQualityToolchain;
 import com.agentbench.execution.quality.NodeQualityAnalyzer;
 import com.agentbench.execution.quality.NodeQualityProperties;
 import com.agentbench.execution.quality.PythonQualityAnalyzer;
@@ -82,6 +84,7 @@ class QualityAnalysisServiceTest {
         assertFalse(metrics.path("sonarEnabled").asBoolean());
         assertFalse(metrics.path("sonarContributed").asBoolean());
         assertEquals("checkstyle+spotbugs+pmd", result.toolLabel());
+        assertFalse(result.metricsJson().contains("builtin_java_heuristics"));
     }
 
     @Test
@@ -200,5 +203,80 @@ class QualityAnalysisServiceTest {
         assertEquals(1, metrics.path("ruff").path("newFindings").asInt());
         assertEquals(1, metrics.path("eslint").path("newFindings").asInt());
         assertFalse(metrics.path("sonarEnabled").asBoolean());
+    }
+
+    @Test
+    void missingToolIsNamedDidNotRunAndDoesNotUseTheHeuristicLabel() throws Exception {
+        QualityToolReport checkstyle = new QualityToolReport(
+                "checkstyle",
+                java.util.List.of(new com.agentbench.execution.quality.QualityFinding(
+                        "checkstyle", "LineLengthCheck", "WARNING", "src/A.java", 1, "line long", "fp")),
+                false,
+                "checkstyle");
+        QualityAnalysisService partial = new QualityAnalysisService(
+                objectMapper,
+                SonarQualityAnalyzer.disabled(),
+                PythonQualityAnalyzer.disabled(),
+                NodeQualityAnalyzer.disabled(),
+                JavaQualityToolchain.reporting(java.util.List.of(
+                        checkstyle,
+                        com.agentbench.execution.quality.QualityToolReport.stub("pmd", JavaQualityToolchain.DID_NOT_RUN),
+                        com.agentbench.execution.quality.QualityToolReport.stub("spotbugs", JavaQualityToolchain.DID_NOT_RUN)
+                )));
+        Path ws = temp.resolve("partial");
+        Files.createDirectories(ws);
+        Files.writeString(ws.resolve("A.java"), "class A {}\n", StandardCharsets.UTF_8);
+
+        var result = partial.analyze(ws, ws);
+        assertEquals("checkstyle+spotbugs+pmd", result.toolLabel());
+        JsonNode metrics = objectMapper.readTree(result.metricsJson());
+        assertEquals(JavaQualityToolchain.DID_NOT_RUN, tool(metrics, "pmd").path("notes").asText());
+        assertTrue(tool(metrics, "pmd").path("stub").asBoolean());
+        assertEquals(JavaQualityToolchain.DID_NOT_RUN, tool(metrics, "spotbugs").path("notes").asText());
+        assertFalse(metrics.toString().contains("builtin_java_heuristics"));
+    }
+
+    @Test
+    void heuristicIsLabeledSeparatelyWhenTheThreeToolsAreAbsent() throws Exception {
+        QualityAnalysisService heuristic = new QualityAnalysisService(
+                objectMapper,
+                SonarQualityAnalyzer.disabled(),
+                PythonQualityAnalyzer.disabled(),
+                NodeQualityAnalyzer.disabled(),
+                JavaQualityToolchain.unavailable());
+        Path baseline = temp.resolve("h-base");
+        Path patched = temp.resolve("h-post");
+        Files.createDirectories(baseline);
+        Files.createDirectories(patched);
+        Files.writeString(baseline.resolve("App.java"), "class App { public int x; }\n", StandardCharsets.UTF_8);
+        Files.writeString(patched.resolve("App.java"), """
+                class App {
+                  public int x;
+                  void run() { System.out.println("hi"); }
+                }
+                """, StandardCharsets.UTF_8);
+
+        var result = heuristic.analyze(baseline, patched);
+        assertEquals(BuiltinJavaQualityScanner.TOOL, result.toolLabel());
+        assertTrue(result.realResults());
+        assertTrue(result.newFindingCount() >= 1);
+        JsonNode metrics = objectMapper.readTree(result.metricsJson());
+        assertEquals(JavaQualityToolchain.DID_NOT_RUN, tool(metrics, "checkstyle").path("notes").asText());
+        assertEquals(JavaQualityToolchain.DID_NOT_RUN, tool(metrics, "pmd").path("notes").asText());
+        assertEquals(JavaQualityToolchain.DID_NOT_RUN, tool(metrics, "spotbugs").path("notes").asText());
+        JsonNode heuristicNode = tool(metrics, BuiltinJavaQualityScanner.TOOL);
+        assertFalse(heuristicNode.path("stub").asBoolean());
+        assertEquals(BuiltinJavaQualityScanner.TOOL, heuristicNode.path("notes").asText());
+        assertTrue(heuristicNode.path("findingsSample").size() >= 1);
+        assertEquals(BuiltinJavaQualityScanner.TOOL, heuristicNode.path("findingsSample").get(0).path("tool").asText(""));
+    }
+
+    private static JsonNode tool(JsonNode metrics, String name) {
+        for (JsonNode node : metrics.path("tools")) {
+            if (name.equals(node.path("tool").asText())) {
+                return node;
+            }
+        }
+        throw new AssertionError("missing " + name);
     }
 }

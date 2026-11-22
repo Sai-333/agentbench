@@ -277,6 +277,9 @@ public class EvaluationService {
                             continue;
                         }
                         samples.add(new EvaluationDtos.QualityFindingResponse(
+                                stringVal(sm.get("tool")).isBlank()
+                                        ? stringVal(map.get("tool"))
+                                        : stringVal(sm.get("tool")),
                                 stringVal(sm.get("ruleId")),
                                 stringVal(sm.get("severity")),
                                 stringVal(sm.get("filePath")),

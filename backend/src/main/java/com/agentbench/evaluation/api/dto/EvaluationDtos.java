@@ -110,6 +110,7 @@ public final class EvaluationDtos {
     }
 
     public record QualityFindingResponse(
+            String tool,
             String ruleId,
             String severity,
             String filePath,
