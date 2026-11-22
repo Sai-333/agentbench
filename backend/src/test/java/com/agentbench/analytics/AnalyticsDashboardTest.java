@@ -291,6 +291,45 @@ class AnalyticsDashboardTest {
                 .andExpect(jsonPath("$.items[0].failureClass").value("AGENT"));
     }
 
+    @Test
+    void comparisonMatrixIsNonemptyForTwoScoredAgentsOnOnePublishedVersion() throws Exception {
+        String token = register("compare-matrix@example.com", "Compare Matrix");
+        UUID orgId = createOrg(token, "Compare Matrix Org", "compare-matrix-org");
+
+        SharedVersion shared = seedPublishedVersion(orgId, "compare-bench", "shared-task");
+        Fixture alpha = seedScoredEvaluationOnVersion(
+                orgId, shared.benchmarkVersionId(), shared.taskId(), "compare-alpha", "90.0000", "0.12");
+        Fixture beta = seedScoredEvaluationOnVersion(
+                orgId, shared.benchmarkVersionId(), shared.taskId(), "compare-beta", "70.0000", "0.05");
+
+        mockMvc.perform(get("/api/v1/orgs/{orgId}/analytics/comparisons", orgId)
+                        .param("benchmarkVersionId", shared.benchmarkVersionId().toString())
+                        .param("agentIds", alpha.agentId() + "," + beta.agentId())
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.benchmarkVersionId").value(shared.benchmarkVersionId().toString()))
+                .andExpect(jsonPath("$.scoringProfileKey").value("default-v1"))
+                .andExpect(jsonPath("$.agentIds.length()").value(2))
+                .andExpect(jsonPath("$.agentIds[0]").value(alpha.agentId().toString()))
+                .andExpect(jsonPath("$.agentIds[1]").value(beta.agentId().toString()))
+                .andExpect(jsonPath("$.rows.length()").value(2))
+                .andExpect(jsonPath("$.rows[?(@.agentName=='compare-alpha')].weightedTotal").value(
+                        org.hamcrest.Matchers.contains(90.0)))
+                .andExpect(jsonPath("$.rows[?(@.agentName=='compare-beta')].weightedTotal").value(
+                        org.hamcrest.Matchers.contains(70.0)))
+                .andExpect(jsonPath("$.rows[?(@.agentName=='compare-alpha')].taskId").value(
+                        org.hamcrest.Matchers.contains(shared.taskId().toString())))
+                .andExpect(jsonPath("$.rows[?(@.agentName=='compare-beta')].taskId").value(
+                        org.hamcrest.Matchers.contains(shared.taskId().toString())))
+                .andExpect(jsonPath("$.rows[?(@.agentName=='compare-alpha')].metricRaws['target_failure_resolution']")
+                        .value(org.hamcrest.Matchers.contains(1.0)))
+                .andExpect(jsonPath("$.rows[?(@.agentName=='compare-beta')].metricRaws['target_failure_resolution']")
+                        .value(org.hamcrest.Matchers.contains(1.0)))
+                .andExpect(jsonPath("$.metricKeys.length()").value(org.hamcrest.Matchers.greaterThan(0)))
+                .andExpect(jsonPath("$.metricKeys").value(
+                        org.hamcrest.Matchers.hasItem("target_failure_resolution")));
+    }
+
     private String register(String email, String displayName) throws Exception {
         MvcResult result = mockMvc.perform(post("/api/v1/auth/register")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -319,15 +358,29 @@ class AnalyticsDashboardTest {
             String agentName,
             String weightedTotal,
             String costUsd) {
-        return RlsContext.callWithOrg(orgId, () -> seedCompletedEvaluationUnderRls(
-                orgId, agentName, weightedTotal, costUsd));
+        return RlsContext.callWithOrg(orgId, () -> {
+            SharedVersion shared = seedPublishedVersionUnderRls(orgId, "Bench-" + agentName, "task-" + agentName);
+            return seedScoredEvaluationOnVersionUnderRls(
+                    orgId, shared.benchmarkVersionId(), shared.taskId(), agentName, weightedTotal, costUsd);
+        });
     }
 
-    private Fixture seedCompletedEvaluationUnderRls(
+    private SharedVersion seedPublishedVersion(UUID orgId, String benchmarkName, String taskSlug) {
+        return RlsContext.callWithOrg(orgId, () -> seedPublishedVersionUnderRls(orgId, benchmarkName, taskSlug));
+    }
+
+    private Fixture seedScoredEvaluationOnVersion(
             UUID orgId,
+            UUID versionId,
+            UUID taskId,
             String agentName,
             String weightedTotal,
             String costUsd) {
+        return RlsContext.callWithOrg(orgId, () -> seedScoredEvaluationOnVersionUnderRls(
+                orgId, versionId, taskId, agentName, weightedTotal, costUsd));
+    }
+
+    private SharedVersion seedPublishedVersionUnderRls(UUID orgId, String benchmarkName, String taskSlug) {
         UUID userId = jdbc.queryForObject(
                 "SELECT id FROM identity.users ORDER BY created_at DESC LIMIT 1",
                 Map.of(),
@@ -335,9 +388,6 @@ class AnalyticsDashboardTest {
         UUID benchmarkId = UUID.randomUUID();
         UUID versionId = UUID.randomUUID();
         UUID taskId = UUID.randomUUID();
-        UUID agentId = UUID.randomUUID();
-        UUID evaluationId = UUID.randomUUID();
-        UUID scoreId = UUID.randomUUID();
         Instant now = Instant.now();
 
         jdbc.update("""
@@ -347,7 +397,7 @@ class AnalyticsDashboardTest {
                 params(Map.of(
                         "id", benchmarkId,
                         "orgId", orgId,
-                        "name", "Bench-" + agentName,
+                        "name", benchmarkName,
                         "userId", userId,
                         "now", Timestamp.from(now)
                 )));
@@ -379,10 +429,29 @@ class AnalyticsDashboardTest {
                         "id", taskId,
                         "versionId", versionId,
                         "orgId", orgId,
-                        "slug", "task-" + agentName,
-                        "title", "Task " + agentName,
+                        "slug", taskSlug,
+                        "title", "Task " + taskSlug,
                         "now", Timestamp.from(now)
                 )));
+        return new SharedVersion(versionId, taskId);
+    }
+
+    private Fixture seedScoredEvaluationOnVersionUnderRls(
+            UUID orgId,
+            UUID versionId,
+            UUID taskId,
+            String agentName,
+            String weightedTotal,
+            String costUsd) {
+        UUID userId = jdbc.queryForObject(
+                "SELECT id FROM identity.users ORDER BY created_at DESC LIMIT 1",
+                Map.of(),
+                UUID.class);
+        UUID agentId = UUID.randomUUID();
+        UUID evaluationId = UUID.randomUUID();
+        UUID scoreId = UUID.randomUUID();
+        Instant now = Instant.now();
+
         jdbc.update("""
                         INSERT INTO agents.agents
                             (id, org_id, name, adapter_type, config_json, enabled, created_by, created_at, updated_at)
@@ -459,6 +528,9 @@ class AnalyticsDashboardTest {
         MapSqlParameterSource source = new MapSqlParameterSource();
         values.forEach(source::addValue);
         return source;
+    }
+
+    private record SharedVersion(UUID benchmarkVersionId, UUID taskId) {
     }
 
     private record Fixture(
