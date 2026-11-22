@@ -525,6 +525,20 @@ export type GpuBenchmarkResult = {
   probedAt: string
 }
 
+export type GpuGraphicsResult = {
+  id: string
+  status: 'measured' | 'unavailable' | string
+  device: string | null
+  frames: number | null
+  frameTimeMs: number | null
+  score: number | null
+  scoreUnit: string | null
+  unavailableReason: string | null
+  probe: string
+  detail: string | null
+  probedAt: string
+}
+
 export function getAccessToken(): string | null {
   return session.getAccessToken()
 }

@@ -35,6 +35,8 @@ class PlatformInfoControllerTest {
                 .andExpect(jsonPath("$.orgScopedApiBase", containsString("/api/v1/orgs/{orgId}/")))
                 .andExpect(jsonPath("$.regressionRuns", containsString("platform-scoped")))
                 .andExpect(jsonPath("$.gpuBenchmark", containsString("no score")))
+                .andExpect(jsonPath("$.gpuGraphics", containsString("no score")))
+                .andExpect(jsonPath("$.gpuGraphics", containsString("frame time")))
                 .andExpect(jsonPath("$.readiness", containsString("Compose")));
     }
 }

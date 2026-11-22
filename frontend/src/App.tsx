@@ -31,6 +31,7 @@ import type {
   Org,
   OverviewResponse,
   GpuBenchmarkResult,
+  GpuGraphicsResult,
   Project,
   RegressionRunDetail,
   RegressionRunSummary,
@@ -47,6 +48,7 @@ import {
   OpsHealthPanel,
   OverviewPanel,
 } from './DashboardPanels'
+import { GraphicsProbePanel } from './GraphicsProbePanel'
 import { GpuProbePanel } from './GpuProbePanel'
 import { RegressionRunsPanel } from './RegressionRunsPanel'
 import { isFailedCaseStatus, visibleCaseResults } from './caseList'
@@ -196,6 +198,10 @@ function App() {
   const [gpuState, setGpuState] = useState<LoadState>('idle')
   const [gpuError, setGpuError] = useState<string | null>(null)
   const [gpuRunning, setGpuRunning] = useState(false)
+  const [graphicsResults, setGraphicsResults] = useState<GpuGraphicsResult[]>([])
+  const [graphicsState, setGraphicsState] = useState<LoadState>('idle')
+  const [graphicsError, setGraphicsError] = useState<string | null>(null)
+  const [graphicsRunning, setGraphicsRunning] = useState(false)
   const [evalFilters, setEvalFilters] = useState<EvaluationFilter>(EMPTY_EVALUATION_FILTER)
   const [failedCasesOnly, setFailedCasesOnly] = useState(false)
   const [evalPage, setEvalPage] = useState(0)
@@ -424,6 +430,35 @@ function App() {
       setGpuError(err instanceof Error ? err.message : 'Could not run the GPU probe')
     } finally {
       setGpuRunning(false)
+    }
+  }, [])
+
+  const loadGraphicsProbes = useCallback(async () => {
+    setGraphicsState('loading')
+    setGraphicsError(null)
+    try {
+      const list = await api<GpuGraphicsResult[]>('/api/v1/gpu-graphics?limit=20')
+      setGraphicsResults(list)
+      setGraphicsState(list.length === 0 ? 'empty' : 'ready')
+    } catch (err) {
+      setGraphicsResults([])
+      setGraphicsError(err instanceof Error ? err.message : 'Could not load graphics results')
+      setGraphicsState('error')
+    }
+  }, [])
+
+  const runGraphicsProbe = useCallback(async () => {
+    setGraphicsRunning(true)
+    setGraphicsError(null)
+    try {
+      await api<GpuGraphicsResult>('/api/v1/gpu-graphics', { method: 'POST' })
+      const list = await api<GpuGraphicsResult[]>('/api/v1/gpu-graphics?limit=20')
+      setGraphicsResults(list)
+      setGraphicsState(list.length === 0 ? 'empty' : 'ready')
+    } catch (err) {
+      setGraphicsError(err instanceof Error ? err.message : 'Could not run the graphics probe')
+    } finally {
+      setGraphicsRunning(false)
     }
   }, [])
 
@@ -1681,6 +1716,7 @@ function App() {
     setError(null)
     if (canViewRegressionRuns) {
       void loadGpuProbes()
+      void loadGraphicsProbes()
     }
   }
 
@@ -1744,6 +1780,15 @@ function App() {
             onRun={() => void runGpuProbe()}
             onRefresh={() => void loadGpuProbes()}
             onBackToOrgs={() => setSurface('consumer')}
+          />
+          <GraphicsProbePanel
+            allowed={canViewRegressionRuns}
+            results={graphicsResults}
+            state={graphicsState}
+            error={graphicsError}
+            running={graphicsRunning}
+            onRun={() => void runGraphicsProbe()}
+            onRefresh={() => void loadGraphicsProbes()}
           />
         </section>
       ) : surface === 'platform-regression' ? (
