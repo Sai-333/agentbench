@@ -70,6 +70,7 @@ import {
   NO_FAILURE_CLASS,
   comparisonFiltersActive,
   comparisonSearchParams,
+  FAKE_SAMPLE_USAGE_LABEL,
   costSearchParams,
   costViewState,
   costsWereReported,
@@ -3158,6 +3159,10 @@ function App() {
                     <div className="muted small">
                       {invocation.model || 'model n/a'}
                       {invocation.providerVersion ? ` · ${invocation.providerVersion}` : ''}
+                      {invocation.promptTokens != null ? ` · ${invocation.promptTokens} prompt` : ''}
+                      {invocation.completionTokens != null
+                        ? ` · ${invocation.completionTokens} completion`
+                        : ''}
                       {invocation.totalTokens != null ? ` · ${invocation.totalTokens} tokens` : ''}
                       {invocation.estimatedCostUsd != null
                         ? ` · ~$${invocation.estimatedCostUsd}`
@@ -3166,6 +3171,10 @@ function App() {
                         ? ` · patch ${invocation.patchDigest.slice(0, 12)}…`
                         : ''}
                     </div>
+                    {invocation.provider === 'FAKE' &&
+                      (invocation.totalTokens != null || invocation.estimatedCostUsd != null) && (
+                        <div className="muted small">{FAKE_SAMPLE_USAGE_LABEL}</div>
+                      )}
                     {invocation.errorMessage && (
                       <div className="error small">{invocation.errorMessage}</div>
                     )}

@@ -1,5 +1,6 @@
 package com.agentbench.agents;
 
+import com.agentbench.agents.infra.FakeAgentProvider;
 import com.agentbench.evaluation.service.EvaluationSyncRunner;
 import com.agentbench.support.PostgresTestSupport;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -198,7 +199,14 @@ class GrokDefaultAgentIntegrationTest {
                         .header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.evaluation.state").value("COMPLETED"))
-                .andExpect(jsonPath("$.agentInvocations[0].provider").value("FAKE"));
+                .andExpect(jsonPath("$.agentInvocations[0].provider").value("FAKE"))
+                .andExpect(jsonPath("$.agentInvocations[0].promptTokens").value(FakeAgentProvider.SAMPLE_PROMPT_TOKENS))
+                .andExpect(jsonPath("$.agentInvocations[0].completionTokens").value(FakeAgentProvider.SAMPLE_COMPLETION_TOKENS))
+                .andExpect(jsonPath("$.agentInvocations[0].totalTokens").value(FakeAgentProvider.SAMPLE_TOTAL_TOKENS))
+                .andExpect(jsonPath("$.agentInvocations[0].estimatedCostUsd")
+                        .value(org.hamcrest.Matchers.closeTo(0.0032, 0.0000001)))
+                .andExpect(jsonPath("$.agentInvocations[0].meta.usageKind").value("sample"))
+                .andExpect(jsonPath("$.agentInvocations[0].meta.usageLabel").value(FakeAgentProvider.SAMPLE_USAGE_LABEL));
     }
 
     private Fixture seedPublishedBenchmark(String token, UUID orgId) throws Exception {

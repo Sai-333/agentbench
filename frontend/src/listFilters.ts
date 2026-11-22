@@ -398,6 +398,14 @@ export function costsWereReported(totalTokens: number, totalEstimatedCostUsd: nu
   return Number(totalTokens || 0) > 0 || Number(totalEstimatedCostUsd || 0) > 0
 }
 
+/** Shown next to FAKE token and cost figures. Not a measured provider bill. */
+export const FAKE_SAMPLE_USAGE_LABEL =
+  'Sample usage from the FAKE adapter, not a measured provider bill.'
+
+export function fakeSampleUsageLabel(adapterTypes: readonly string[]): string | null {
+  return adapterTypes.some((type) => type === 'FAKE') ? FAKE_SAMPLE_USAGE_LABEL : null
+}
+
 export function costViewState(
   reported: boolean,
   filterActive: boolean,
