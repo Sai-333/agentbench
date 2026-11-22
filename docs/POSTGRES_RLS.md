@@ -56,6 +56,7 @@ SPRING_FLYWAY_USER: agentbench
 - Integration test: `PostgresRlsIsolationTest` (Testcontainers) proves cross-org SELECT/UPDATE/DELETE fail without an org filter under `agentbench_app` on `projects.projects`.
 - `SecretRepoSnapshotRlsIsolationTest` extends the same proof to `identity.secret_refs`, `projects.project_repositories`, and `projects.repo_snapshots`.
 - `SuiteFlakeQuarantineRlsIsolationTest` covers `benchmarks.test_suites` and `evaluations.flake_quarantines`.
+- `LeaderboardCommentVoteRlsIsolationTest` covers `analytics.leaderboard_comments` and `analytics.leaderboard_votes`.
 - `BenchmarkRlsApiIsolationTest` covers `benchmarks.benchmarks` (API + unfiltered SELECT).
 - App-layer isolation tests (`AuthOrgIsolationTest`, etc.) remain required.
 
