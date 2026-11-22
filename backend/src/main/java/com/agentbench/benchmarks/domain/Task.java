@@ -17,6 +17,7 @@ public record Task(
         TaskDifficulty difficulty,
         List<String> languageTags,
         UUID repoSnapshotId,
+        String gitUrl,
         String baselineCommitSha,
         String referencePatch,
         String expectedBehavior,

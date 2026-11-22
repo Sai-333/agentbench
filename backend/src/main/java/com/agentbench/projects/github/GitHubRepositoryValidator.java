@@ -40,6 +40,42 @@ public class GitHubRepositoryValidator {
         this.validationEnabled = validationEnabled;
     }
 
+    /**
+     * github.com owner/repo, as {@code https://github.com/owner/repo} or {@code git@github.com:owner/repo}.
+     * Credentials in the URL are rejected.
+     */
+    public static Optional<OwnerRepo> parseGithub(String gitUrl) {
+        if (gitUrl == null || gitUrl.isBlank()) {
+            return Optional.empty();
+        }
+        String trimmed = gitUrl.trim();
+        if (trimmed.indexOf('\r') >= 0 || trimmed.indexOf('\n') >= 0 || trimmed.indexOf(' ') >= 0) {
+            return Optional.empty();
+        }
+        Matcher matcher = GITHUB_URL.matcher(trimmed);
+        if (!matcher.matches()) {
+            return Optional.empty();
+        }
+        String owner = matcher.group("owner");
+        String repo = matcher.group("repo");
+        if (!safeSegment(owner) || !safeSegment(repo)) {
+            return Optional.empty();
+        }
+        return Optional.of(new OwnerRepo(owner, repo));
+    }
+
+    public static String httpsCloneUrl(OwnerRepo repo) {
+        return "https://github.com/" + repo.owner() + "/" + repo.repo() + ".git";
+    }
+
+    private static boolean safeSegment(String value) {
+        return value != null
+                && value.matches("[A-Za-z0-9_.-]+")
+                && !value.contains("..")
+                && !value.startsWith("-")
+                && !value.endsWith(".");
+    }
+
     public ValidationResult validate(String gitUrl, Optional<String> secretToken) {
         if (!validationEnabled) {
             return ValidationResult.skipped("GitHub validation disabled by configuration");
@@ -85,6 +121,9 @@ public class GitHubRepositoryValidator {
             log.warn("GitHub validation transport failure for owner={} repo={}", owner, repo);
             return ValidationResult.invalid("Unable to reach GitHub API");
         }
+    }
+
+    public record OwnerRepo(String owner, String repo) {
     }
 
     public record ValidationResult(String status, String message) {

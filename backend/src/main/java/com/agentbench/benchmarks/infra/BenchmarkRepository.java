@@ -210,6 +210,7 @@ public class BenchmarkRepository {
             TaskDifficulty difficulty,
             String languageTagsJson,
             UUID repoSnapshotId,
+            String gitUrl,
             String baselineCommitSha,
             String referencePatch,
             String expectedBehavior,
@@ -224,12 +225,12 @@ public class BenchmarkRepository {
         jdbc.update("""
                 INSERT INTO benchmarks.tasks
                     (id, benchmark_version_id, org_id, slug, title, prompt, acceptance_criteria,
-                     category, difficulty, language_tags, repo_snapshot_id, baseline_commit_sha,
+                     category, difficulty, language_tags, repo_snapshot_id, git_url, baseline_commit_sha,
                      reference_patch, expected_behavior, timeout_sec, memory_mb, cpu_limit,
                      max_patch_bytes, eval_config_json, ordinal, created_at, updated_at)
                 VALUES
                     (:id, :versionId, :orgId, :slug, :title, :prompt, :acceptanceCriteria,
-                     :category, :difficulty, CAST(:languageTags AS jsonb), :repoSnapshotId, :baselineCommitSha,
+                     :category, :difficulty, CAST(:languageTags AS jsonb), :repoSnapshotId, :gitUrl, :baselineCommitSha,
                      :referencePatch, :expectedBehavior, :timeoutSec, :memoryMb, :cpuLimit,
                      :maxPatchBytes, CAST(:evalConfig AS jsonb), :ordinal, :createdAt, :updatedAt)
                 """,
@@ -245,6 +246,7 @@ public class BenchmarkRepository {
                         .addValue("difficulty", difficulty == null ? null : difficulty.name())
                         .addValue("languageTags", languageTagsJson)
                         .addValue("repoSnapshotId", repoSnapshotId)
+                        .addValue("gitUrl", gitUrl)
                         .addValue("baselineCommitSha", baselineCommitSha)
                         .addValue("referencePatch", referencePatch)
                         .addValue("expectedBehavior", expectedBehavior)
@@ -263,7 +265,7 @@ public class BenchmarkRepository {
         var list = jdbc.query("""
                 SELECT id, benchmark_version_id, org_id, slug, title, prompt, acceptance_criteria,
                        category, difficulty, language_tags::text AS language_tags,
-                       repo_snapshot_id, baseline_commit_sha, reference_patch, expected_behavior,
+                       repo_snapshot_id, git_url, baseline_commit_sha, reference_patch, expected_behavior,
                        timeout_sec, memory_mb, cpu_limit, max_patch_bytes,
                        eval_config_json::text AS eval_config_json, ordinal, created_at, updated_at
                 FROM benchmarks.tasks
@@ -280,7 +282,7 @@ public class BenchmarkRepository {
         return jdbc.query("""
                 SELECT id, benchmark_version_id, org_id, slug, title, prompt, acceptance_criteria,
                        category, difficulty, language_tags::text AS language_tags,
-                       repo_snapshot_id, baseline_commit_sha, reference_patch, expected_behavior,
+                       repo_snapshot_id, git_url, baseline_commit_sha, reference_patch, expected_behavior,
                        timeout_sec, memory_mb, cpu_limit, max_patch_bytes,
                        eval_config_json::text AS eval_config_json, ordinal, created_at, updated_at
                 FROM benchmarks.tasks
@@ -303,6 +305,7 @@ public class BenchmarkRepository {
             TaskDifficulty difficulty,
             String languageTagsJson,
             UUID repoSnapshotId,
+            String gitUrl,
             String baselineCommitSha,
             String referencePatch,
             String expectedBehavior,
@@ -321,6 +324,7 @@ public class BenchmarkRepository {
                     difficulty = :difficulty,
                     language_tags = CAST(:languageTags AS jsonb),
                     repo_snapshot_id = :repoSnapshotId,
+                    git_url = :gitUrl,
                     baseline_commit_sha = :baselineCommitSha,
                     reference_patch = :referencePatch,
                     expected_behavior = :expectedBehavior,
@@ -343,6 +347,7 @@ public class BenchmarkRepository {
                         .addValue("difficulty", difficulty == null ? null : difficulty.name())
                         .addValue("languageTags", languageTagsJson)
                         .addValue("repoSnapshotId", repoSnapshotId)
+                        .addValue("gitUrl", gitUrl)
                         .addValue("baselineCommitSha", baselineCommitSha)
                         .addValue("referencePatch", referencePatch)
                         .addValue("expectedBehavior", expectedBehavior)
@@ -527,6 +532,7 @@ public class BenchmarkRepository {
                 TaskDifficulty.fromString(rs.getString("difficulty")),
                 readStringList(rs.getString("language_tags")),
                 (UUID) rs.getObject("repo_snapshot_id"),
+                trimToNull(rs.getString("git_url")),
                 trimToNull(rs.getString("baseline_commit_sha")),
                 rs.getString("reference_patch"),
                 rs.getString("expected_behavior"),

@@ -7,7 +7,7 @@ COPY src ./src
 RUN mvn -B -DskipTests package
 
 FROM eclipse-temurin:21-jre-alpine AS runtime
-RUN apk add --no-cache wget \
+RUN apk add --no-cache wget git ca-certificates \
     && addgroup -S agentbench && adduser -S agentbench -G agentbench \
     && mkdir -p /var/agentbench/artifacts /app \
     && chown -R agentbench:agentbench /var/agentbench /app

@@ -94,7 +94,7 @@ public class ProjectController {
 
     @PostMapping(value = "/projects/{projectId}/snapshots", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
     @ResponseStatus(HttpStatus.CREATED)
-    @Operation(summary = "Pin a repo snapshot (metadata; clone/archive deferred)")
+    @Operation(summary = "Record a repo snapshot of URL, commit, branch, digest, and storage URI")
     public ProjectDtos.SnapshotResponse createSnapshot(
             @PathVariable UUID orgId,
             @PathVariable UUID projectId,

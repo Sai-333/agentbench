@@ -27,20 +27,29 @@ public class WorkspaceProvisioner {
     private final Path workspacesRoot;
     private final Path hiddenRoot;
     private final ObjectMapper objectMapper;
+    private final GitSnapshotCheckout gitSnapshotCheckout;
 
     public WorkspaceProvisioner(
             @Value("${agentbench.artifacts.root}") String artifactsRoot,
-            ObjectMapper objectMapper) {
+            ObjectMapper objectMapper,
+            GitSnapshotCheckout gitSnapshotCheckout) {
         Path root = Path.of(artifactsRoot).toAbsolutePath().normalize();
         this.workspacesRoot = root.resolve("workspaces");
         this.hiddenRoot = root.resolve("hidden-fixtures");
         this.objectMapper = objectMapper;
+        this.gitSnapshotCheckout = gitSnapshotCheckout;
     }
 
     public Path provision(UUID orgId, UUID evaluationId, JsonNode snapshotTaskNode) {
         try {
             Files.createDirectories(workspacesRoot);
             Path workspace = workspacesRoot.resolve(orgId.toString()).resolve(evaluationId.toString());
+            GitSnapshotCheckout.GitPin pin = GitSnapshotCheckout.pinFrom(snapshotTaskNode);
+            if (pin != null) {
+                // The tree is the pinned commit. A directory already on disk is not used.
+                gitSnapshotCheckout.checkout(workspace, pin);
+                return workspace;
+            }
             if (Files.exists(workspace)) {
                 return workspace;
             }
