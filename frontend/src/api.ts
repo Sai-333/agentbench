@@ -2,6 +2,7 @@ import {
   createSessionClient,
   isSessionEndedError,
   readProblemDetail,
+  sessionEndedForBootstrap,
   signInCopy,
 } from './session'
 
@@ -17,7 +18,7 @@ const session = createSessionClient({
   },
 })
 
-export { isSessionEndedError, signInCopy }
+export { isSessionEndedError, sessionEndedForBootstrap, signInCopy }
 
 export type TokenResponse = {
   accessToken: string
@@ -535,6 +536,30 @@ export function startSessionKeeper(): () => void {
 
 export async function api<T>(path: string, options: RequestInit = {}, auth = true): Promise<T> {
   return session.api<T>(path, options, auth)
+}
+
+/**
+ * Same-origin POST that finishes before the caller returns.
+ * Used when the result is shown with window.alert, which has to be open
+ * before the click that triggered it returns to the browser.
+ */
+export function postJsonSync<T>(path: string): T {
+  const xhr = new XMLHttpRequest()
+  xhr.open('POST', path, false)
+  const token = getAccessToken()
+  if (token) xhr.setRequestHeader('Authorization', `Bearer ${token}`)
+  xhr.send()
+  if (xhr.status < 200 || xhr.status >= 300) {
+    let detail = `HTTP ${xhr.status}`
+    try {
+      const body = JSON.parse(xhr.responseText) as { detail?: string; title?: string }
+      detail = body.detail || body.title || detail
+    } catch {
+      // keep the status line
+    }
+    throw new Error(detail)
+  }
+  return JSON.parse(xhr.responseText) as T
 }
 
 export async function downloadAuthenticated(path: string, filename: string): Promise<void> {

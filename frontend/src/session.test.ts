@@ -10,6 +10,7 @@ import {
   createMemoryStore,
   createSessionClient,
   isSessionEndedError,
+  sessionEndedForBootstrap,
   signInCopy,
   type IssuedTokens,
   type SessionFetch,
@@ -200,6 +201,9 @@ test('a rejected, expired, or revoked refresh token ends the session', async () 
   assert.equal(signInCopy(true), 'Your session ended. Sign in again to continue.')
   assert.equal(signInCopy(false), FIRST_VISIT_SIGN_IN_COPY)
   assert.notEqual(signInCopy(true), signInCopy(false))
+  assert.equal(sessionEndedForBootstrap(true), false)
+  assert.equal(signInCopy(sessionEndedForBootstrap(true)), FIRST_VISIT_SIGN_IN_COPY)
+  assert.equal(sessionEndedForBootstrap(false), true)
 })
 
 test('a server error on refresh keeps the refresh token', async () => {

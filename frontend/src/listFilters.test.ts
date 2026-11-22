@@ -9,6 +9,8 @@ import {
   comparisonFiltersActive,
   comparisonSearchParams,
   costSearchParams,
+  costViewState,
+  costsWereReported,
   evaluationFiltersActive,
   evaluationSearchParams,
   filterComparisonRows,
@@ -402,4 +404,12 @@ test('comparison and cost filters combine and clear', () => {
   )
   assert.equal(filterCostAgents(costs, 'agent-a', 'stub').length, 0)
   assert.equal(filterCostAgents(costs, '', '  ').length, 2)
+  assert.equal(costsWereReported(0, 0), false)
+  assert.equal(costsWereReported(0, 0.01), true)
+  assert.equal(costsWereReported(12, 0), true)
+  assert.equal(costViewState(false, false, 1), 'empty')
+  assert.equal(costViewState(false, true, 0), 'filtered')
+  assert.equal(costViewState(true, true, 0), 'filtered')
+  assert.equal(costViewState(true, false, 2), 'ready')
+  assert.equal(costViewState(true, true, 1), 'ready')
 })

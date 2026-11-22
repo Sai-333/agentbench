@@ -48,6 +48,14 @@ export function signInCopy(sessionEnded: boolean): string {
   return sessionEnded ? SESSION_ENDED_COPY : FIRST_VISIT_SIGN_IN_COPY
 }
 
+/**
+ * A URL fragment that is rejected never became a session. The sign-in screen
+ * keeps the first-visit copy. A refresh rejected after a real sign-in says the session ended.
+ */
+export function sessionEndedForBootstrap(arrivedFromHash: boolean): boolean {
+  return !arrivedFromHash
+}
+
 export function createMemoryStore(): KeyValueStore {
   const items = new Map<string, string>()
   return {

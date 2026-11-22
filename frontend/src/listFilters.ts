@@ -393,6 +393,21 @@ export type CostAgentLike = {
   agentName: string
 }
 
+/** Invocations with no tokens and no estimated cost are not cost records. */
+export function costsWereReported(totalTokens: number, totalEstimatedCostUsd: number): boolean {
+  return Number(totalTokens || 0) > 0 || Number(totalEstimatedCostUsd || 0) > 0
+}
+
+export function costViewState(
+  reported: boolean,
+  filterActive: boolean,
+  matchingAgents: number,
+): 'ready' | 'empty' | 'filtered' {
+  if (filterActive && matchingAgents === 0) return 'filtered'
+  if (!reported) return 'empty'
+  return 'ready'
+}
+
 export function filterCostAgents<T extends CostAgentLike>(rows: T[], agentId: string, q: string): T[] {
   const query = trimmed(q).toLowerCase()
   if (!agentId && !query) return rows

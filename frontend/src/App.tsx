@@ -8,6 +8,8 @@ import {
   getRefreshToken,
   isSessionEndedError,
   onSessionEnded,
+  postJsonSync,
+  sessionEndedForBootstrap,
   signInCopy,
   startSessionKeeper,
   storeTokens,
@@ -60,6 +62,8 @@ import {
   comparisonFiltersActive,
   comparisonSearchParams,
   costSearchParams,
+  costViewState,
+  costsWereReported,
   evaluationFiltersActive,
   evaluationSearchParams,
   filterComparisonRows,
@@ -154,6 +158,7 @@ function App() {
   const [bootstrapping, setBootstrapping] = useState(true)
   const [sessionEnded, setSessionEnded] = useState(false)
   const loggingOut = useRef(false)
+  const hashBootstrap = useRef(false)
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
     const stored = localStorage.getItem(THEME_KEY)
     return stored === 'dark' ? 'dark' : 'light'
@@ -349,7 +354,7 @@ function App() {
       )
       if (gen !== costReq.current) return
       setCosts(data)
-      setCostsState(data.invocationCount === 0 ? 'empty' : 'ready')
+      setCostsState('ready')
     } catch (err) {
       if (gen !== costReq.current) return
       setCosts(null)
@@ -486,7 +491,8 @@ function App() {
   useEffect(() => {
     const stopEnded = onSessionEnded(() => {
       if (loggingOut.current) return
-      setSessionEnded(true)
+      setSessionEnded(sessionEndedForBootstrap(hashBootstrap.current))
+      hashBootstrap.current = false
       setError(null)
       setMe(null)
       setBusy(false)
@@ -523,6 +529,7 @@ function App() {
 
       const oidcTokens = consumeOidcHashTokens()
       if (oidcTokens) {
+        hashBootstrap.current = true
         storeTokens(oidcTokens)
         if (!cancelled) setSessionEnded(false)
       }
@@ -533,11 +540,11 @@ function App() {
       }
       try {
         await loadWorkspace()
+        hashBootstrap.current = false
         if (!cancelled) setSessionEnded(false)
       } catch (err) {
         if (!cancelled) {
           if (isSessionEndedError(err)) {
-            setSessionEnded(true)
             setMe(null)
           } else if (!getRefreshToken()) {
             clearTokens()
@@ -1136,14 +1143,13 @@ function App() {
     }
   }
 
-  async function handleTestAgentConnection(agentId: string) {
+  function handleTestAgentConnection(agentId: string) {
     if (!selectedOrgId) return
     setError(null)
     setBusy(true)
     try {
-      const result = await api<{ ok: boolean; provider: string; detail: string }>(
+      const result = postJsonSync<{ ok: boolean; provider: string; detail: string }>(
         `/api/v1/orgs/${selectedOrgId}/agents/${agentId}/test-connection`,
-        { method: 'POST' },
       )
       setError(result.ok ? null : result.detail)
       if (result.ok) {
@@ -1615,6 +1621,14 @@ function App() {
     comparisonState === 'ready' && comparisonRows.length === 0 ? 'empty' : comparisonState
   const costAgents = costs ? filterCostAgents(costs.byAgent, costAgentId, costQuery) : []
   const costsView = costs ? { ...costs, byAgent: costAgents } : null
+  const costFilterActive = Boolean(costAgentId || costQuery.trim())
+  const costReported = costs
+    ? costsWereReported(costs.totalTokens, costs.totalEstimatedCostUsd)
+    : false
+  const costView =
+    costsState === 'ready'
+      ? costViewState(costReported, costFilterActive, costAgents.length)
+      : costsState
 
   function openPlatformRegression() {
     setSurface('platform-regression')
@@ -2012,15 +2026,9 @@ function App() {
                   </div>
                   <CostsPanel
                     costs={costsView}
-                    state={
-                      costsState === 'ready' && costQuery.trim() && costAgents.length === 0
-                        ? 'empty'
-                        : costsState
-                    }
+                    state={costView === 'filtered' || costView === 'empty' ? 'empty' : costView}
                     error={costsError}
-                    emptyMessage={
-                      costAgentId || costQuery.trim() ? EMPTY.costsFiltered : EMPTY.costs
-                    }
+                    emptyMessage={costView === 'filtered' ? EMPTY.costsFiltered : EMPTY.costs}
                   />
                 </>
               ) : (
