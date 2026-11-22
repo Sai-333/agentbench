@@ -29,7 +29,7 @@ services:
       AGENTBENCH_SHUTDOWN_TIMEOUT: ${AGENTBENCH_SHUTDOWN_TIMEOUT:-30s}
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
       SPRING_RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD}
-      JAVA_OPTS: ${BACKEND_JAVA_OPTS:--XX:MaxRAMPercentage=75.0 -Djava.security.egd=file:/dev/./urandom}
+      JAVA_OPTS: ${BACKEND_JAVA_OPTS:--XX:MaxRAMPercentage=75.0 --enable-preview --enable-native-access=ALL-UNNAMED -Djava.security.egd=file:/dev/./urandom}
     # Publish readiness/liveness only; avoid exposing management details publicly via reverse proxy.
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/actuator/health/readiness | grep -q UP || exit 1"]
@@ -47,7 +47,7 @@ services:
       AGENTBENCH_SHUTDOWN_TIMEOUT: ${AGENTBENCH_SHUTDOWN_TIMEOUT:-30s}
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
       SPRING_RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD}
-      JAVA_OPTS: ${WORKER_JAVA_OPTS:--XX:MaxRAMPercentage=75.0}
+      JAVA_OPTS: ${WORKER_JAVA_OPTS:--XX:MaxRAMPercentage=75.0 --enable-preview --enable-native-access=ALL-UNNAMED}
       AGENTBENCH_EXECUTION_MODE: ${AGENTBENCH_EXECUTION_MODE:-docker}
     stop_grace_period: 60s
 

@@ -131,9 +131,16 @@ h3 {
   margin-bottom: 1.25rem;
 }
 
-.platform-panel .cta.secondary {
+.platform-panel .cta.secondary,
+.platform-panel .cta {
   margin-right: 0.5rem;
   margin-bottom: 0.75rem;
+}
+
+.gpu-label {
+  display: inline-block;
+  min-width: 4.5rem;
+  font-weight: 600;
 }
 
 .userbox {

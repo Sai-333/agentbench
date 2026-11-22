@@ -30,6 +30,7 @@ import type {
   MeResponse,
   Org,
   OverviewResponse,
+  GpuBenchmarkResult,
   Project,
   RegressionRunDetail,
   RegressionRunSummary,
@@ -46,6 +47,7 @@ import {
   OpsHealthPanel,
   OverviewPanel,
 } from './DashboardPanels'
+import { GpuProbePanel } from './GpuProbePanel'
 import { RegressionRunsPanel } from './RegressionRunsPanel'
 import { isFailedCaseStatus, visibleCaseResults } from './caseList'
 import { qualityFindingLines, qualityToolDisplayName, qualityToolNote } from './qualityFindings'
@@ -93,7 +95,7 @@ type WorkspaceTab =
   | 'costs'
   | 'ops'
 /** Consumer org workspace vs platform-scoped AgentBench application surfaces. */
-type AppSurface = 'consumer' | 'platform-regression'
+type AppSurface = 'consumer' | 'platform-regression' | 'platform-gpu'
 type LoadState = 'idle' | 'loading' | 'ready' | 'empty' | 'error'
 
 const THEME_KEY = 'agentbench.theme'
@@ -190,6 +192,10 @@ function App() {
   const [expandedRegressionId, setExpandedRegressionId] = useState('')
   const [expandedRegression, setExpandedRegression] = useState<RegressionRunDetail | null>(null)
   const [regressionExpanding, setRegressionExpanding] = useState(false)
+  const [gpuResults, setGpuResults] = useState<GpuBenchmarkResult[]>([])
+  const [gpuState, setGpuState] = useState<LoadState>('idle')
+  const [gpuError, setGpuError] = useState<string | null>(null)
+  const [gpuRunning, setGpuRunning] = useState(false)
   const [evalFilters, setEvalFilters] = useState<EvaluationFilter>(EMPTY_EVALUATION_FILTER)
   const [failedCasesOnly, setFailedCasesOnly] = useState(false)
   const [evalPage, setEvalPage] = useState(0)
@@ -389,6 +395,35 @@ function App() {
       setRegressionRuns([])
       setRegressionError(err instanceof Error ? err.message : 'Could not load regression runs')
       setRegressionState('error')
+    }
+  }, [])
+
+  const loadGpuProbes = useCallback(async () => {
+    setGpuState('loading')
+    setGpuError(null)
+    try {
+      const list = await api<GpuBenchmarkResult[]>('/api/v1/gpu-benchmarks?limit=20')
+      setGpuResults(list)
+      setGpuState(list.length === 0 ? 'empty' : 'ready')
+    } catch (err) {
+      setGpuResults([])
+      setGpuError(err instanceof Error ? err.message : 'Could not load GPU probes')
+      setGpuState('error')
+    }
+  }, [])
+
+  const runGpuProbe = useCallback(async () => {
+    setGpuRunning(true)
+    setGpuError(null)
+    try {
+      await api<GpuBenchmarkResult>('/api/v1/gpu-benchmarks', { method: 'POST' })
+      const list = await api<GpuBenchmarkResult[]>('/api/v1/gpu-benchmarks?limit=20')
+      setGpuResults(list)
+      setGpuState(list.length === 0 ? 'empty' : 'ready')
+    } catch (err) {
+      setGpuError(err instanceof Error ? err.message : 'Could not run the GPU probe')
+    } finally {
+      setGpuRunning(false)
     }
   }, [])
 
@@ -1641,6 +1676,14 @@ function App() {
     }
   }
 
+  function openPlatformGpu() {
+    setSurface('platform-gpu')
+    setError(null)
+    if (canViewRegressionRuns) {
+      void loadGpuProbes()
+    }
+  }
+
   return (
     <main className="shell wide">
       <header className="topbar">
@@ -1648,7 +1691,7 @@ function App() {
           <p className="eyebrow">Milestone 8 · Analytics</p>
           <h1>AgentBench</h1>
           <p className="muted small platform-nav-hint">
-            Consumer orgs below. Application regression is platform-scoped.
+            Consumer orgs below. Application regression and the GPU probe are platform-scoped.
           </p>
         </div>
         <div className="userbox">
@@ -1661,6 +1704,13 @@ function App() {
               onClick={openPlatformRegression}
             >
               Regression runs
+            </button>
+            <button
+              type="button"
+              className={surface === 'platform-gpu' ? 'tab active' : 'tab'}
+              onClick={openPlatformGpu}
+            >
+              GPU probe
             </button>
           </div>
           <div>
@@ -1683,7 +1733,20 @@ function App() {
 
       {error && <p className="error banner">{error}</p>}
 
-      {surface === 'platform-regression' ? (
+      {surface === 'platform-gpu' ? (
+        <section className="panel platform-panel">
+          <GpuProbePanel
+            allowed={canViewRegressionRuns}
+            results={gpuResults}
+            state={gpuState}
+            error={gpuError}
+            running={gpuRunning}
+            onRun={() => void runGpuProbe()}
+            onRefresh={() => void loadGpuProbes()}
+            onBackToOrgs={() => setSurface('consumer')}
+          />
+        </section>
+      ) : surface === 'platform-regression' ? (
         <section className="panel platform-panel">
           <RegressionRunsPanel
             allowed={canViewRegressionRuns}

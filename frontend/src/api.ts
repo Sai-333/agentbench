@@ -512,6 +512,19 @@ export type RegressionRunDetail = RegressionRunSummary & {
   cases: RegressionCase[]
 }
 
+export type GpuBenchmarkResult = {
+  id: string
+  status: 'measured' | 'unavailable' | string
+  device: string | null
+  api: string | null
+  score: number | null
+  scoreUnit: string | null
+  unavailableReason: string | null
+  probe: string
+  detail: string | null
+  probedAt: string
+}
+
 export function getAccessToken(): string | null {
   return session.getAccessToken()
 }
