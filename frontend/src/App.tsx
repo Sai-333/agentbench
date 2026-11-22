@@ -48,6 +48,7 @@ import {
 } from './DashboardPanels'
 import { RegressionRunsPanel } from './RegressionRunsPanel'
 import { isFailedCaseStatus, visibleCaseResults } from './caseList'
+import { qualityFindingLines, qualityToolDisplayName, qualityToolNote } from './qualityFindings'
 import { EMPTY } from './emptyCopy'
 import { ScoreBars, StageTimeline, StatusChip } from './evaluationUi'
 import { evaluationProgressHint, showFailureChip } from './evaluationStages'
@@ -2949,13 +2950,13 @@ function App() {
                         </thead>
                         <tbody>
                           {report.tools.map((tool) => (
-                            <tr key={tool.tool}>
-                              <td data-label="Tool">{tool.tool}</td>
+                            <tr key={`${tool.tool}-${qualityToolDisplayName(tool)}`}>
+                              <td data-label="Tool">{qualityToolDisplayName(tool)}</td>
                               <td data-label="New">{tool.newFindings}</td>
                               <td data-label="Pre-existing">{tool.preExistingFindings}</td>
                               <td data-label="Total">{tool.totalFindings}</td>
                               <td data-label="Notes" className="muted small">
-                                {tool.stub ? 'stub' : tool.notes || ''}
+                                {qualityToolNote(tool)}
                               </td>
                             </tr>
                           ))}
@@ -2963,16 +2964,11 @@ function App() {
                       </table>
                     </div>
                   )}
-                  {report.tools?.some((tool) => (tool.findingsSample?.length ?? 0) > 0) && (
+                  {qualityFindingLines(report.tools ?? []).length > 0 && (
                     <ul className="muted small">
-                      {report.tools.flatMap((tool) =>
-                        (tool.findingsSample ?? []).slice(0, 8).map((finding, idx) => (
-                          <li key={`${tool.tool}-${finding.ruleId}-${idx}`}>
-                            [{tool.tool}] {finding.introduced ? 'NEW' : 'pre'} · {finding.severity}{' '}
-                            · {finding.filePath}:{finding.line} — {finding.message}
-                          </li>
-                        )),
-                      )}
+                      {qualityFindingLines(report.tools ?? []).map((line) => (
+                        <li key={line.key}>{line.text}</li>
+                      ))}
                     </ul>
                   )}
                 </div>

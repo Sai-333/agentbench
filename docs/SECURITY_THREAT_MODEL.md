@@ -126,7 +126,7 @@ Shared-kernel breakout residual risk remains on the default path. Prefer **`agen
 
 ## 10. Code quality stage
 
-- Tools: **Checkstyle + SpotBugs + PMD** (XML when present; builtin Java heuristics otherwise) — primary local path.
+- Tools: **Checkstyle + SpotBugs + PMD** (XML when present, otherwise the tools run on the tree). A tool that does not run is named as such. Builtin Java heuristics are labeled `builtin_java_heuristics` and are not presented as those tools.
 - **Sonar** is optional (workspace issues JSON import or Web API fetch when `AGENTBENCH_SONAR_ENABLED=true`); default off; never invents scores; not sole scoring authority. See `docs/QUALITY_SONAR.md`.
 - **Python (ruff)** and **Node (eslint)** are optional opt-in scanners (report import → `RuntimeIsolator` → builtin heuristics); default off; never sole scoring authority. See `docs/QUALITY_LANGUAGE.md`.
 - Findings split into **newly introduced** vs **pre-existing** (fingerprint diff baseline↔post).

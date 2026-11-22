@@ -1,9 +1,12 @@
 package com.agentbench.execution.quality;
 
 import com.agentbench.agents.infra.SecretRedactor;
+import com.agentbench.execution.config.ExecutionProperties;
+import com.agentbench.execution.service.ExecutionIsolatorService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
@@ -20,26 +23,38 @@ import java.util.Set;
 import java.util.UUID;
 
 /**
- * Runs Checkstyle + SpotBugs + PMD analysis (XML when present, else builtin heuristics),
- * optionally merges Sonar / Python (ruff) / Node (eslint) findings when configured,
- * separates pre-existing vs newly introduced findings, and computes an honest normalized score.
- *
- * <p>Checkstyle / SpotBugs / PMD remain the primary local tools. Sonar and language scanners
- * are optional and never claimed as the sole scoring authority.
+ * Runs Checkstyle, SpotBugs, and PMD (existing XML, otherwise the tools themselves).
+ * When none of those tools run, records {@code builtin_java_heuristics} instead of
+ * labeling the heuristic as those tools. Optionally merges Sonar / ruff / eslint.
+ * Separates pre-existing vs newly introduced findings and computes a normalized score
+ * from the new-finding count. Sonar and the language scanners stay optional.
  */
 @Service
 public class QualityAnalysisService {
+
+    private static final String HEURISTIC = BuiltinJavaQualityScanner.TOOL;
 
     private final ObjectMapper objectMapper;
     private final SonarQualityAnalyzer sonarQualityAnalyzer;
     private final PythonQualityAnalyzer pythonQualityAnalyzer;
     private final NodeQualityAnalyzer nodeQualityAnalyzer;
+    private final JavaQualityToolchain javaQualityToolchain;
 
     public QualityAnalysisService(
             ObjectMapper objectMapper,
             SonarQualityAnalyzer sonarQualityAnalyzer,
             PythonQualityAnalyzer pythonQualityAnalyzer,
             NodeQualityAnalyzer nodeQualityAnalyzer) {
+        this(objectMapper, sonarQualityAnalyzer, pythonQualityAnalyzer, nodeQualityAnalyzer,
+                JavaQualityToolchain.inProcess());
+    }
+
+    public QualityAnalysisService(
+            ObjectMapper objectMapper,
+            SonarQualityAnalyzer sonarQualityAnalyzer,
+            PythonQualityAnalyzer pythonQualityAnalyzer,
+            NodeQualityAnalyzer nodeQualityAnalyzer,
+            JavaQualityToolchain javaQualityToolchain) {
         this.objectMapper = objectMapper;
         this.sonarQualityAnalyzer = sonarQualityAnalyzer == null
                 ? SonarQualityAnalyzer.disabled()
@@ -50,6 +65,21 @@ public class QualityAnalysisService {
         this.nodeQualityAnalyzer = nodeQualityAnalyzer == null
                 ? NodeQualityAnalyzer.disabled()
                 : nodeQualityAnalyzer;
+        this.javaQualityToolchain = javaQualityToolchain == null
+                ? JavaQualityToolchain.inProcess()
+                : javaQualityToolchain;
+    }
+
+    @Autowired
+    public QualityAnalysisService(
+            ObjectMapper objectMapper,
+            SonarQualityAnalyzer sonarQualityAnalyzer,
+            PythonQualityAnalyzer pythonQualityAnalyzer,
+            NodeQualityAnalyzer nodeQualityAnalyzer,
+            ExecutionIsolatorService isolatorService,
+            ExecutionProperties executionProperties) {
+        this(objectMapper, sonarQualityAnalyzer, pythonQualityAnalyzer, nodeQualityAnalyzer,
+                JavaQualityToolchain.withIsolator(isolatorService, executionProperties));
     }
 
     /** Convenience for unit tests / callers without an evaluation id (no isolator invoke). */
@@ -175,7 +205,9 @@ public class QualityAnalysisService {
                 newByTool.getOrDefault(EslintReportParser.TOOL, List.of()),
                 preExistingByTool.getOrDefault(EslintReportParser.TOOL, List.of())));
 
-        String toolLabel = buildToolLabel(sonarReal, ruffReal, eslintReal);
+        boolean javaReal = postReports.stream().anyMatch(QualityAnalysisService::isRealPrimaryTool);
+        boolean heuristicReal = postReports.stream().anyMatch(r -> HEURISTIC.equals(r.tool()) && !r.stub());
+        String toolLabel = buildToolLabel(javaReal, heuristicReal, sonarReal, ruffReal, eslintReal);
 
         return new AggregatedQuality(
                 toolLabel,
@@ -188,8 +220,9 @@ public class QualityAnalysisService {
     }
 
     /**
-     * Prefer XML reports under conventional paths; otherwise run builtin heuristics.
-     * Sonar / Python / Node are optional and disabled by default.
+     * Read a tool's XML when the tree already has it. Otherwise run that tool.
+     * When none of the three run, append {@code builtin_java_heuristics}.
+     * Sonar / Python / Node stay optional and disabled by default.
      */
     public List<QualityToolReport> collectReports(Path workspace) {
         return collectReports(null, workspace);
@@ -198,59 +231,75 @@ public class QualityAnalysisService {
     public List<QualityToolReport> collectReports(UUID evaluationId, Path workspace) {
         List<QualityToolReport> reports = new ArrayList<>();
         if (workspace == null || !Files.isDirectory(workspace)) {
-            reports.add(QualityToolReport.stub("checkstyle", "workspace_missing"));
-            reports.add(QualityToolReport.stub("pmd", "workspace_missing"));
-            reports.add(QualityToolReport.stub("spotbugs", "workspace_missing"));
+            reports.add(QualityToolReport.stub("checkstyle", JavaQualityToolchain.DID_NOT_RUN));
+            reports.add(QualityToolReport.stub("pmd", JavaQualityToolchain.DID_NOT_RUN));
+            reports.add(QualityToolReport.stub("spotbugs", JavaQualityToolchain.DID_NOT_RUN));
             reports.add(sonarQualityAnalyzer.analyze(workspace));
             reports.add(pythonQualityAnalyzer.analyze(evaluationId, workspace));
             reports.add(nodeQualityAnalyzer.analyze(evaluationId, workspace));
             return reports;
         }
 
-        String checkstyleXml = readIfPresent(workspace.resolve("target/checkstyle-result.xml"));
-        String pmdXml = readIfPresent(workspace.resolve("target/pmd.xml"));
-        if (pmdXml == null) {
-            pmdXml = readIfPresent(workspace.resolve("target/pmd/pmd.xml"));
+        Map<String, QualityToolReport> fromXml = xmlReports(workspace);
+        List<QualityToolReport> engines = javaQualityToolchain.scan(evaluationId, workspace);
+        Map<String, QualityToolReport> fromEngine = new LinkedHashMap<>();
+        for (QualityToolReport report : engines) {
+            fromEngine.put(report.tool(), report);
         }
-        String spotbugsXml = readIfPresent(workspace.resolve("target/spotbugsXml.xml"));
-        if (spotbugsXml == null) {
-            spotbugsXml = readIfPresent(workspace.resolve("target/spotbugs/spotbugs.xml"));
+        for (String tool : List.of("checkstyle", "pmd", "spotbugs")) {
+            QualityToolReport xml = fromXml.get(tool);
+            QualityToolReport engine = fromEngine.get(tool);
+            if (xml != null && !xml.stub()) {
+                reports.add(xml);
+            } else if (engine != null) {
+                reports.add(engine);
+            } else {
+                reports.add(QualityToolReport.stub(tool, JavaQualityToolchain.DID_NOT_RUN));
+            }
         }
-
-        boolean usedXml = false;
-        if (checkstyleXml != null) {
-            reports.add(CheckstyleReportParser.parse(checkstyleXml));
-            usedXml = true;
-        }
-        if (pmdXml != null) {
-            reports.add(PmdReportParser.parse(pmdXml));
-            usedXml = true;
-        }
-        if (spotbugsXml != null) {
-            reports.add(SpotBugsReportParser.parse(spotbugsXml));
-            usedXml = true;
-        }
-
-        if (!usedXml) {
+        boolean anyJavaReal = reports.stream().anyMatch(QualityAnalysisService::isRealPrimaryTool);
+        if (!anyJavaReal) {
             reports.addAll(BuiltinJavaQualityScanner.scan(workspace));
-        } else {
-            // Fill missing tools with stubs so the report always names all three.
-            Set<String> present = new HashSet<>();
-            reports.forEach(r -> present.add(r.tool()));
-            if (!present.contains("checkstyle")) {
-                reports.add(QualityToolReport.stub("checkstyle", "xml_missing"));
-            }
-            if (!present.contains("pmd")) {
-                reports.add(QualityToolReport.stub("pmd", "xml_missing"));
-            }
-            if (!present.contains("spotbugs")) {
-                reports.add(QualityToolReport.stub("spotbugs", "xml_missing"));
-            }
         }
         reports.add(sonarQualityAnalyzer.analyze(workspace));
         reports.add(pythonQualityAnalyzer.analyze(evaluationId, workspace));
         reports.add(nodeQualityAnalyzer.analyze(evaluationId, workspace));
         return reports;
+    }
+
+    private static Map<String, QualityToolReport> xmlReports(Path workspace) {
+        Map<String, QualityToolReport> found = new LinkedHashMap<>();
+        QualityToolReport checkstyle = CheckstyleReportParser.parse(
+                readIfPresent(workspace.resolve("target/checkstyle-result.xml")));
+        if (!checkstyle.stub()) {
+            found.put("checkstyle", checkstyle);
+        }
+        String pmdXml = readIfPresent(workspace.resolve("target/pmd.xml"));
+        if (pmdXml == null) {
+            pmdXml = readIfPresent(workspace.resolve("target/pmd/pmd.xml"));
+        }
+        QualityToolReport pmd = PmdReportParser.parse(pmdXml);
+        if (!pmd.stub()) {
+            found.put("pmd", pmd);
+        }
+        String spotbugsXml = readIfPresent(workspace.resolve("target/spotbugsXml.xml"));
+        if (spotbugsXml == null) {
+            spotbugsXml = readIfPresent(workspace.resolve("target/spotbugs/spotbugs.xml"));
+        }
+        QualityToolReport spotbugs = SpotBugsReportParser.parse(spotbugsXml);
+        if (!spotbugs.stub()) {
+            found.put("spotbugs", spotbugs);
+        }
+        return found;
+    }
+
+    private static boolean isRealPrimaryTool(QualityToolReport report) {
+        if (report == null || report.stub()) {
+            return false;
+        }
+        return "checkstyle".equals(report.tool())
+                || "pmd".equals(report.tool())
+                || "spotbugs".equals(report.tool());
     }
 
     private static boolean isOptionalStubExcluded(QualityToolReport report) {
@@ -262,8 +311,15 @@ public class QualityAnalysisService {
                 || EslintReportParser.TOOL.equals(report.tool());
     }
 
-    private static String buildToolLabel(boolean sonarReal, boolean ruffReal, boolean eslintReal) {
-        StringBuilder label = new StringBuilder("checkstyle+spotbugs+pmd");
+    private static String buildToolLabel(
+            boolean javaReal,
+            boolean heuristicReal,
+            boolean sonarReal,
+            boolean ruffReal,
+            boolean eslintReal) {
+        StringBuilder label = new StringBuilder(javaReal
+                ? "checkstyle+spotbugs+pmd"
+                : (heuristicReal ? HEURISTIC : "unavailable"));
         if (sonarReal) {
             label.append("+sonar");
         }
@@ -306,10 +362,11 @@ public class QualityAnalysisService {
         node.put("newFindings", newly.size());
         node.put("preExistingFindings", preexisting.size());
         ArrayNode samples = objectMapper.createArrayNode();
-        int limit = Math.min(20, newly.size());
+        int limit = Math.min(80, newly.size());
         for (int i = 0; i < limit; i++) {
             QualityFinding f = newly.get(i);
             ObjectNode sample = objectMapper.createObjectNode();
+            sample.put("tool", f.tool());
             sample.put("ruleId", f.ruleId());
             sample.put("severity", f.severity());
             sample.put("filePath", f.filePath());
@@ -318,10 +375,11 @@ public class QualityAnalysisService {
             sample.put("introduced", true);
             samples.add(sample);
         }
-        int preLimit = Math.min(5, preexisting.size());
+        int preLimit = Math.min(80, preexisting.size());
         for (int i = 0; i < preLimit; i++) {
             QualityFinding f = preexisting.get(i);
             ObjectNode sample = objectMapper.createObjectNode();
+            sample.put("tool", f.tool());
             sample.put("ruleId", f.ruleId());
             sample.put("severity", f.severity());
             sample.put("filePath", f.filePath());

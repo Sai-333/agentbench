@@ -236,6 +236,7 @@ export type EvaluationScore = {
 }
 
 export type QualityFinding = {
+  tool?: string
   ruleId: string
   severity: string
   filePath: string

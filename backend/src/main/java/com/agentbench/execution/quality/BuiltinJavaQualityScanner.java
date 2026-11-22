@@ -13,12 +13,12 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * Lightweight in-process Java heuristics that emit Checkstyle / PMD / SpotBugs-category
- * findings when full toolchains are not installed in the evaluation environment.
- * Results are real workspace observations (not invented scores) and participate in
- * new-vs-pre-existing diffing.
+ * In-process Java observations used only when Checkstyle, SpotBugs, and PMD did not run.
+ * Findings are labeled {@code builtin_java_heuristics}. They are not those tools' results.
  */
 public final class BuiltinJavaQualityScanner {
+
+    public static final String TOOL = "builtin_java_heuristics";
 
     private static final Pattern SYSTEM_OUT = Pattern.compile("System\\.out\\.print");
     private static final Pattern EMPTY_CATCH = Pattern.compile("catch\\s*\\([^)]+\\)\\s*\\{\\s*}");
@@ -33,11 +33,7 @@ public final class BuiltinJavaQualityScanner {
         List<QualityFinding> pmd = new ArrayList<>();
         List<QualityFinding> spotbugs = new ArrayList<>();
         if (workspace == null || !Files.isDirectory(workspace)) {
-            return List.of(
-                    QualityToolReport.stub("checkstyle", "workspace_missing"),
-                    QualityToolReport.stub("pmd", "workspace_missing"),
-                    QualityToolReport.stub("spotbugs", "workspace_missing")
-            );
+            return List.of(QualityToolReport.stub(TOOL, "workspace_missing"));
         }
         try {
             Files.walkFileTree(workspace, new SimpleFileVisitor<>() {
@@ -56,25 +52,25 @@ public final class BuiltinJavaQualityScanner {
                             String line = lines.get(i);
                             int lineNo = i + 1;
                             if (SYSTEM_OUT.matcher(line).find()) {
-                                checkstyle.add(finding("checkstyle", "RegexpSinglelineJava.SystemOut",
-                                        "WARNING", relative, lineNo, "System.out usage", line));
+                                checkstyle.add(finding("RegexpSinglelineJava.SystemOut",
+                                        "WARNING", relative, lineNo, "System.out usage"));
                             }
                             if (TODO.matcher(line).find()) {
-                                checkstyle.add(finding("checkstyle", "TodoComment",
-                                        "INFO", relative, lineNo, "TODO/FIXME comment", line));
+                                checkstyle.add(finding("TodoComment",
+                                        "INFO", relative, lineNo, "TODO/FIXME comment"));
                             }
                             Matcher field = PUBLIC_FIELD.matcher(line);
                             if (field.find()) {
-                                pmd.add(finding("pmd", "AvoidPublicFields",
-                                        "WARNING", relative, lineNo, "Public field: " + field.group(1), line));
+                                pmd.add(finding("AvoidPublicFields",
+                                        "WARNING", relative, lineNo, "Public field: " + field.group(1)));
                             }
                             if (EMPTY_CATCH.matcher(line).find()) {
-                                spotbugs.add(finding("spotbugs", "REC_CATCH_EXCEPTION",
-                                        "WARNING", relative, lineNo, "Empty catch block", line));
+                                spotbugs.add(finding("REC_CATCH_EXCEPTION",
+                                        "WARNING", relative, lineNo, "Empty catch block"));
                             }
                             if (line.contains("printStackTrace(")) {
-                                spotbugs.add(finding("spotbugs", "DM_USELESS_THREAD",
-                                        "INFO", relative, lineNo, "printStackTrace usage", line));
+                                spotbugs.add(finding("DM_USELESS_THREAD",
+                                        "INFO", relative, lineNo, "printStackTrace usage"));
                             }
                         }
                     } catch (IOException ignored) {
@@ -84,22 +80,18 @@ public final class BuiltinJavaQualityScanner {
                 }
             });
         } catch (IOException ex) {
-            return List.of(
-                    QualityToolReport.stub("checkstyle", "scan_io_error"),
-                    QualityToolReport.stub("pmd", "scan_io_error"),
-                    QualityToolReport.stub("spotbugs", "scan_io_error")
-            );
+            return List.of(QualityToolReport.stub(TOOL, "scan_io_error"));
         }
-        return List.of(
-                new QualityToolReport("checkstyle", checkstyle, false, "builtin_java_heuristics"),
-                new QualityToolReport("pmd", pmd, false, "builtin_java_heuristics"),
-                new QualityToolReport("spotbugs", spotbugs, false, "builtin_java_heuristics")
-        );
+        List<QualityFinding> findings = new ArrayList<>();
+        findings.addAll(checkstyle);
+        findings.addAll(pmd);
+        findings.addAll(spotbugs);
+        return List.of(new QualityToolReport(TOOL, findings, false, TOOL));
     }
 
     private static QualityFinding finding(
-            String tool, String rule, String severity, String path, int line, String message, String sourceLine) {
-        String fp = tool + "|" + rule + "|" + path + "|" + line + "|" + message;
-        return new QualityFinding(tool, rule, severity, path, line, message, fp);
+            String rule, String severity, String path, int line, String message) {
+        String fp = TOOL + "|" + rule + "|" + path + "|" + line + "|" + message;
+        return new QualityFinding(TOOL, rule, severity, path, line, message, fp);
     }
 }
