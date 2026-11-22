@@ -57,6 +57,7 @@ import { qualityFindingLines, qualityToolDisplayName, qualityToolNote } from './
 import { EMPTY } from './emptyCopy'
 import { canManageMembers } from './memberRoles'
 import { MembersPanel } from './MembersPanel'
+import { ProjectRepositoryForm } from './ProjectRepositoryForm'
 import { ScoreBars, StageTimeline, StatusChip } from './evaluationUi'
 import { evaluationProgressHint, showFailureChip } from './evaluationStages'
 import { resetForm } from './formUtils'
@@ -146,6 +147,7 @@ function App() {
   const [orgs, setOrgs] = useState<Org[]>([])
   const [selectedOrgId, setSelectedOrgId] = useState<string>('')
   const [projects, setProjects] = useState<Project[]>([])
+  const [selectedProjectId, setSelectedProjectId] = useState('')
   const [benchmarks, setBenchmarks] = useState<Benchmark[]>([])
   const [selectedBenchmarkId, setSelectedBenchmarkId] = useState<string>('')
   const [versions, setVersions] = useState<BenchmarkVersion[]>([])
@@ -1454,13 +1456,14 @@ function App() {
     const name = String(form.get('name') || '')
     const description = String(form.get('description') || '')
     try {
-      await api<Project>(`/api/v1/orgs/${selectedOrgId}/projects`, {
+      const created = await api<Project>(`/api/v1/orgs/${selectedOrgId}/projects`, {
         method: 'POST',
         body: JSON.stringify({ name, description }),
       })
       resetForm(formEl)
       const projectList = await api<Project[]>(`/api/v1/orgs/${selectedOrgId}/projects`)
       setProjects(projectList)
+      setSelectedProjectId(created.id)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not create project')
     } finally {
@@ -1764,6 +1767,8 @@ function App() {
   }
 
   const selectedOrg = orgs.find((o) => o.id === selectedOrgId)
+  const selectedProject =
+    projects.find((project) => project.id === selectedProjectId) ?? projects[0]
   const role = me.memberships.find((m) => m.orgId === selectedOrgId)?.role
   const selectedBenchmark = benchmarks.find((b) => b.id === selectedBenchmarkId)
   const selectedVersion = versions.find((v) => v.id === selectedVersionId)
@@ -2942,15 +2947,34 @@ function App() {
                       {EMPTY.projects}
                     </p>
                   ) : (
-                    <ul className="list plain">
+                    <ul className="list">
                       {projects.map((project) => (
                         <li key={project.id}>
-                          <strong>{project.name}</strong>
-                          <div className="muted small">{project.description || 'No description'}</div>
+                          <button
+                            type="button"
+                            className={
+                              project.id === selectedProject?.id ? 'list-item active' : 'list-item'
+                            }
+                            onClick={() => setSelectedProjectId(project.id)}
+                          >
+                            <span>{project.name}</span>
+                            <span className="muted small">
+                              {project.description || 'No description'}
+                            </span>
+                          </button>
                         </li>
                       ))}
                     </ul>
                   )}
+                  {selectedOrg && selectedProject ? (
+                    <ProjectRepositoryForm
+                      key={`${selectedOrg.id}:${selectedProject.id}`}
+                      orgId={selectedOrg.id}
+                      projectId={selectedProject.id}
+                      projectName={selectedProject.name}
+                      canEdit={canEdit}
+                    />
+                  ) : null}
                   {canEdit && (
                     <form className="form compact" onSubmit={handleCreateProject}>
                       <h3>Create project</h3>

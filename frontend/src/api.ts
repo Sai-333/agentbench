@@ -56,6 +56,34 @@ export type Project = {
   updatedAt: string
 }
 
+export type ProjectRepository = {
+  id: string
+  projectId: string
+  gitUrl: string
+  defaultBranch: string
+  commitSha: string | null
+  language: string | null
+  buildCommand: string | null
+  testCommand: string | null
+  secretRefId: string | null
+  hasCredentials: boolean
+  validationStatus: string | null
+  validationMessage: string | null
+  lastValidatedAt: string | null
+  updatedAt: string
+}
+
+export type RepoSnapshot = {
+  id: string
+  projectId: string
+  gitUrl: string | null
+  commitSha: string | null
+  branch: string | null
+  contentDigest: string | null
+  storageUri: string | null
+  createdAt: string
+}
+
 export type Benchmark = {
   id: string
   orgId: string
