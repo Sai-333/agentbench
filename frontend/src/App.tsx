@@ -5,6 +5,11 @@ import {
   clearTokens,
   downloadAuthenticated,
   getAccessToken,
+  getRefreshToken,
+  isSessionEndedError,
+  onSessionEnded,
+  signInCopy,
+  startSessionKeeper,
   storeTokens,
 } from './api'
 import type {
@@ -144,6 +149,8 @@ function App() {
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [bootstrapping, setBootstrapping] = useState(true)
+  const [sessionEnded, setSessionEnded] = useState(false)
+  const loggingOut = useRef(false)
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
     const stored = localStorage.getItem(THEME_KEY)
     return stored === 'dark' ? 'dark' : 'light'
@@ -473,6 +480,22 @@ function App() {
   }, [theme])
 
   useEffect(() => {
+    const stopEnded = onSessionEnded(() => {
+      if (loggingOut.current) return
+      setSessionEnded(true)
+      setError(null)
+      setMe(null)
+      setBusy(false)
+      setBootstrapping(false)
+    })
+    const stopKeeper = startSessionKeeper()
+    return () => {
+      stopEnded()
+      stopKeeper()
+    }
+  }, [])
+
+  useEffect(() => {
     let cancelled = false
     ;(async () => {
       try {
@@ -497,18 +520,28 @@ function App() {
       const oidcTokens = consumeOidcHashTokens()
       if (oidcTokens) {
         storeTokens(oidcTokens)
+        if (!cancelled) setSessionEnded(false)
       }
 
-      if (!getAccessToken()) {
-        setBootstrapping(false)
+      if (!getAccessToken() && !getRefreshToken()) {
+        if (!cancelled) setBootstrapping(false)
         return
       }
       try {
         await loadWorkspace()
-      } catch {
-        clearTokens()
+        if (!cancelled) setSessionEnded(false)
+      } catch (err) {
         if (!cancelled) {
-          setMe(null)
+          if (isSessionEndedError(err)) {
+            setSessionEnded(true)
+            setMe(null)
+          } else if (!getRefreshToken()) {
+            clearTokens()
+            setMe(null)
+          } else {
+            setMe(null)
+            setError(err instanceof Error ? err.message : 'Could not load the workspace')
+          }
         }
       } finally {
         if (!cancelled) {
@@ -622,6 +655,7 @@ function App() {
         false,
       )
       storeTokens(tokens)
+      setSessionEnded(false)
       await loadWorkspace()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Authentication failed')
@@ -631,6 +665,7 @@ function App() {
   }
 
   async function handleLogout() {
+    loggingOut.current = true
     setBusy(true)
     try {
       await api('/api/v1/auth/logout', { method: 'POST', body: '{}' })
@@ -638,6 +673,7 @@ function App() {
       // ignore network logout failures
     } finally {
       clearTokens()
+      setSessionEnded(false)
       setMe(null)
       setOrgs([])
       setProjects([])
@@ -653,6 +689,7 @@ function App() {
       setSelectedEvaluation(null)
       setSelectedAgent(null)
       setSelectedOrgId('')
+      loggingOut.current = false
       setBusy(false)
     }
   }
@@ -1455,7 +1492,7 @@ function App() {
       <main className="shell">
         <p className="eyebrow">Milestone 8</p>
         <h1>AgentBench</h1>
-        <p className="lede">Sign in to manage organizations, benchmarks, and evaluations.</p>
+        <p className="lede">{signInCopy(sessionEnded)}</p>
         <div className="tabs">
           <button
             type="button"
