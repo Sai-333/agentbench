@@ -457,15 +457,16 @@ public class AnalyticsRepository {
             UUID agentId,
             UUID taskId,
             UUID benchmarkVersionId,
+            String failureClass,
+            BigDecimal minScore,
+            BigDecimal maxScore,
+            Instant createdFrom,
+            Instant createdTo,
             String q) {
         MapSqlParameterSource params = new MapSqlParameterSource("orgId", orgId);
-        String sql = """
-                SELECT COUNT(*)
-                FROM evaluations.evaluations e
-                JOIN agents.agents a ON a.id = e.agent_id
-                JOIN benchmarks.tasks t ON t.id = e.task_id
-                WHERE e.org_id = :orgId
-                """ + evaluationSearchFilters(state, agentId, taskId, benchmarkVersionId, q, params);
+        String sql = countEvaluationsSql(
+                state, agentId, taskId, benchmarkVersionId, failureClass,
+                minScore, maxScore, createdFrom, createdTo, q, params);
         Long count = jdbc.queryForObject(sql, params, Long.class);
         return count == null ? 0L : count;
     }
@@ -476,27 +477,20 @@ public class AnalyticsRepository {
             UUID agentId,
             UUID taskId,
             UUID benchmarkVersionId,
+            String failureClass,
+            BigDecimal minScore,
+            BigDecimal maxScore,
+            Instant createdFrom,
+            Instant createdTo,
             String q,
             int limit,
             int offset) {
         MapSqlParameterSource params = new MapSqlParameterSource("orgId", orgId)
                 .addValue("limit", Math.min(Math.max(limit, 1), 100))
                 .addValue("offset", Math.max(offset, 0));
-        String sql = """
-                SELECT e.id, e.state, e.agent_id, a.name AS agent_name, e.task_id, t.slug AS task_slug,
-                       e.benchmark_version_id, bv.version AS benchmark_version, s.weighted_total,
-                       e.failure_class, e.created_at, e.updated_at, e.completed_at
-                FROM evaluations.evaluations e
-                JOIN agents.agents a ON a.id = e.agent_id
-                JOIN benchmarks.tasks t ON t.id = e.task_id
-                JOIN benchmarks.benchmark_versions bv ON bv.id = e.benchmark_version_id
-                LEFT JOIN evaluations.evaluation_scores s ON s.evaluation_id = e.id
-                WHERE e.org_id = :orgId
-                """ + evaluationSearchFilters(state, agentId, taskId, benchmarkVersionId, q, params)
-                + """
-                ORDER BY e.created_at DESC
-                LIMIT :limit OFFSET :offset
-                """;
+        String sql = searchEvaluationsSql(
+                state, agentId, taskId, benchmarkVersionId, failureClass,
+                minScore, maxScore, createdFrom, createdTo, q, params);
         return jdbc.query(sql, params, (rs, rowNum) -> new AnalyticsDtos.EvaluationSearchItem(
                 rs.getObject("id", UUID.class),
                 rs.getString("state"),
@@ -578,11 +572,78 @@ public class AnalyticsRepository {
         return "%" + escaped + "%";
     }
 
+    /**
+     * Search statement. The ORDER BY clause is a separate string that starts with whitespace.
+     * A text block would drop that leading break, and NamedParameterJdbcTemplate would then
+     * treat the last filter name and ORDER as one parameter. That failure reaches the UI as
+     * "Authentication required".
+     */
+    static String searchEvaluationsSql(
+            String state,
+            UUID agentId,
+            UUID taskId,
+            UUID benchmarkVersionId,
+            String failureClass,
+            BigDecimal minScore,
+            BigDecimal maxScore,
+            Instant createdFrom,
+            Instant createdTo,
+            String q,
+            MapSqlParameterSource params) {
+        return """
+                SELECT e.id, e.state, e.agent_id, a.name AS agent_name, e.task_id, t.slug AS task_slug,
+                       e.benchmark_version_id, bv.version AS benchmark_version, s.weighted_total,
+                       e.failure_class, e.created_at, e.updated_at, e.completed_at
+                FROM evaluations.evaluations e
+                JOIN agents.agents a ON a.id = e.agent_id
+                JOIN benchmarks.tasks t ON t.id = e.task_id
+                JOIN benchmarks.benchmark_versions bv ON bv.id = e.benchmark_version_id
+                LEFT JOIN evaluations.evaluation_scores s ON s.evaluation_id = e.id
+                WHERE e.org_id = :orgId
+                """
+                + evaluationSearchFilters(
+                        state, agentId, taskId, benchmarkVersionId, failureClass,
+                        minScore, maxScore, createdFrom, createdTo, q, params)
+                + "\nORDER BY e.created_at DESC\nLIMIT :limit OFFSET :offset\n";
+    }
+
+    static String countEvaluationsSql(
+            String state,
+            UUID agentId,
+            UUID taskId,
+            UUID benchmarkVersionId,
+            String failureClass,
+            BigDecimal minScore,
+            BigDecimal maxScore,
+            Instant createdFrom,
+            Instant createdTo,
+            String q,
+            MapSqlParameterSource params) {
+        return """
+                SELECT COUNT(*)
+                FROM evaluations.evaluations e
+                JOIN agents.agents a ON a.id = e.agent_id
+                JOIN benchmarks.tasks t ON t.id = e.task_id
+                LEFT JOIN evaluations.evaluation_scores s ON s.evaluation_id = e.id
+                WHERE e.org_id = :orgId
+                """
+                + evaluationSearchFilters(
+                        state, agentId, taskId, benchmarkVersionId, failureClass,
+                        minScore, maxScore, createdFrom, createdTo, q, params);
+    }
+
+    public static final String NO_FAILURE_CLASS = "NONE";
+
     private static String evaluationSearchFilters(
             String state,
             UUID agentId,
             UUID taskId,
             UUID benchmarkVersionId,
+            String failureClass,
+            BigDecimal minScore,
+            BigDecimal maxScore,
+            Instant createdFrom,
+            Instant createdTo,
             String q,
             MapSqlParameterSource params) {
         StringBuilder sql = new StringBuilder();
@@ -601,6 +662,33 @@ public class AnalyticsRepository {
         if (benchmarkVersionId != null) {
             sql.append(" AND e.benchmark_version_id = :benchmarkVersionId");
             params.addValue("benchmarkVersionId", benchmarkVersionId);
+        }
+        if (failureClass != null && !failureClass.isBlank()) {
+            if (NO_FAILURE_CLASS.equals(failureClass)) {
+                sql.append(" AND e.failure_class IS NULL");
+            } else {
+                sql.append(" AND e.failure_class = :failureClass");
+                params.addValue("failureClass", failureClass);
+            }
+        }
+        if (minScore != null || maxScore != null) {
+            sql.append(" AND s.weighted_total IS NOT NULL");
+            if (minScore != null) {
+                sql.append(" AND s.weighted_total >= :minScore");
+                params.addValue("minScore", minScore);
+            }
+            if (maxScore != null) {
+                sql.append(" AND s.weighted_total <= :maxScore");
+                params.addValue("maxScore", maxScore);
+            }
+        }
+        if (createdFrom != null) {
+            sql.append(" AND e.created_at >= :createdFrom");
+            params.addValue("createdFrom", Timestamp.from(createdFrom));
+        }
+        if (createdTo != null) {
+            sql.append(" AND e.created_at <= :createdTo");
+            params.addValue("createdTo", Timestamp.from(createdTo));
         }
         if (q != null && !q.isBlank()) {
             sql.append("""

@@ -22,6 +22,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.agentbench.analytics.service.PublicEngagementService;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
 
@@ -56,11 +57,17 @@ public class AnalyticsController {
             @RequestParam(required = false) UUID agentId,
             @RequestParam(required = false) UUID taskId,
             @RequestParam(required = false) UUID benchmarkVersionId,
+            @RequestParam(required = false) String failureClass,
+            @RequestParam(required = false) BigDecimal minScore,
+            @RequestParam(required = false) BigDecimal maxScore,
+            @RequestParam(required = false) Instant createdFrom,
+            @RequestParam(required = false) Instant createdTo,
             @RequestParam(required = false) String q,
             @RequestParam(required = false) Integer page,
             @RequestParam(required = false) Integer size) {
         return analyticsService.searchEvaluations(
-                orgId, state, agentId, taskId, benchmarkVersionId, q, page, size);
+                orgId, state, agentId, taskId, benchmarkVersionId, failureClass,
+                minScore, maxScore, createdFrom, createdTo, q, page, size);
     }
 
     @GetMapping("/benchmark-versions/{versionId}/leaderboard")

@@ -666,6 +666,12 @@ h4 {
   width: auto;
 }
 
+.case-message {
+  display: block;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
 .status-block {
   padding: 0.85rem 0;
 }
