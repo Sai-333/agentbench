@@ -28,6 +28,7 @@ import type {
   LeaderboardResponse,
   MintEmbedTokenResponse,
   MeResponse,
+  Member,
   Org,
   OverviewResponse,
   GpuBenchmarkResult,
@@ -54,6 +55,8 @@ import { RegressionRunsPanel } from './RegressionRunsPanel'
 import { isFailedCaseStatus, visibleCaseResults } from './caseList'
 import { qualityFindingLines, qualityToolDisplayName, qualityToolNote } from './qualityFindings'
 import { EMPTY } from './emptyCopy'
+import { canManageMembers } from './memberRoles'
+import { MembersPanel } from './MembersPanel'
 import { ScoreBars, StageTimeline, StatusChip } from './evaluationUi'
 import { evaluationProgressHint, showFailureChip } from './evaluationStages'
 import { resetForm } from './formUtils'
@@ -92,6 +95,7 @@ type WorkspaceTab =
   | 'evaluations'
   | 'agents'
   | 'sso'
+  | 'members'
   | 'leaderboard'
   | 'compare'
   | 'costs'
@@ -152,6 +156,10 @@ function App() {
   const [secrets, setSecrets] = useState<SecretMeta[]>([])
   const [samlIdps, setSamlIdps] = useState<SamlIdp[]>([])
   const [selectedSamlIdp, setSelectedSamlIdp] = useState<SamlIdp | null>(null)
+  const [members, setMembers] = useState<Member[]>([])
+  const [membersForOrgId, setMembersForOrgId] = useState('')
+  const [membersState, setMembersState] = useState<LoadState>('idle')
+  const [membersError, setMembersError] = useState<string | null>(null)
   const [evaluations, setEvaluations] = useState<Evaluation[]>([])
   const [selectedEvaluation, setSelectedEvaluation] = useState<EvaluationDetail | null>(null)
   const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null)
@@ -220,6 +228,7 @@ function App() {
   const loadedLbVersion = useRef('')
   const costReq = useRef(0)
   const compareReq = useRef(0)
+  const membersReq = useRef(0)
   evalFiltersRef.current = evalFilters
   lbFiltersRef.current = lbFilters
   compareTaskRef.current = compareTaskFilter
@@ -282,6 +291,42 @@ function App() {
     } catch {
       setSamlIdps([])
       setSelectedSamlIdp(null)
+    }
+  }, [])
+
+  const clearMembers = useCallback(() => {
+    membersReq.current += 1
+    setMembers([])
+    setMembersForOrgId('')
+    setMembersState('idle')
+    setMembersError(null)
+  }, [])
+
+  const loadMembers = useCallback(async (orgId: string, mode: 'initial' | 'refresh' = 'initial') => {
+    const gen = ++membersReq.current
+    if (mode === 'initial') {
+      setMembersState('loading')
+      setMembersForOrgId(orgId)
+      setMembersError(null)
+    }
+    try {
+      const list = await api<Member[]>(`/api/v1/orgs/${orgId}/members`)
+      if (gen !== membersReq.current) return
+      setMembers(list)
+      setMembersForOrgId(orgId)
+      setMembersError(null)
+      setMembersState(list.length === 0 ? 'empty' : 'ready')
+    } catch (err) {
+      if (gen !== membersReq.current) return
+      const message = err instanceof Error ? err.message : 'Could not load members'
+      if (mode === 'refresh') {
+        setMembersError(message)
+        return
+      }
+      setMembers([])
+      setMembersForOrgId(orgId)
+      setMembersError(message)
+      setMembersState('error')
     }
   }, [])
 
@@ -541,6 +586,7 @@ function App() {
       setCosts(null)
       setHealth(null)
       setEvalSearchResult(null)
+      clearMembers()
     }
   }, [
     selectedOrgId,
@@ -552,7 +598,14 @@ function App() {
     loadCosts,
     loadHealth,
     loadEvaluationSearch,
+    clearMembers,
   ])
+
+  useEffect(() => {
+    if (tab !== 'members' || !selectedOrgId) return
+    if (membersForOrgId === selectedOrgId && membersState !== 'idle') return
+    void loadMembers(selectedOrgId)
+  }, [tab, selectedOrgId, membersForOrgId, membersState, loadMembers])
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme)
@@ -777,6 +830,7 @@ function App() {
       setSelectedEvaluation(null)
       setSelectedAgent(null)
       setSelectedOrgId('')
+      clearMembers()
       loggingOut.current = false
       setBusy(false)
     }
@@ -848,6 +902,66 @@ function App() {
       setSecrets([])
       setSamlIdps([])
       setSelectedSamlIdp(null)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function handleAddMember(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (!selectedOrgId) return
+    setError(null)
+    setBusy(true)
+    const formEl = event.currentTarget
+    const form = new FormData(formEl)
+    const email = String(form.get('email') || '').trim()
+    const memberRole = String(form.get('role') || 'VIEWER')
+    try {
+      await api<Member>(`/api/v1/orgs/${selectedOrgId}/members`, {
+        method: 'POST',
+        body: JSON.stringify({ email, role: memberRole }),
+      })
+      resetForm(formEl)
+      await loadMembers(selectedOrgId, 'refresh')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not add member')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function handleUpdateMemberRole(member: Member, memberRole: string) {
+    if (!selectedOrgId || memberRole === member.role) return
+    setError(null)
+    setBusy(true)
+    try {
+      await api<Member>(`/api/v1/orgs/${selectedOrgId}/members/${member.userId}`, {
+        method: 'PUT',
+        body: JSON.stringify({ role: memberRole }),
+      })
+      if (member.userId === me?.id) {
+        setMe(await api<MeResponse>('/api/v1/me'))
+      }
+      await loadMembers(selectedOrgId, 'refresh')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not update member role')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function handleRemoveMember(member: Member) {
+    if (!selectedOrgId) return
+    setError(null)
+    setBusy(true)
+    try {
+      await api(`/api/v1/orgs/${selectedOrgId}/members/${member.userId}`, { method: 'DELETE' })
+      if (member.userId === me?.id) {
+        setMe(await api<MeResponse>('/api/v1/me'))
+      }
+      await loadMembers(selectedOrgId, 'refresh')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not remove member')
     } finally {
       setBusy(false)
     }
@@ -1655,6 +1769,7 @@ function App() {
   const selectedVersion = versions.find((v) => v.id === selectedVersionId)
   const canEdit = role === 'OWNER' || role === 'ADMIN' || role === 'DEVELOPER'
   const canManageSso = role === 'OWNER' || role === 'ADMIN'
+  const manageMembers = canManageMembers(role)
   const canPublishLeaderboard = role === 'OWNER' || role === 'ADMIN'
   const canViewRegressionRuns = me.memberships.some(
     (membership) => membership.role === 'OWNER' || membership.role === 'ADMIN',
@@ -1858,6 +1973,7 @@ function App() {
                 ['costs', 'Costs'],
                 ['agents', 'Agents'],
                 ['sso', 'SSO'],
+                ['members', 'Members'],
                 ['benchmarks', 'Benchmarks'],
                 ['projects', 'Projects'],
                 ['ops', 'Ops'],
@@ -2348,6 +2464,23 @@ function App() {
                 </p>
               )}
             </>
+          ) : tab === 'members' ? (
+            <MembersPanel
+              selectedOrg={selectedOrg}
+              role={role}
+              members={members}
+              membersForOrgId={membersForOrgId}
+              membersState={membersState}
+              membersError={membersError}
+              manageMembers={manageMembers}
+              busy={busy}
+              onRefresh={() => {
+                if (selectedOrgId) void loadMembers(selectedOrgId)
+              }}
+              onAdd={handleAddMember}
+              onRoleChange={(member, memberRole) => void handleUpdateMemberRole(member, memberRole)}
+              onRemove={(member) => void handleRemoveMember(member)}
+            />
           ) : tab === 'agents' ? (
             <>
               <h2>Agents {selectedOrg ? `· ${selectedOrg.name}` : ''}</h2>
