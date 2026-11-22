@@ -6,6 +6,8 @@ import type {
   OverviewResponse,
   SystemHealthResponse,
 } from './api'
+import { EMPTY } from './emptyCopy'
+import { StatusChip } from './evaluationUi'
 
 type LoadState = 'idle' | 'loading' | 'ready' | 'empty' | 'error'
 
@@ -35,7 +37,11 @@ function StateBlock({
     )
   }
   if (state === 'empty') {
-    return <p className="muted status-block">{emptyMessage}</p>
+    return (
+      <p className="empty-state" role="status">
+        {emptyMessage}
+      </p>
+    )
   }
   return <>{children}</>
 }
@@ -53,7 +59,7 @@ export function OverviewPanel({
 }) {
   return (
     <div className="dash-stack">
-      <StateBlock state={state} error={error} emptyMessage="No evaluation activity yet for this organization.">
+      <StateBlock state={state} error={error} emptyMessage={EMPTY.overview}>
         {overview && (
           <>
             <div className="stat-grid" role="group" aria-label="Evaluation overview">
@@ -99,7 +105,9 @@ export function OverviewPanel({
 
             <h3>Recent evaluations</h3>
             {overview.recent.length === 0 ? (
-              <p className="muted">No recent evaluations.</p>
+              <p className="empty-state" role="status">
+                {EMPTY.recentEvaluations}
+              </p>
             ) : (
               <ul className="list">
                 {overview.recent.map((item) => (
@@ -109,8 +117,11 @@ export function OverviewPanel({
                       className="list-item"
                       onClick={() => onOpenEvaluation(item.id)}
                     >
-                      <span>
-                        <span className="badge">{item.state}</span> {item.agentName} · {item.taskSlug}
+                      <span className="status-row">
+                        <StatusChip status={item.state} />
+                        <span>
+                          {item.agentName} · {item.taskSlug}
+                        </span>
                       </span>
                       <span className="muted small">
                         {item.weightedTotal != null
@@ -126,7 +137,9 @@ export function OverviewPanel({
 
             <h3>Volume (last {overview.volumeByDay.length || 0} days with activity)</h3>
             {overview.volumeByDay.length === 0 ? (
-              <p className="muted">No volume in the selected window.</p>
+              <p className="empty-state" role="status">
+                {EMPTY.volume}
+              </p>
             ) : (
             <div className="table-scroll">
               <table className="metrics-table">
@@ -170,7 +183,7 @@ export function LeaderboardPanel({
   onMintEmbed,
   embedSnippet,
   embedStatus,
-  emptyMessage = 'No completed scored evaluations for this benchmark version yet.',
+  emptyMessage = EMPTY.leaderboard,
 }: {
   board: LeaderboardResponse | null
   state: LoadState
@@ -358,7 +371,7 @@ export function ComparisonPanel({
   comparison,
   state,
   error,
-  emptyMessage = 'Select agents and a published benchmark version to compare identical runs.',
+  emptyMessage = EMPTY.comparison,
 }: {
   comparison: ComparisonResponse | null
   state: LoadState
@@ -414,7 +427,7 @@ export function CostsPanel({
   costs,
   state,
   error,
-  emptyMessage = 'No token or cost records yet. Costs appear when adapters report them.',
+  emptyMessage = EMPTY.costs,
 }: {
   costs: CostAnalyticsResponse | null
   state: LoadState
@@ -452,7 +465,9 @@ export function CostsPanel({
             </div>
             <h3>By agent</h3>
             {costs.byAgent.length === 0 ? (
-              <p className="muted">No per-agent cost rows.</p>
+              <p className="empty-state" role="status">
+                {EMPTY.costsByAgent}
+              </p>
             ) : (
               <div className="table-scroll">
                 <table className="metrics-table">
@@ -481,7 +496,9 @@ export function CostsPanel({
             )}
             <h3>By day</h3>
             {costs.byDay.length === 0 ? (
-              <p className="muted">No daily cost points.</p>
+              <p className="empty-state" role="status">
+                {EMPTY.costsByDay}
+              </p>
             ) : (
               <div className="table-scroll">
                 <table className="metrics-table">
@@ -524,7 +541,7 @@ export function OpsHealthPanel({
 }) {
   return (
     <div className="dash-stack">
-      <StateBlock state={state} error={error} emptyMessage="Health summary unavailable.">
+      <StateBlock state={state} error={error} emptyMessage={EMPTY.health}>
         {health && (
           <>
             <p>

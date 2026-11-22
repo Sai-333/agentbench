@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import type { RegressionRunDetail, RegressionRunSummary } from './api'
+import { EMPTY } from './emptyCopy'
 import {
   EMPTY_REGRESSION_FILTER,
   filterRegressionRuns,
@@ -57,8 +58,8 @@ export function RegressionRunsPanel({
         </button>
       ) : null}
       {!allowed ? (
-        <p className="muted">
-          Your account does not have OWNER or ADMIN on an organization, so run details stay hidden.
+        <p className="empty-state" role="status">
+          {EMPTY.regressionForbidden}
         </p>
       ) : (
         <>
@@ -104,9 +105,13 @@ export function RegressionRunsPanel({
           {state === 'loading' || state === 'idle' ? (
             <p className="muted">Loading regression runs…</p>
           ) : state === 'empty' ? (
-            <p className="muted">No regression runs yet.</p>
+            <p className="empty-state" role="status">
+              {EMPTY.regression}
+            </p>
           ) : visibleRuns.length === 0 ? (
-            <p className="muted">No regression runs match these filters.</p>
+            <p className="empty-state" role="status">
+              {EMPTY.regressionFiltered}
+            </p>
           ) : (
             <ul className="list">
               {visibleRuns.map((run) => {
