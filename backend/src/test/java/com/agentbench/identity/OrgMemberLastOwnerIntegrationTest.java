@@ -244,8 +244,7 @@ class OrgMemberLastOwnerIntegrationTest {
     private static void assertStatus(MvcResult result, int expected) {
         int actual = result.getResponse().getStatus();
         if (actual != expected) {
-            throw new AssertionError("expected HTTP " + expected + " but got " + actual
-                    + " body=" + result.getResponse().getContentAsString());
+            throw new AssertionError("expected HTTP " + expected + " but got " + actual);
         }
     }
 
