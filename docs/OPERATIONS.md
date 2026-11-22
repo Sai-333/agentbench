@@ -65,7 +65,8 @@ Ops checks: broker `rabbitmq-diagnostics listeners` shows SSL on 5671; API/worke
 ## Cancel / timeout
 
 - `POST .../evaluations/{id}/cancel` — immediate if `QUEUED`; otherwise sets `cancel_requested` and worker cancels between stages.
-- `EvaluationTimeoutWatchdog` marks `TIMED_OUT` when `started_at` exceeds org `max_duration_sec` (default 1800s).
+- `EvaluationTimeoutWatchdog` marks `TIMED_OUT` when `started_at` exceeds org `max_duration_sec` (default 1800s). Poll interval: `agentbench.evaluation.timeout-poll-ms` (default 30000).
+- CI regression: `EvaluationRecoveryScenariosTest.timeoutWatchdogMarksTimedOut` awaits `TIMED_OUT` from the Spring `@Scheduled` poll and does **not** call `sweep()` from the test body. Limit: that is still one JVM (`@SpringBootTest`); a separate Compose/K8s worker process is not started in CI.
 
 ## Invalid baseline
 

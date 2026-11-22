@@ -2,7 +2,6 @@ package com.agentbench.evaluation;
 
 import com.agentbench.evaluation.domain.EvaluationState;
 import com.agentbench.evaluation.service.EvaluationSyncRunner;
-import com.agentbench.evaluation.worker.EvaluationTimeoutWatchdog;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
@@ -23,7 +22,10 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicReference;
 
+import static java.util.concurrent.TimeUnit.SECONDS;
+import static org.awaitility.Awaitility.await;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -35,6 +37,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 /**
  * Milestone 9 recovery scenarios: invalid baseline, mid-flight cancel, timeout watchdog.
  * DLQ topology + retry exhaustion are covered by dedicated unit tests.
+ *
+ * <p>{@code timeoutWatchdogMarksTimedOut} proves Spring's {@code @Scheduled} poll marks
+ * an overdue evaluation {@code TIMED_OUT} without the test body calling
+ * {@code EvaluationTimeoutWatchdog.sweep()}. A separate worker JVM process is not
+ * exercised here — CI has no multi-process worker harness for that stronger proof.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -110,6 +117,8 @@ class EvaluationRecoveryScenariosTest {
     static void datasourceProps(DynamicPropertyRegistry registry) {
         PostgresTestSupport.registerRlsAwareDatasource(registry, postgres);
         registry.add("agentbench.evaluation.listener-enabled", () -> "false");
+        // Fast enough for Awaitility; default 30s would make the scheduled proof CI-impractical.
+        registry.add("agentbench.evaluation.timeout-poll-ms", () -> "200");
     }
 
     @Autowired
@@ -120,9 +129,6 @@ class EvaluationRecoveryScenariosTest {
 
     @Autowired
     EvaluationSyncRunner syncRunner;
-
-    @Autowired
-    EvaluationTimeoutWatchdog timeoutWatchdog;
 
     @Autowired
     NamedParameterJdbcTemplate jdbc;
@@ -230,14 +236,25 @@ class EvaluationRecoveryScenariosTest {
                     """, new MapSqlParameterSource("id", evaluationId));
         });
 
-        timeoutWatchdog.sweep();
+        // Do not call sweep() — wait for the @Scheduled poll (timeout-poll-ms=200).
+        AtomicReference<JsonNode> timedOut = new AtomicReference<>();
+        await().atMost(10, SECONDS).until(() -> {
+            MvcResult detail = mockMvc.perform(get("/api/v1/orgs/{orgId}/evaluations/{id}", orgId, evaluationId)
+                            .header("Authorization", "Bearer " + token))
+                    .andExpect(status().isOk())
+                    .andReturn();
+            JsonNode body = objectMapper.readTree(detail.getResponse().getContentAsString());
+            if (!"TIMED_OUT".equals(body.path("evaluation").path("state").asText())) {
+                return false;
+            }
+            timedOut.set(body);
+            return true;
+        });
 
-        mockMvc.perform(get("/api/v1/orgs/{orgId}/evaluations/{id}", orgId, evaluationId)
-                        .header("Authorization", "Bearer " + token))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.evaluation.state").value("TIMED_OUT"))
-                .andExpect(jsonPath("$.evaluation.failureClass").value("INFRASTRUCTURE"))
-                .andExpect(jsonPath("$.evaluation.errorCode").value("TIMED_OUT"));
+        JsonNode evaluation = timedOut.get().path("evaluation");
+        assertEquals("TIMED_OUT", evaluation.path("state").asText());
+        assertEquals("INFRASTRUCTURE", evaluation.path("failureClass").asText());
+        assertEquals("TIMED_OUT", evaluation.path("errorCode").asText());
     }
 
     private Fixture seedPublishedBenchmark(String token, UUID orgId, String fixture) throws Exception {

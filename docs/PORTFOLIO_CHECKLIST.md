@@ -25,7 +25,7 @@
 | Opt-in public leaderboards (OWNER/ADMIN publish; sanitized payload) | Flyway V11; `/api/v1/public/leaderboards/{slug}`; org-private remains default |
 | Signed embeds + Cache-Control for public boards | HMAC embed tokens (OWNER/ADMIN mint); `/embed?token=`; Cache-Control + ETag; UI copy snippet; `docs/PUBLIC_LEADERBOARDS.md` |
 | Anonymous-capable comments + up/down votes on public boards | Flyway V21; public POST/GET comments + votes on published slugs only; optional JWT attribution; OWNER/ADMIN soft-delete; IP rate + size limits; UI on `/public/leaderboards/{slug}`; embed HTML read-only tallies; `docs/PUBLIC_LEADERBOARDS.md` — **residual:** in-process rate limits (not distributed WAF/CAPTCHA); board-level votes only (not per-entry/stars) |
-| Recovery tests (baseline / cancel / timeout / retry policy / DLQ topology) | M9 tests |
+| Recovery tests (baseline / cancel / timeout / retry policy / DLQ topology) | M9 tests; timeout awaits `@Scheduled` poll (not direct `sweep()`); separate worker JVM not in CI — see `docs/OPERATIONS.md` |
 | Graceful shutdown + prod-ish Compose overlay | `application.yml`, `docker-compose.prod.yml` |
 | Kubernetes templates (deploy/svc/config/secrets) | `deploy/kubernetes/` |
 | Helm chart (API/worker/frontend) | `deploy/helm/agentbench/`; `scripts/helm/smoke.sh`; CI `helm` job; `docs/DEPLOYMENT.md` §3b |
