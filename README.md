@@ -194,7 +194,7 @@ Never edit applied migrations; forward-only only.
 
 ## CI
 
-GitHub Actions builds backend (`mvn verify`, including Testcontainers when Docker is available), frontend (`npm ci && npm run build`), and Helm/operator packaging (`./scripts/helm/smoke.sh`, including `./scripts/operator/smoke.sh`). WireMock covers OpenAI-compatible HTTP, including the default Grok agent, without paid APIs.
+GitHub Actions builds backend (`mvn verify`, including Testcontainers when Docker is available), frontend (`npm ci && npm run build`), Helm packaging (`./scripts/helm/smoke.sh`), and a dedicated operator packaging job (`./scripts/operator/smoke.sh`). WireMock covers OpenAI-compatible HTTP, including the default Grok agent, without paid APIs.
 
 **Docker 29 note:** Engine 29 defaults to a minimum API of 1.44 while Testcontainers 1.21.x still negotiates an older client API. Local/daemon workaround:
 

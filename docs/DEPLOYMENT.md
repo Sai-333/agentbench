@@ -216,7 +216,7 @@ helm upgrade --install agentbench deploy/helm/agentbench -n agentbench \
 Path: `deploy/operator/`. Lean **Helm-operator** packaging: `AgentBenchInstance` CRD (`agentbench.io/v1alpha1`) + controller Deployment that installs/reconciles the app chart from §3b when you apply a CR. Spec fields pass through as Helm values. Direct Helm install remains supported.
 
 ```bash
-# Cluster-free validation (also run from ./scripts/helm/smoke.sh):
+# Cluster-free validation (CI "operator" job; also run from ./scripts/helm/smoke.sh):
 ./scripts/operator/smoke.sh
 
 # Build operator image (embeds watches.yaml + deploy/helm/agentbench):
