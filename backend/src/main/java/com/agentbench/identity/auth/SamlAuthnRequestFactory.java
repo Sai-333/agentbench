@@ -3,11 +3,11 @@ package com.agentbench.identity.auth;
 import org.springframework.security.saml2.core.Saml2X509Credential;
 import org.springframework.security.saml2.provider.service.registration.RelyingPartyRegistration;
 import org.springframework.stereotype.Component;
-import org.springframework.web.util.UriComponentsBuilder;
 import org.springframework.web.util.UriUtils;
 
 import java.io.ByteArrayOutputStream;
 import java.net.URI;
+import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.security.Signature;
 import java.time.Instant;
@@ -53,13 +53,21 @@ public class SamlAuthnRequestFactory {
             return signedRedirect(destination, samlRequest, relayState, credential.get());
         }
 
-        return UriComponentsBuilder
-                .fromUriString(destination)
-                .queryParam("SAMLRequest", samlRequest)
-                .queryParam("RelayState", relayState)
-                .encode()
-                .build()
-                .toUri();
+        return unsignedRedirect(destination, samlRequest, relayState);
+    }
+
+    /**
+     * Form-encode the deflated AuthnRequest. Spring's query encoder leaves base64
+     * {@code +} raw, and form decoders then turn that into a space.
+     */
+    static URI unsignedRedirect(String destination, String samlRequest, String relayState) {
+        String query = "SAMLRequest=" + formEncode(samlRequest) + "&RelayState=" + formEncode(relayState);
+        String separator = destination.contains("?") ? "&" : "?";
+        return URI.create(destination + separator + query);
+    }
+
+    static String formEncode(String value) {
+        return URLEncoder.encode(value == null ? "" : value, StandardCharsets.UTF_8);
     }
 
     /**

@@ -50,7 +50,8 @@ class S3CompatibleArtifactStorageMinioTest {
 
     @BeforeAll
     static void startMinio() {
-        minio = new GenericContainer<>(DockerImageName.parse("minio/minio:RELEASE.2024-12-18T13-15-44Z"))
+        // minio/minio tags 404 on Docker Hub. Silo is the MinIO-compatible server that still pulls.
+        minio = new GenericContainer<>(DockerImageName.parse("pgsty/silo:RELEASE.2026-10-26T00-00-00Z"))
                 .withEnv("MINIO_ROOT_USER", ACCESS)
                 .withEnv("MINIO_ROOT_PASSWORD", SECRET)
                 .withCommand("server", "/data")

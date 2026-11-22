@@ -12,6 +12,7 @@ import org.springframework.web.util.UriUtils;
 
 import java.io.ByteArrayInputStream;
 import java.net.URI;
+import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.security.Signature;
 import java.util.Arrays;
@@ -38,7 +39,9 @@ class SamlAuthnRequestFactoryTest {
         assertFalse(query.containsKey("Signature"));
         assertFalse(query.containsKey("SigAlg"));
 
-        String xml = inflate(query.get("SAMLRequest"));
+        String rawSaml = rawQueryParam(redirect, "SAMLRequest");
+        assertFalse(rawSaml.contains("+") || rawSaml.contains(" "), rawSaml);
+        String xml = inflate(URLDecoder.decode(rawSaml, StandardCharsets.UTF_8));
         assertTrue(xml.contains("ID=\"_req-1\""));
         assertTrue(xml.contains("http://sp.test/metadata"));
         assertTrue(xml.contains("http://sp.test/acs"));
@@ -113,6 +116,17 @@ class SamlAuthnRequestFactoryTest {
         SamlProperties properties = new SamlProperties();
         properties.getSigning().setEnabled(false);
         return new SamlSpSigningCredentials(properties);
+    }
+
+    private static String rawQueryParam(URI uri, String name) {
+        String raw = uri.getRawQuery();
+        String prefix = name + "=";
+        for (String part : raw.split("&")) {
+            if (part.startsWith(prefix)) {
+                return part.substring(prefix.length());
+            }
+        }
+        throw new AssertionError("missing " + name);
     }
 
     private static String inflate(String base64) throws Exception {

@@ -11,16 +11,20 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.PosixFilePermission;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -76,6 +80,7 @@ public class DockerRuntimeIsolator implements RuntimeIsolator {
     @Override
     public IsolationResult run(IsolationSpec spec) {
         assertSafeSpec(spec);
+        prepareWorkspaceForNonRoot(spec.workspace());
         List<String> cmd = buildDockerCommand(spec);
         Map<String, Object> meta = new LinkedHashMap<>();
         meta.put("runtime", RUNTIME_NAME);
@@ -308,5 +313,42 @@ public class DockerRuntimeIsolator implements RuntimeIsolator {
 
     public boolean workspaceExists(Path workspace) {
         return workspace != null && Files.isDirectory(workspace);
+    }
+
+    /**
+     * The workload stays uid 65534 with a read-only root. Host-created workspace
+     * files are owned by the app user, so grant other-write on that tree only.
+     * Hidden fixtures stay on their own read-only mount.
+     */
+    private void prepareWorkspaceForNonRoot(Path workspace) {
+        if (workspace == null || !Files.isDirectory(workspace)) {
+            return;
+        }
+        try (var paths = Files.walk(workspace)) {
+            paths.forEach(path -> {
+                if (Files.isSymbolicLink(path)) {
+                    return;
+                }
+                try {
+                    grantContainerWrite(path);
+                } catch (UnsupportedOperationException | IOException ex) {
+                    log.debug("Could not loosen workspace permissions on {}: {}",
+                            path, SecretRedactor.sanitizeError(ex.getMessage()));
+                }
+            });
+        } catch (IOException ex) {
+            log.debug("Could not prepare workspace {} for non-root user: {}",
+                    workspace, SecretRedactor.sanitizeError(ex.getMessage()));
+        }
+    }
+
+    private static void grantContainerWrite(Path path) throws IOException {
+        Set<PosixFilePermission> perms = new HashSet<>(Files.getPosixFilePermissions(path));
+        perms.add(PosixFilePermission.OTHERS_READ);
+        perms.add(PosixFilePermission.OTHERS_WRITE);
+        if (Files.isDirectory(path)) {
+            perms.add(PosixFilePermission.OTHERS_EXECUTE);
+        }
+        Files.setPosixFilePermissions(path, perms);
     }
 }
